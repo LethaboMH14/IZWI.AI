@@ -1,0 +1,213 @@
+TEAM PROFILE: Sonar
+DATE: Sun, 15 Nov 2026 21:09
+
+
+
+
+ NEMISA Digital Innovation Discothon 2026
+    Business Model Canvas
+
+
+Sonar - Lean Business Canvas   NEMISA Digital Innovation Discothon 2026, 15 Nov 2026 21:09
+
+ PROJECT: Izwi.AI
+PROBLEM                    SOLUTION                         UNIQUE VALUE          UNFAIR ADVANTAGE                 SEGMENTS
+                                                            PROPOSITION
+
+South African digital      Izwi AI is an AI-native                                Our intended advantage is        Primary customers
+creators face barriers     creative operating system        One Voice. Every      deep African creator
+in turning creative        that helps creators              Language. Every       specialisation combined              1. South African
+work into accessible       produce, localise,               Market.               with an extensible agentic              independent
+content, wider             distribute, analyse, protect                           AI platform.                            podcasters,
+audiences and              and monetise content                                                                           YouTubers, short-
+sustainable income.        through one connected                                  We aim to build difficult-to-           form video
+Statistics South           workspace.                       Izwi AI transforms    replicate strengths through:            creators,
+Africa's Census 2022                                        one creative idea                                             educators and
+shows that only 8.7%                                        into multiple             1. Native-speaker-                  digital storytellers,
+of the population                                           market-ready                 reviewed South                   especially ages
+spoke English most         Core features:                   digital assets               African language                 18–34.
+often at home, while                                        through a single,            evaluation datasets           2. Freelance video
+the General                    1. Agentic AI Studio:        AI-powered                   and localisation                 editors and small
+Household Survey                  Create and edit           workflow.                    workflows.                       creative studios
+2024 found that only              videos, podcasts and                                2. A local-first AI                 producing
+17.4% of households               digital media using       Instead of                   engine that supports             recurring content
+had fixed home                    natural-language          manually                     lower-specification              for clients.
+internet access. These            prompts and editable      switching between            computers, BYOK
+realities increase the            timelines.                content creation,            and cloud                 Secondary customers
+importance of                  2. Global Localisation:      editing,                     processing.
+affordable, multilingual          Generate multilingual     translation,              3. Creator-specific              1. Digital marketing
+and connectivity-                 subtitles, culturally     analytics and                workflow                         agencies,
+conscious digital tools.          adapted content and       publishing tools,            preferences,                     production
+In Lit.africa's Q3 2026           supported AI dubbing      creators can                 reusable editing                 companies,
+creator index, covering           for African and           describe their               templates and                    musicians,
+24,900 registered                 international             goals and have AI            consented                        filmmakers and
+South African creators,           audiences.                agents execute               performance                      animation studios.
+51.3% of respondents           3. Creator Intelligence:     approved actions             feedback.                     2. Universities,
+with income data                  Analyse connected         across the                4. Partnerships with                training
+reported earning                  audience metrics,         workspace.                   South African                    institutions,
+below R10,000 per                 retention and content                                  creative                         NGOs,
+month.                            performance to            Our differentiation          communities,                     broadcasters and
+                                  recommend and             is the combination           training                         organisations
+                                  generate creative         of African-first             organisations and                requiring
+                                  variations.               language                     production studios.              multilingual
+Creators often depend          4. Global Distribution:      accessibility,            5. An integrated                    content
+on separate                       Prepare and schedule      global market                workflow connecting              production.
+applications for                  platform-specific         localisation,                creation, localisation,
+editing, translation,             content through           prompt-driven                engagement                Initial geographical
+publishing, analytics,            approved social           creative                     insights, distribution    focus:
+rights management                 media integrations.       automation,                  and monetisation.         Johannesburg/Gauteng,
+and monetisation. This         5. Rights & Commerce:        connected                                              followed by other South
+can increase costs,               Maintain creator          audience              Defensibility will come          African creator
+repetitive work and               declarations,             intelligence and      from trusted creator             communities, wider
+technical complexity.             collaboration             affordable            relationships, validated         Southern Africa and
+Izwi AI addresses the             agreements, licensing     local/cloud AI        localisation quality,            international markets.
+gap between                       requests and digital      options.              product reliability and
+creating original                 storefronts.                                    accumulated workflow             Early adopters: Creators
+content and turning            6. Hybrid AI                                       knowledge — not from             who already publish
+it into globally                  Infrastructure:                                 exclusive ownership of           regularly, use multiple
+accessible,                       Support Meta Models       Izwi AI is            open-source models.              production tools and
+commercially                      API, optional             designed to help                                       experience repeated
+valuable digital                  GPT/Claude/Gemini         creators spend                                         editing, localisation or
+assets, particularly for          integrations, BYOK,       less time                                              publishing bottlenecks.
+independent creators              Hugging Face models       managing
+with limited time,                and compatible local      software and                                           Buyers: Individual
+equipment and                     AI processing.            more time                                              creators, studio owners,
+resources.                                                  creating, reaching                                     agency managers and
+                                                            audiences and                                          institutional procurement
+                                                            building                                               teams.
+                           Initial MVP: Upload media ?      sustainable
+                           generate/edit clips ? review     income.
+                           multilingual captions ? export
+                           ? prepare distribution.
+
+                           Advanced dubbing,
+                           marketplace transactions and
+                           wider platform integrations
+                           will be developed and
+                           validated progressively.
+                          CHANNELS
+
+
+North Star Metric:        Phase 1 — Direct South
+Number of active          African creator acquisition
+creators who
+successfully produce          1. Demonstrations and
+and export or publish            onboarding through
+useful content through           podcast studios,
+Izwi AI each week.               freelance editors,
+                                 student media groups
+Six-month pilot                  and creator
+targets (not current             communities.
+results):                     2. Short tutorials and
+                                 before/after
+    1. 800 registered            demonstrations on
+       creators.                 YouTube, TikTok,
+    2. 300 creators              Instagram and
+       completing                LinkedIn.
+       their first            3. Workshops with
+       usable export.            universities, creative
+    3. 55 paying                 hubs and digital skills
+       subscriptions.            programmes.
+    4. At least 30% of        4. Creator referral
+       activated                 rewards and peer-to-
+       creators                  peer
+       returning within          recommendations.
+       30 days.
+    5. At least 300       Phase 2 — Partnerships
+       completed          and growth
+       media exports
+       per month.             1. Partnerships with
+    6. 20 structured             production studios,
+       creator                   agencies, training
+       interviews and            organisations and
+       five repeat-              creator educators.
+       using studio           2. Community
+       customers.                ambassadors, affiliate
+                                 arrangements and
+Commercial KPIs                  case studies.
+                              3. Integrations with
+    1. Free-to-paid              familiar creative tools
+       conversion                and approved
+       rate.                     publishing platforms.
+    2. Monthly                4. Search-driven
+       recurring                 tutorials and open-
+       revenue                   source community
+       (MRR).                    engagement.
+    3. Customer
+       acquisition cost   Phase 3 — Regional and
+       (CAC).             international expansion
+    4. Customer
+       retention and          1. African-language
+       churn.                    creator communities
+    5. Contribution              and localisation
+       margin per                partnerships.
+       paid customer.         2. International creator
+    6. Cloud AI cost             agencies and
+       per completed             multilingual media
+       task.                     organisations.
+                              3. Institutional and
+Product-quality KPIs             enterprise sales.
+
+    1. Time to first      Acquisition strategy:
+       successful         Demonstrate immediate
+       export.            value through a free first
+    2. Editing and        export, then convert users
+       translation        after they experience
+       acceptance         repeatable time savings.
+       rates.
+    3. Rendering
+       failure and
+       retry rates.
+    4. Security
+       incidents and
+       data-loss
+       events.
+
+Results will be
+measured using
+consented, privacy-
+conscious product
+analytics.
+COST STRUCTURE                                                                REVENUE STREAMS
+
+
+Izwi AI will operate a hybrid local/cloud model to control AI inference       1. Freemium subscriptions
+costs and keep a useful free tier sustainable.
+                                                                                  1. Free : R0/month: Local editing, compatible BYOK
+Proposed monthly operating budget at an early commercial stage:                      processing, basic exports and limited hosted AI
+                                                                                     trials.
+    1. Founder/engineering compensation: R50,000.                                 2. Creator : R149/month: Cloud AI allowance,
+    2. Part-time design, QA and content support: R12,000.                            professional exports, workflow automation and
+    3. Customer support/community operations: R6,000.                                supported publishing features.
+    4. Baseline infrastructure, backups and monitoring: R5,000.                   3. Studio : R499/month: Team collaboration, higher AI
+    5. Marketing, demonstrations and creator partnerships: R8,000.                   allowances, shared projects and client workflows.
+    6. Legal, administration and security allowance: R4,000.                      4. Agency : proposed R1,499/month: Larger usage
+                                                                                     allowances, multi-client management and
+Estimated fixed operating budget: R85,000/month.                                     advanced team permissions.
+Variable costs                                                                2. Additional AI processing
+    1. AI inference and GPU processing: dependent on task complexity and      Prepaid, transparently priced usage credits for
+       usage.                                                                 computationally expensive transcription, dubbing, batch
+    2. Media storage, rendering and data transfer.                            rendering and advanced model tasks.
+    3. Payment processing and refunds.
+    4. Customer support and additional infrastructure consumption.            3. Digital marketplace and licensing
+
+Example proposed unit-cost budgets: R25 hosted compute per Creator            Proposed 7% platform commission on qualifying digital
+subscriber; R110 per Studio; R390 per Agency. These are spending limits for   sales and licences, with payment processing fees charged
+financial modelling, not measured task costs.                                 separately and clearly disclosed.
+
+Local processing and BYOK reduce our direct model-inference expense, but do   4. Institutional and enterprise contracts
+not eliminate development, support, distribution or infrastructure costs.
+                                                                              Custom licensing, onboarding, support and multilingual
+                                                                              production workflows for agencies, broadcasters,
+                                                                              universities, NGOs and training organisations.
+
+                                                                              5. Optional managed services
+
+                                                                              Paid localisation review, production assistance, setup and
+                                                                              integration services through appropriately qualified
+                                                                              partners.
+
+                                                                              Commercial principle: Affordable entry-level access,
+                                                                              usage-based control of expensive workloads and higher-
+                                                                              value plans for professional customers.
+

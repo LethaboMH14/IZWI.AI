@@ -1,0 +1,13 @@
+# Instructions for future contributors
+- Read README.md, docs/HANDOFF.md and docs/PRODUCT.md before changing scope.
+- The product name is IZWI AI. Team Sonar is the team. MzansiCreator OS was an unapproved draft name.
+- Preserve all five pillars: Create, Localise, Protect, Publish, Earn. A podcast is the example, not the whole product.
+- Use white/ivory surfaces, amber/gold accents and charcoal type. No purple or dark default theme. Preserve the supplied Figma template's typography and device composition.
+- Preserve the existing fictional Naledi character from current presentation images. Do not regenerate her identity without a request.
+- Current approved prices: Free R0, Creator R149, Studio R499, Agency R1499; proposed fixed monthly budget R85000. These are assumptions, not measured results.
+- No fabricated revenue, payouts, consent verification, translation quality or publishing success.
+- Implement the first vertical slice before advanced commerce, dubbing or broad provider integrations.
+- Keep server secrets server-side. Never commit keys, credentials, private media or customer data.
+- Use open-source modules where suitable; check exact release and model licences separately. Do not call a commercial API open source.
+- Update docs and asset manifest when decisions or deliverables change. Clearly distinguish planned, mocked and implemented features.
+- Run python3 scripts/verify_handoff.py and python3 scripts/financial_model.py for handoff changes; run relevant application checks once an application exists.

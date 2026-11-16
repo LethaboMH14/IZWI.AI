@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "updated": "2026-11-16",
+  "assets": [
+    {
+      "path": "assets/current/poster/izwi-ai-full-solution.png",
+      "role": "Final generated full-platform poster",
+      "status": "current",
+      "source": "https://drive.google.com/file/d/1pz3vM_fPaJQrN878WCoo7IWA5vaY68bX/view",
+      "bytes": 1862648,
+      "sha256": "a224f229d21b524103f0ce0cc17edc09666bc47ff4e2cf8ff937fa84d9f8ecfe"
+    },
+    {
+      "path": "assets/current/presentation/izwi-ai-canvas-aligned-v2.pdf",
+      "role": "Canvas-aligned 12-slide presentation",
+      "status": "current",
+      "source": "IZWI-AI-Canvas-Aligned-v2.pdf",
+      "bytes": 1362204,
+      "sha256": "3565f48d9cfbf4dbcdd96ed6819da5ac971960f3406ae4f45e73ba695b290e8a"
+    },
+    {
+      "path": "assets/current/presentation/izwi-ai-canvas-aligned-v2.pptx",
+      "role": "Canvas-aligned 12-slide presentation",
+      "status": "current",
+      "source": "IZWI-AI-Canvas-Aligned-v2.pptx",
+      "bytes": 3135506,
+      "sha256": "dd3d5961256be1005f5719f9ac80769251ae6b3f1b94d79dc96120cd1bd8d634"
+    },
+    {
+      "path": "assets/current/presentation/contact-sheet.png",
+      "role": "Current slide overview",
+      "status": "current",
+      "source": "aligned-contact-sheet.png",
+      "bytes": 483817,
+      "sha256": "7dec16a7ae72e77cec7478296ce07aa0e4835b774a070ff4081c5ee54389dfeb"
+    },
+    {
+      "path": "assets/current/presentation/slides/01.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-01.png",
+      "bytes": 595708,
+      "sha256": "f587d6c5b4c69f299b576792c9d13eb0b83bb09cf3222b97c73e4497d64e6a54"
+    },
+    {
+      "path": "assets/current/presentation/slides/02.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-02.png",
+      "bytes": 77512,
+      "sha256": "01ef99a5c7da230d493a7929a4e36a196a04ab78afcb62ad54dfcf1cca312bf1"
+    },
+    {
+      "path": "assets/current/presentation/slides/03.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-03.png",
+      "bytes": 618090,
+      "sha256": "7e94b5cd51e838d14b87b43d77f7700a1a14ee7d2470157ad7ec4fc9b62acac0"
+    },
+    {
+      "path": "assets/current/presentation/slides/04.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-04.png",
+      "bytes": 86659,
+      "sha256": "27a79246be8352b750d8b22fec8a61e33ddd8b905c5654d937df943935d939f9"
+    },
+    {
+      "path": "assets/current/presentation/slides/05.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-05.png",
+      "bytes": 298610,
+      "sha256": "f2a21f3825c9dee9a5e853bbfdb3ae94c98a71f0773a6e53b4d151bb613b3668"
+    },
+    {
+      "path": "assets/current/presentation/slides/06.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-06.png",
+      "bytes": 398174,
+      "sha256": "ce08f9cf2a7e3715c0a914bdadc407cf74b0b67abb093cab2016eff67d705c36"
+    },
+    {
+      "path": "assets/current/presentation/slides/07.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-07.png",
+      "bytes": 484853,
+      "sha256": "708c89e4cbaff599c902d9d7576ff4ed57d1ec841dfcbab13490522af7d49708"
+    },
+    {
+      "path": "assets/current/presentation/slides/08.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-08.png",
+      "bytes": 79199,
+      "sha256": "a1f0123e5248f716325f1c432af16194aa26d77132693d26e7ae9f253bbf7343"
+    },
+    {
+      "path": "assets/current/presentation/slides/09.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-09.png",
+      "bytes": 90532,
+      "sha256": "88166eaee1283b4eda964bf6bf21b3563866c3c024016c8cb761dff832c42f0c"
+    },
+    {
+      "path": "assets/current/presentation/slides/10.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-10.png",
+      "bytes": 113130,
+      "sha256": "6c3e2f335a45439975515f113d30da3e45c91c274203bf471ed3afac86ede8bd"
+    },
+    {
+      "path": "assets/current/presentation/slides/11.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-11.png",
+      "bytes": 101170,
+      "sha256": "5daa1456e12f86837b61b25b052636ce5d37d0e8beede04eb8e754fda1d22f8e"
+    },
+    {
+      "path": "assets/current/presentation/slides/12.png",
+      "role": "Current slide render",
+      "status": "current",
+      "source": "aligned-12.png",
+      "bytes": 207746,
+      "sha256": "1ca0b810d88a9dee30884093fcda0e8b41b2235c992a90f8231495a8c455e845"
+    },
+    {
+      "path": "assets/current/presentation/notes.json",
+      "role": "Notes snapshot; visible slide wording may be newer for cover phone labels",
+      "status": "current",
+      "source": "Figma export and PowerPoint notes",
+      "bytes": 14344,
+      "sha256": "8b991720853c0453a3264449bfb0f045fe9202d9cca2ab1901b03cd3d140a0ae"
+    },
+    {
+      "path": "assets/source/sonar-team-profile.pdf",
+      "role": "Original user-supplied Team Profile and lean canvas",
+      "status": "source",
+      "source": "Sonar(Creative Industries and A) - Team Profile.pdf",
+      "bytes": 58865,
+      "sha256": "24907dffc0dde282e0ddfa46949750a8a83e813ef73871b5b8e5579a75f8296c"
+    },
+    {
+      "path": "assets/source/sonar-team-profile.txt",
+      "role": "Searchable source extraction",
+      "status": "source",
+      "source": "pdftotext from original source PDF",
+      "bytes": 16381,
+      "sha256": "991c98f593bfb5dc156b9d1b1daf1fdf1f5f2ceb3300ee86115780acd0deaf7a"
+    },
+    {
+      "path": "assets/archive/first-design-pass/IZWI-AI-Presentation.pptx",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "IZWI-AI-Presentation.pptx",
+      "bytes": 3548226,
+      "sha256": "c916fbf388618e0fe7a7caea6258c8dbf67929e8774622ecf2cdf99029989bd2"
+    },
+    {
+      "path": "assets/archive/first-design-pass/IZWI-AI-Presentation.pdf",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "IZWI-AI-Presentation.pdf",
+      "bytes": 1340438,
+      "sha256": "37aaf17ed89ef66cf455da9305613ce18b5cb658016dbb806f63859d73d81614"
+    },
+    {
+      "path": "assets/archive/first-design-pass/IZWI-AI-Poster.pdf",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "IZWI-AI-Poster.pdf",
+      "bytes": 139986,
+      "sha256": "7d6213424ba690e91dddfd9d618d3e4cbfc503b3eb76fc6ff08f41cc4a79d7ff"
+    },
+    {
+      "path": "assets/archive/first-design-pass/poster.png",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "poster.png",
+      "bytes": 878043,
+      "sha256": "d3cc4c9ed136ae934ffac9d5023c7e191cda43f2c1858fccfe24e1a49660ea8a"
+    },
+    {
+      "path": "assets/archive/first-design-pass/mockup-editorial.png",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "mockup-editorial.png",
+      "bytes": 705950,
+      "sha256": "600b29b69769fecd0a93f32eb68fb63951026fb3810a1344f7ace8700e03d0f8"
+    },
+    {
+      "path": "assets/archive/first-design-pass/mockup-studio.png",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "mockup-studio.png",
+      "bytes": 614193,
+      "sha256": "52941d5b4a2d7449d36b89f54890bdd04ff934862fbf4150605e63e1cce68c8a"
+    },
+    {
+      "path": "assets/archive/first-design-pass/mockup-wildcard.png",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "mockup-wildcard.png",
+      "bytes": 574481,
+      "sha256": "27ddca357d143b09211ec5b0b8b09bf3a0760ac6590bb3531deb4e18ef11d131"
+    },
+    {
+      "path": "assets/archive/first-design-pass/contact-sheet.png",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "contact-sheet.png",
+      "bytes": 492991,
+      "sha256": "5b44e4f1c9e6e88388aa2ca3a21dfdd1abdd2afb92cf9ef7a12f0e3685192665"
+    },
+    {
+      "path": "assets/archive/first-design-pass/IZWI-AI-Artwork.zip",
+      "role": "Superseded first design pass",
+      "status": "superseded",
+      "source": "IZWI-AI-Artwork.zip",
+      "bytes": 2864854,
+      "sha256": "a76ea6e913309c218863c806b88d2a7eb6de41884bb3d73787e32dd50f86dbb7"
+    },
+    {
+      "path": "assets/archive/posters/dark-izwi-clip-poster.png",
+      "role": "Superseded poster iteration",
+      "status": "superseded",
+      "source": "exec-179e7249-b061-4062-a107-ee8d50858177.png",
+      "bytes": 2146255,
+      "sha256": "8e407d1d9b0818977d85130e78952ea7afca7dc952fa16ab4c36372ba5a4a2bb"
+    },
+    {
+      "path": "assets/archive/posters/unapproved-mzansicreator-poster.png",
+      "role": "Superseded poster iteration",
+      "status": "superseded",
+      "source": "exec-605abca5-aa87-41d1-bc8b-481d7fd0f51f.png",
+      "bytes": 1946044,
+      "sha256": "ba3ba6b8b95822b74ed52c057d6fb538b6da7907cd45b33df8705cbe995d5e4f"
+    }
+  ]
+}
