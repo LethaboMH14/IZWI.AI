@@ -1,4 +1,5 @@
 # Instructions for future contributors
+- Read CRITERIA.md first. Name the criteria IDs your work moves. Mark a row `done` only with an evidence path that exists; `python3 scripts/criteria_check.py` enforces this.
 - Read README.md, docs/HANDOFF.md and docs/PRODUCT.md before changing scope.
 - The product name is IZWI AI. Team Sonar is the team. MzansiCreator OS was an unapproved draft name.
 - Preserve all five pillars: Create, Localise, Protect, Publish, Earn. A podcast is the example, not the whole product.

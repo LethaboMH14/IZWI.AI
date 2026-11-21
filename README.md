@@ -12,6 +12,8 @@ A proposed creative operating system for South African independent creators and 
 4. [Architecture](docs/engineering/ARCHITECTURE.md), [open-source tool choices](docs/engineering/OPEN-SOURCE-TOOLS.md), [implementation backlog](docs/engineering/BACKLOG.md)
 5. [Design rules](docs/design/DESIGN-SYSTEM.md) and [poster brief](docs/design/POSTER-BRIEF.md)
 6. [All deliverables and version history](assets/README.md)
+7. [Platform plan](docs/PLATFORM-PLAN.md): the full brief built from open-source parts (proposal)
+8. [Frontend design prototype](docs/design/FRONTEND.md) in `web/` (sample data, nothing wired), with mockups in `design/mockups/`
 
 ## Current deliverables
 - [Latest full-solution poster PNG](assets/current/poster/izwi-ai-full-solution.png)
@@ -31,7 +33,7 @@ cd IZWI.AI
 python3 scripts/verify_handoff.py
 python3 scripts/financial_model.py
 ```
-These scripts use Python's standard library. For an existing checkout, run `git pull --ff-only` first. See [development setup](docs/engineering/DEVELOPMENT.md) for the implementation sequence. There is no `npm run dev` application yet.
+These scripts use Python's standard library. For an existing checkout, run `git pull --ff-only` first. See [development setup](docs/engineering/DEVELOPMENT.md) for the implementation sequence. `web/` holds a design prototype only (`cd web && npm install && npm run dev`); there is no working application yet.
 
 ## Scope
 First vertical slice: upload → suggest/edit clips → review multilingual captions → export → prepare distribution.

@@ -1,0 +1,65 @@
+/* Localise, Protect, Publish, Earn tabs. Prefix st- keeps these apart from the shell styles. */
+.st { display: grid; gap: 1.4rem; max-width: 62rem; }
+.st h2 { font: 700 1.5rem var(--display); }
+.st h3 { font: 700 1.15rem var(--display); }
+.st-card { background: var(--paper); border-radius: var(--r-m); padding: 1.1rem 1.2rem; box-shadow: var(--shadow); display: grid; gap: 0.8rem; min-width: 0; }
+.st-card.soft { background: var(--tint-2); box-shadow: none; }
+.st-head { display: flex; gap: 0.8rem; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.st-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.st-row.end { justify-content: flex-end; }
+.st-grow { flex: 1; min-width: 0; }
+.st-list { display: grid; gap: 0.6rem; list-style: none; padding: 0; margin: 0; }
+.st-item { display: grid; gap: 0.5rem; padding: 0.9rem 1rem; border-radius: var(--r-m); background: var(--paper); border-left: 5px solid var(--sc, var(--line)); min-width: 0; }
+.st-item b { font-family: var(--display); font-size: 1.05rem; }
+.st-item p, .st-meta { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+.st-empty { padding: 1.4rem 1.2rem; border-radius: var(--r-m); background: var(--sand); color: var(--ink-2); display: grid; gap: 0.6rem; justify-items: start; }
+.st-empty b { font: 700 1.1rem var(--display); }
+.st-err { color: var(--clay); font-weight: 600; font-size: 0.88rem; overflow-wrap: anywhere; }
+.st-err a { text-decoration: underline; }
+.st-ok { color: var(--moss); font-weight: 600; font-size: 0.88rem; }
+.st-bar { height: 8px; border-radius: 99px; background: var(--sand-2); overflow: hidden; }
+.st-bar i { display: block; height: 100%; background: var(--amber); border-radius: 99px; transition: width 0.45s var(--ease); }
+.st-bar.done i { background: var(--moss); }
+.st select, .st .st-in { font: inherit; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-s); padding: 0 0.7rem; height: 44px; max-width: 100%; }
+.st textarea.st-in { height: auto; padding: 0.6rem 0.8rem; width: 100%; resize: vertical; }
+.st select:focus, .st .st-in:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 4px var(--tint-2); }
+.st .btn:focus-visible, .st button:focus-visible, .st a:focus-visible { outline: 2.5px solid var(--ink); outline-offset: 2px; }
+.st .btn-sm { height: 36px; font-size: 0.85rem; padding: 0 0.9rem; }
+.st .btn-danger { background: var(--clay-tint); color: var(--clay); }
+.st .btn-danger:hover { background: var(--clay); color: #fff; }
+.st-two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.st-lang { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.5rem; }
+.st-lang button { text-align: left; padding: 0.6rem 0.8rem; border-radius: var(--r-s); border: 1.5px solid var(--line); background: var(--paper); display: grid; gap: 0.1rem; transition: border-color 0.2s, background 0.2s; }
+.st-lang button.on { border-color: var(--amber); background: var(--tint-2); }
+.st-lang button[disabled] { opacity: 0.55; cursor: not-allowed; }
+.st-lang b { font-family: var(--display); }
+.st-lang small { color: var(--muted); font-size: 0.75rem; }
+.st-line { display: grid; grid-template-columns: 4.6rem 1fr auto; gap: 0.5rem 0.8rem; align-items: start; padding: 0.6rem 0; border-bottom: 1px dashed var(--line); }
+.st-line.ok .st-text { color: var(--ink-2); }
+.st-text { font-family: var(--serif); font-size: 1.02rem; overflow-wrap: anywhere; }
+.st-flag { color: var(--clay); font-size: 0.78rem; font-weight: 600; }
+.st-link { display: grid; gap: 0.5rem; padding: 0.9rem 1rem; border-radius: var(--r-m); background: var(--moss-tint); }
+.st-link code { font: 500 0.8rem var(--mono); overflow-wrap: anywhere; background: var(--paper); padding: 0.4rem 0.6rem; border-radius: var(--r-s); display: block; }
+.st-quote { font-family: var(--serif); font-style: italic; padding: 0.8rem 1rem; border-left: 3px solid var(--gold); background: var(--tint-2); border-radius: 0 var(--r-s) var(--r-s) 0; }
+.st-declaration-meta { color: var(--muted); font-size: 0.85rem; }
+.st-scope-field { display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--muted); }
+.st-summary { border: 1px solid var(--line); border-radius: var(--r-s); background: var(--tint-2); padding: 0.65rem 0.8rem; font-size: 0.88rem; }
+.st-intro { color: var(--ink-2); }
+.st-presets { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.st-presets button { text-align: left; padding: 0.5rem 0.9rem; border-radius: var(--r-m); border: 1.5px solid var(--line); background: var(--paper); display: grid; transition: all 0.2s var(--ease); }
+.st-presets button.on { border-color: var(--gold); background: var(--tint-2); }
+.st-presets b { font-family: var(--display); }
+.st-presets small { color: var(--muted); font-size: 0.75rem; }
+.st-check { display: inline-flex; gap: 0.5rem; align-items: center; font-weight: 600; font-size: 0.9rem; cursor: pointer; min-height: 44px; }
+.st-check input { width: 20px; height: 20px; accent-color: var(--amber); }
+.st-guide { display: grid; gap: 0.4rem; font-size: 0.9rem; }
+.st-guide li { margin-left: 1.1rem; }
+.st details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+@media (max-width: 640px) {
+  .st-two { grid-template-columns: 1fr; }
+  .st-line { grid-template-columns: 1fr auto; }
+  .st-line .mono { grid-column: 1 / -1; }
+  .st-row > .btn, .st-row > select { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) { .st * { transition: none !important; } }
+.st .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

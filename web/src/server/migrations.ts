@@ -1,0 +1,338 @@
+// Forward-only, versioned schema. Each migration runs in a transaction and is recorded once.
+// Auth tables (user, session, account, verification, organization, member, invitation) are created by better-auth first.
+import { db, now } from "./db";
+
+export const MIGRATIONS: { version: number; name: string; sql: string }[] = [
+  {
+    version: 1,
+    name: "core workspace, media, captions, rights, outputs, providers, audit",
+    sql: `
+CREATE TABLE workspace_pref (
+  workspace_id TEXT PRIMARY KEY REFERENCES organization(id) ON DELETE CASCADE,
+  makes TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(makes)),
+  languages TEXT NOT NULL DEFAULT '["en"]' CHECK (json_valid(languages)),
+  mixes_languages INTEGER NOT NULL DEFAULT 1 CHECK (mixes_languages IN (0,1)),
+  device TEXT NOT NULL DEFAULT 'both' CHECK (device IN ('phone','laptop','both')),
+  data_saver INTEGER NOT NULL DEFAULT 1 CHECK (data_saver IN (0,1)),
+  glossary TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(glossary)),
+  accuracy TEXT NOT NULL DEFAULT 'fast' CHECK (accuracy IN ('fast','accurate')),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE project (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),
+  kind TEXT NOT NULL CHECK (kind IN ('podcast','video','lesson','music','film','animation','client')),
+  spoken_language TEXT NOT NULL DEFAULT 'auto',
+  created_by TEXT NOT NULL REFERENCES "user"(id),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX project_by_ws ON project(workspace_id, updated_at DESC);
+
+CREATE TABLE asset (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('source','proxy','audio','poster','peaks','render','caption','package')),
+  storage_key TEXT NOT NULL UNIQUE,
+  filename TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  bytes INTEGER NOT NULL CHECK (bytes >= 0),
+  sha256 TEXT,
+  duration_ms INTEGER,
+  width INTEGER,
+  height INTEGER,
+  meta TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(meta)),
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX asset_by_project ON asset(project_id, kind);
+
+CREATE TABLE job (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES project(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('queued','running','succeeded','failed','cancelled','blocked')),
+  input TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(input)),
+  output TEXT CHECK (output IS NULL OR json_valid(output)),
+  error TEXT,
+  progress REAL NOT NULL DEFAULT 0,
+  stage TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  idempotency_key TEXT UNIQUE,
+  depends_on TEXT REFERENCES job(id) ON DELETE SET NULL,
+  run_after INTEGER NOT NULL,
+  lease_until INTEGER,
+  worker_id TEXT,
+  created_by TEXT,
+  created_at INTEGER NOT NULL,
+  started_at INTEGER,
+  finished_at INTEGER
+);
+CREATE INDEX job_queue ON job(status, run_after);
+CREATE INDEX job_by_project ON job(project_id, created_at DESC);
+
+CREATE TABLE caption_track (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  language TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('source','translation')),
+  status TEXT NOT NULL CHECK (status IN ('draft','in_review','approved','revision_requested')),
+  source_track_id TEXT REFERENCES caption_track(id) ON DELETE CASCADE,
+  engine TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (project_id, language, kind)
+);
+
+CREATE TABLE caption_line (
+  id TEXT PRIMARY KEY,
+  track_id TEXT NOT NULL REFERENCES caption_track(id) ON DELETE CASCADE,
+  idx INTEGER NOT NULL,
+  start_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL CHECK (end_ms > start_ms),
+  text TEXT NOT NULL,
+  words TEXT CHECK (words IS NULL OR json_valid(words)),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved')),
+  flag TEXT,
+  approved_by TEXT,
+  approved_at INTEGER,
+  edited INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (track_id, idx)
+);
+
+CREATE TABLE clip (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),
+  start_ms INTEGER NOT NULL CHECK (start_ms >= 0),
+  end_ms INTEGER NOT NULL CHECK (end_ms > start_ms),
+  reason TEXT NOT NULL,
+  origin TEXT NOT NULL CHECK (origin IN ('heuristic','model','manual')),
+  status TEXT NOT NULL CHECK (status IN ('suggested','kept','dropped')),
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX clip_by_project ON clip(project_id, start_ms);
+
+CREATE TABLE person (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 80),
+  role TEXT NOT NULL,
+  whole_recording INTEGER NOT NULL DEFAULT 1 CHECK (whole_recording IN (0,1)),
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE appearance (
+  id TEXT PRIMARY KEY,
+  person_id TEXT NOT NULL REFERENCES person(id) ON DELETE CASCADE,
+  start_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL CHECK (end_ms > start_ms)
+);
+
+CREATE TABLE consent (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  person_id TEXT NOT NULL REFERENCES person(id) ON DELETE CASCADE,
+  scope TEXT NOT NULL CHECK (scope IN ('appearance','voice','likeness')),
+  status TEXT NOT NULL CHECK (status IN ('requested','granted','declined','revoked')),
+  statement TEXT NOT NULL,
+  responded_name TEXT,
+  responded_at INTEGER,
+  user_agent TEXT,
+  requested_by TEXT NOT NULL,
+  requested_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX consent_by_person ON consent(person_id, requested_at DESC);
+
+CREATE TABLE declaration (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  statement TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE share_link (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('review','consent')),
+  target_id TEXT,
+  label TEXT,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at INTEGER NOT NULL,
+  revoked_at INTEGER,
+  opens INTEGER NOT NULL DEFAULT 0,
+  last_opened_at INTEGER,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE comment (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  link_id TEXT REFERENCES share_link(id) ON DELETE SET NULL,
+  user_id TEXT,
+  author TEXT NOT NULL,
+  at_ms INTEGER,
+  body TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+  kind TEXT NOT NULL DEFAULT 'note' CHECK (kind IN ('note','approve','changes')),
+  resolved_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX comment_by_project ON comment(project_id, created_at DESC);
+
+CREATE TABLE output (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  clip_id TEXT REFERENCES clip(id) ON DELETE SET NULL,
+  preset TEXT NOT NULL,
+  language TEXT,
+  burn INTEGER NOT NULL DEFAULT 1 CHECK (burn IN (0,1)),
+  status TEXT NOT NULL CHECK (status IN ('queued','ready','failed','blocked')),
+  note TEXT,
+  job_id TEXT REFERENCES job(id) ON DELETE SET NULL,
+  asset_id TEXT REFERENCES asset(id) ON DELETE SET NULL,
+  posted_platform TEXT,
+  posted_url TEXT,
+  posted_at INTEGER,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE listing (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  clip_id TEXT NOT NULL REFERENCES clip(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  terms TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE enquiry (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  listing_id TEXT NOT NULL REFERENCES listing(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  contact TEXT NOT NULL,
+  organisation TEXT,
+  intended_use TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','replied','closed')),
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE provider (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('openai_compat','madlad_endpoint','asr_endpoint')),
+  label TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  model TEXT,
+  key_sealed TEXT,
+  key_hint TEXT,
+  roles TEXT NOT NULL DEFAULT '["plan","translate"]' CHECK (json_valid(roles)),
+  last_test_at INTEGER,
+  last_test_ok INTEGER,
+  last_test_note TEXT,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE usage_event (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  job_id TEXT,
+  unit TEXT NOT NULL,
+  amount REAL NOT NULL,
+  provider TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE plan_run (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  prompt TEXT NOT NULL,
+  planner TEXT NOT NULL,
+  steps TEXT NOT NULL CHECK (json_valid(steps)),
+  status TEXT NOT NULL CHECK (status IN ('proposed','approved','dismissed')),
+  approved_by TEXT,
+  approved_at INTEGER,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE upload_session (
+  upload_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE worker_beat (
+  worker_id TEXT PRIMARY KEY,
+  info TEXT NOT NULL CHECK (json_valid(info)),
+  seen_at INTEGER NOT NULL
+);
+
+CREATE TABLE audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id TEXT,
+  user_id TEXT,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target TEXT,
+  meta TEXT CHECK (meta IS NULL OR json_valid(meta)),
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX audit_by_ws ON audit_log(workspace_id, created_at DESC);
+`,
+  },
+];
+
+export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
+
+function ensureTable() {
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at INTEGER NOT NULL)`);
+}
+
+export function appliedVersion(): number {
+  ensureTable();
+  const r = db.prepare(`SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations`).get() as { v: number };
+  return r.v;
+}
+
+export function migrateApp(log: (s: string) => void = console.log) {
+  const current = appliedVersion();
+  for (const m of MIGRATIONS) {
+    if (m.version <= current) continue;
+    db.transaction(() => {
+      db.exec(m.sql);
+      db.prepare(`INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`).run(m.version, m.name, now());
+    })();
+    log(`applied migration ${m.version}: ${m.name}`);
+  }
+}

@@ -26,6 +26,9 @@ def main():
             errors.append(f'Missing: {relative}')
             continue
         data = p.read_bytes()
+        # Windows checkouts with core.autocrlf turn LF into CRLF in text files; compare the committed form.
+        if p.suffix in {'.txt', '.md', '.csv', '.json'} and b'\r\n' in data:
+            data = data.replace(b'\r\n', b'\n')
         if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
             errors.append(f'Checksum/size mismatch: {relative}')
         if p.suffix == '.png' and not data.startswith(b'\x89PNG\r\n\x1a\n'):
@@ -45,14 +48,18 @@ def main():
             except zipfile.BadZipFile:
                 errors.append(f'Invalid archive: {relative}')
     for md in ROOT.rglob('*.md'):
-        if '.git' in md.parts:
+        if '.git' in md.parts or 'node_modules' in md.parts or '.next' in md.parts:
             continue
-        for target in re.findall(r'\]\(([^)]+)\)', md.read_text()):
+        for target in re.findall(r'\]\(([^)]+)\)', md.read_text(encoding='utf-8')):
             if '://' in target or target.startswith(('#', 'mailto:')):
                 continue
             local = unquote(target.split('#', 1)[0])
             if local and not (md.parent / local).exists():
                 errors.append(f'Broken link in {md.relative_to(ROOT)}: {target}')
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    from criteria_check import check as check_criteria
+    criteria_errors, _ = check_criteria()
+    errors.extend(criteria_errors)
     if errors:
         print('\n'.join(errors), file=sys.stderr)
         return 1
