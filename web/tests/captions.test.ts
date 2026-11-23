@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyGlossary, buildLines, cps, sliceLines, stamp, toASS, toSRT, toVTT, type Seg } from "../src/server/captions";
+import { applyGlossary, buildLines, cps, lineFlag, sliceLines, stamp, toASS, toSRT, toVTT, type Seg } from "../src/server/captions";
 
 const w = (text: string, startMs: number, perWord = 300, gap = 0) =>
   text.split(" ").map((t, i) => ({ w: t, s: startMs + i * (perWord + gap), e: startMs + i * (perWord + gap) + perWord }));
@@ -78,5 +78,19 @@ describe("sliceLines and ASS", () => {
     const ass = toASS(sliceLines(full, 9_000, 20_000), { width: 1080, height: 1920, font: "Archivo Black", karaoke: true });
     expect(ass).toContain("PlayResY: 1920");
     expect(ass).toContain("Dialogue: 0,0:00:01.00,0:00:03.00,Caption,,0,0,0,,{\\k60}Start {\\k140}before");
+  });
+});
+
+describe("lineFlag", () => {
+  it("flags split South African language names even when the model is confident", () => {
+    expect(lineFlag("You switch between English\nand ISI Zulu all the time.", [{ p: 0.99 }])).toMatch(/South African/);
+    expect(lineFlag("Se Sotho and Tshi Venda", [])).toMatch(/South African/);
+  });
+  it("leaves correct spellings and confident lines alone", () => {
+    expect(lineFlag("We added captions in isiZulu and Sesotho.", [{ p: 0.95 }])).toBeNull();
+    expect(lineFlag("She sees the sea.", [{ p: 0.9 }])).toBeNull();
+  });
+  it("still flags low-confidence words", () => {
+    expect(lineFlag("Sharp sharp.", [{ p: 0.3 }])).toMatch(/Low confidence/);
   });
 });

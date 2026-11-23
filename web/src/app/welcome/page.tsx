@@ -242,7 +242,7 @@ export default function Welcome() {
             <p className="lede">This is where your stories, your team and your records live. You can invite people later.</p>
             <label className="field wfield">
               <span>Workspace name</span>
-              <input value={wsNameValue} maxLength={60} onChange={(e) => { setNameTouched(true); setWsName(e.target.value); }} aria-invalid={nameTouched && wsNameValue.trim().length < 2} autoComplete="organization" />
+              <input value={wsNameValue} maxLength={60} onFocus={(e) => { if (!nameTouched) e.currentTarget.select(); }} onMouseUp={(e) => { if (!nameTouched) e.preventDefault(); }} onChange={(e) => { setNameTouched(true); setWsName(e.target.value); }} aria-invalid={nameTouched && wsNameValue.trim().length < 2} autoComplete="organization" />
               <small>At least 2 characters. You are the owner.</small>
             </label>
           </>
