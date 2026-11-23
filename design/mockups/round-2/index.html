@@ -130,7 +130,14 @@ em { font-family: var(--display); font-style: italic; font-weight: 400; color: v
   background: rgba(255,255,255,.95); border: 1px solid var(--line); box-shadow: 0 10px 24px -14px rgba(96,62,6,.45); font-size: .84rem; transition: background .2s, color .2s, box-shadow .2s, opacity .2s; }
 .tag .tt { display: flex; align-items: center; gap: .4rem; font-weight: 700; }
 .tag .tt i { width: 9px; height: 9px; border-radius: 50%; background: var(--pc); }
-.tag .st { font-size: .74rem; color: var(--muted); font-weight: 500; }
+.tag .st { font-size: .74rem; color: var(--ink-2); font-weight: 600; }
+.tag .nx0 { font-size: .72rem; color: var(--amber-deep); font-weight: 600; }
+.tag.on .nx0 { color: var(--tint); }
+.landed { animation: landed 1.6s var(--ease); }
+@keyframes landed { 0%, 40% { box-shadow: 0 0 0 4px var(--gold), var(--shadow); } }
+.ghost-tag.applied { background: var(--moss); }
+.blk .cut { margin-left: .35rem; padding: 0 .3rem; border-radius: 6px; background: rgba(255,255,255,.28); font-size: .66rem; }
+.ws-head .row { display: flex; gap: .4rem; flex-wrap: wrap; }
 .tag .more { display: none; margin-top: .3rem; padding-top: .35rem; border-top: 1px dashed var(--line); font-size: .76rem; color: var(--ink-2); max-width: 15rem; white-space: normal; }
 .tag .more div { display: flex; justify-content: space-between; gap: .6rem; }
 .tag .more .nx { margin-top: .25rem; color: var(--amber-deep); font-weight: 600; }
@@ -372,7 +379,7 @@ em { font-family: var(--display); font-style: italic; font-weight: 400; color: v
     <div class="lobby">
       <aside class="proj" aria-label="Project">
         <div><p class="eyebrow">Your project</p><h3>Jozi Stories · Episode 04</h3><span class="sub mono">28:16 · uploaded 22 Nov · Naledi's studio</span></div>
-        <div class="next" id="next-card"><b>Next: get Sipho's yes</b><span>Clip 2 and its two renders are held until he answers. Everything else can keep moving.</span><div class="row" style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-s" data-open="2">Open Protect</button><button type="button" class="btn btn-q btn-s" data-jump="rights">See it on the map</button></div></div>
+        <div class="next" id="next-card"><b>Next: get Sipho's yes</b><span>Clip 2 and its two renders are held until he answers. Everything else can keep moving.</span><div class="row" style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-s" data-studio="2">Open in Studio →</button><button type="button" class="btn btn-q btn-s" data-open="2">Quick look</button></div></div>
         <div><p class="eyebrow">Happening now</p><ul class="now" id="now-list"></ul></div>
         <ul class="stations-list" id="stations-list" aria-label="Stations"></ul>
       </aside>
@@ -384,7 +391,7 @@ em { font-family: var(--display); font-style: italic; font-weight: 400; color: v
         <div class="flat" id="flat"><div class="flat-room" id="flat-room"></div></div>
         <div class="sel-card" id="sel-card" aria-live="polite"></div>
         <div class="st-dock"><span class="hint mono" id="st-hint">Drag to turn · hover to expand · Enter or Open to fly in</span></div>
-        <div class="ws" id="ws" role="dialog" aria-modal="false" aria-labelledby="ws-title"><div class="ws-head"><h3 id="ws-title"></h3><button type="button" class="btn btn-q btn-s" id="ws-back">← Back to lobby</button></div><div class="ws-body" id="ws-body"></div></div>
+        <div class="ws" id="ws" role="dialog" aria-modal="false" aria-labelledby="ws-title"><div class="ws-head"><h3 id="ws-title"></h3><div class="row"><span id="ws-studio"></span><button type="button" class="btn btn-q btn-s" id="ws-back">← Back to lobby</button></div></div><div class="ws-body" id="ws-body"></div></div>
       </div>
     </div>
   </section>
@@ -562,19 +569,38 @@ function pillarStatus(i) {
   const h = held().length, cleared = S.people.filter((p) => p.consent !== "waiting").length, waiting = S.people.filter((p) => p.consent === "waiting");
   const d = DESTS(), readyN = d.filter((x) => x.state === "ready").length;
   return [
-    { st: "3 clips · 2 kept · 1 to review", rows: [["Kept", "Clip 1, Clip 2"], ["To review", "Clip 3 (suggested)"], ["Open edits", S.props.filter((p) => p.state === "open" && p.kind === "edit").length]], next: "Review clip 3's suggestion" },
-    { st: LANGS.map((l) => `${l.code.toUpperCase()} ${l.state === "ready" ? "✓" : l.state === "draft" ? `${l.done}/${l.total}` : "queued"}`).join(" · "), rows: LANGS.map((l) => [l.name, l.state === "ready" ? "Approved" : l.state === "draft" ? `Draft · ${l.done} of ${l.total} lines` : "Queued"]), next: "Approve 5 isiZulu lines" },
-    { st: `${h} held · ${cleared} cleared`, rows: [["Held", h ? `Clip 2 · ${waiting.map((p) => p.name).join(", ")}` : "Nothing"], ["Cleared", S.people.filter((p) => p.consent !== "waiting").map((p) => p.name).join(", ")]], next: h ? "Get Sipho's yes" : "Nothing blocked" },
+    { st: "1 clip to review", rows: [["Kept", "Clip 1, Clip 2"], ["To review", "Clip 3 (suggested)"], ["Open edits", S.props.filter((p) => p.state === "open" && p.kind === "edit").length]], next: "Review clip 3's suggestion" },
+    { st: "isiZulu in progress", rows: LANGS.map((l) => [l.name, l.state === "ready" ? "Approved" : l.state === "draft" ? `Draft · ${l.done} of ${l.total} lines` : "Queued"]), next: "Approve 5 isiZulu lines" },
+    { st: h ? `${h} clip held` : "Nothing held", rows: [["Held", h ? `Clip 2 · ${waiting.map((p) => p.name).join(", ")}` : "Nothing"], ["Cleared", S.people.filter((p) => p.consent !== "waiting").map((p) => p.name).join(", ")]], next: h ? "Get Sipho's yes" : "Nothing blocked" },
     { st: `${readyN} of ${d.length} ready to export`, rows: d.map((x) => [x.name, x.state === "ready" ? "Ready" : x.state === "held" ? "Held" : "Needs captions"]), next: "Finish isiZulu for WhatsApp" },
-    { st: `${rand(LISTING.price)} · ${LISTING.enquiries.length} enquiries`, rows: [["Listing price", `${rand(LISTING.price)} / 12 months`], ["Enquiries", LISTING.enquiries.length]], next: "Reply to 2 enquiries", planned: true },
+    { st: `Asking price ${rand(LISTING.price)}`, rows: [["Asking price", `${rand(LISTING.price)} / 12 months`], ...LISTING.enquiries.map((e) => ["Enquiry", e.who])], next: `Reply to ${LISTING.enquiries.length} enquiries`, planned: true },
   ][i];
 }
 function tagInner(i) {
   const p = PILLARS[i], s = pillarStatus(i);
-  return `<span class="tt"><i></i>${p.name}${s.planned ? ' <small class="mono" style="font-weight:400">listing planned</small>' : ""}</span><span class="st">${esc(s.st)}</span>
-    <span class="more">${s.rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}<div class="nx">Next: ${esc(s.next)} →</div></span>`;
+  return `<span class="tt"><i></i>${p.name}${s.planned ? ' <small class="mono" style="font-weight:400">listing planned</small>' : ""}</span><span class="st">${esc(s.st)}</span><span class="nx0">Next: ${esc(s.next)}</span>
+    <span class="more">${s.rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}</span>`;
 }
 let sel = 2;
+// Open in Studio: lands on the same project, stage and selected item
+const STUDIO = [
+  { sec: "editor", ed: "clip:c3", what: "Clip 3 in the editor" },
+  { sec: "editor", ed: "track:zu", what: "isiZulu captions in the editor" },
+  { sec: "rights", r: "person:sipho", what: "Sipho on the Rights map" },
+  { sec: "editor", ed: "out:o4", what: "the WhatsApp Status output in the editor" },
+  null,
+];
+const studioBtn = (i) => STUDIO[i] ? `<button type="button" class="btn btn-s" data-studio="${i}">Open in Studio →</button>` : `<button type="button" class="btn btn-s" disabled style="opacity:.5;cursor:not-allowed">Studio planned</button>`;
+function openStudio(i) {
+  const t = STUDIO[i]; if (!t) return;
+  if ($("#ws").classList.contains("on")) { $("#ws").classList.remove("on"); if (lobby3d) lobby3d.back(); }
+  if (t.ed) S.edSel = t.ed;
+  if (t.r) selectItem(t.r); else refresh();
+  document.getElementById(t.sec).scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+  const target = t.sec === "editor" ? $(".center") : $("#insp");
+  target.classList.remove("landed"); void target.offsetWidth; target.classList.add("landed");
+  toast(`Opened ${t.what}`);
+}
 const tagEls = [];
 function buildTags(host, positioned) {
   host.innerHTML = PILLARS.map((p, i) => `<button type="button" class="tag${p.id === "earn" ? " planned" : ""}" data-station="${i}" style="--pc:${p.color}${positioned ? `;left:${r2(50 + Math.sin((i / 5) * Math.PI * 2) * 44)}%;top:${r2(50 - Math.cos((i / 5) * Math.PI * 2) * 44)}%` : ""}" aria-pressed="false"></button>`).join("");
@@ -616,12 +642,12 @@ function renderLobby() {
   [...tagEls, ...flatTags].forEach((t) => { const i = +t.dataset.station; t.innerHTML = tagInner(i); t.classList.toggle("on", i === sel); t.setAttribute("aria-pressed", i === sel); });
   const p = PILLARS[sel], s = pillarStatus(sel), c = $("#sel-card");
   c.style.setProperty("--pc", p.color);
-  c.innerHTML = `<h4>${p.name}</h4><p><b>${esc(s.st)}</b></p><p>${p.line} Next: ${esc(s.next)}.</p>
-    <div class="row"><button type="button" class="btn btn-s" data-open="${sel}">Open ${p.name} →</button><button type="button" class="btn btn-q btn-s" data-step="-1" aria-label="Previous station">←</button><button type="button" class="btn btn-q btn-s" data-step="1" aria-label="Next station">→</button></div>`;
-  $("#stations-list").innerHTML = PILLARS.map((x, i) => { const st = pillarStatus(i); return `<li><details${i === 2 ? " open" : ""}><summary><span><i class="dot" style="background:${x.color}"></i> ${x.name}</span><span class="mono">${esc(st.st)}</span></summary><div class="more">${st.rows.map(([k, v]) => `<div>${esc(k)}: <b>${esc(v)}</b></div>`).join("")}<button type="button" class="btn btn-q btn-s" data-open="${i}" style="justify-self:start;margin-top:.3rem">Open ${x.name}</button></div></details></li>`; }).join("");
+  c.innerHTML = `<h4>${p.name}</h4><p><b>${esc(s.st)}</b> · Next: ${esc(s.next)}</p><p>${p.line}</p>
+    <div class="row">${studioBtn(sel)}<button type="button" class="btn btn-q btn-s" data-open="${sel}">Quick look</button><button type="button" class="btn btn-q btn-s" data-step="-1" aria-label="Previous station">←</button><button type="button" class="btn btn-q btn-s" data-step="1" aria-label="Next station">→</button></div>`;
+  $("#stations-list").innerHTML = PILLARS.map((x, i) => { const st = pillarStatus(i); return `<li><details${i === 2 ? " open" : ""}><summary><span><i class="dot" style="background:${x.color}"></i> ${x.name}</span><span class="mono">${esc(st.st)}</span></summary><div class="more"><div style="color:var(--amber-deep);font-weight:600">Next: ${esc(st.next)}</div>${st.rows.map(([k, v]) => `<div>${esc(k)}: <b>${esc(v)}</b></div>`).join("")}<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.3rem">${studioBtn(i)}<button type="button" class="btn btn-q btn-s" data-open="${i}">Quick look</button></div></div></details></li>`; }).join("");
   $("#next-card").innerHTML = person("sipho").consent === "waiting"
-    ? `<b>Next: get Sipho's yes</b><span>Clip 2 and its two renders are held until he answers. Everything else can keep moving.</span><div style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-s" data-open="2">Open Protect</button><button type="button" class="btn btn-q btn-s" data-jump="rights">See it on the map</button></div>`
-    : `<b>Next: approve 5 isiZulu lines</b><span>Sipho said yes and clip 2 is rendering. WhatsApp Status still needs isiZulu captions.</span><div style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-s" data-open="1">Open Localise</button><button type="button" class="btn btn-q btn-s" data-jump="editor">Open the editor</button></div>`;
+    ? `<b>Next: get Sipho's yes</b><span>Clip 2 and its two renders are held until he answers. Everything else can keep moving.</span><div style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-s" data-studio="2">Open in Studio →</button><button type="button" class="btn btn-q btn-s" data-open="2">Quick look</button></div>`
+    : `<b>Next: approve 5 isiZulu lines</b><span>Sipho said yes and clip 2 is rendering. WhatsApp Status still needs isiZulu captions.</span><div style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-s" data-studio="1">Open in Studio →</button><button type="button" class="btn btn-q btn-s" data-open="1">Quick look</button></div>`;
   renderNow();
   if (lobby3d) lobby3d.update();
 }
@@ -636,16 +662,17 @@ function wsBody(i) {
   if (i === 2) return `<div class="ws-grid">${S.people.map((p) => `<div class="ws-card"><b>${p.name}</b><span>${p.role}</span><span class="pill ${p.consent === "waiting" ? "p-held" : "p-ready"}" style="justify-self:start">${p.consent === "waiting" ? "Held · waiting" : p.consent === "declared" ? "Declared" : "Said yes"}</span></div>`).join("")}</div>
     <div class="row" style="display:flex;gap:.5rem;flex-wrap:wrap">${person("sipho").consent === "waiting" ? `<button type="button" class="btn" data-consent="1">▶ Simulate Sipho's yes</button>` : `<button type="button" class="btn btn-q" data-reset="1">↺ Reset</button>`}<button type="button" class="btn btn-q" data-jump="rights">Open the Rights map ↓</button></div>`;
   if (i === 3) return `<div class="ws-grid">${DESTS().map((d) => `<div class="ws-card"><b>${d.name}</b><span class="mono">${d.fmt}</span><span class="pill p-${d.state}" style="justify-self:start">${d.state === "ready" ? "Ready to export" : d.state === "held" ? "Held" : "Needs captions"}</span><span>${d.why}</span></div>`).join("")}</div><p class="note">"Ready to export" means the file is made. Posting to each platform is a separate step (planned).</p>`;
-  return `<div class="ws-grid"><div class="ws-card"><span class="mono">Your listing (sample)</span><b>${LISTING.title}</b><span style="font:600 1.6rem var(--display)">${rand(LISTING.price)}</span><span>${LISTING.term}</span></div>${LISTING.enquiries.map((e) => `<div class="ws-card"><b>${e.who}</b><span>${e.ask}</span><span class="mono">${e.when}</span><button type="button" class="btn btn-q btn-s" style="justify-self:start">Reply</button></div>`).join("")}</div><p class="note">The price is what the creator sets. No sales or payouts are shown, because none exist yet.</p>`;
+  return `<div class="ws-grid"><div class="ws-card"><span class="mono">Your listing (sample)</span><b>${LISTING.title}</b><span class="mono">Asking price</span><span style="font:600 1.6rem var(--display)">${rand(LISTING.price)}</span><span>${LISTING.term}</span></div>${LISTING.enquiries.map((e) => `<div class="ws-card"><b>${e.who}</b><span>${e.ask}</span><span class="mono">${e.when}</span><button type="button" class="btn btn-q btn-s" style="justify-self:start">Reply</button></div>`).join("")}</div><p class="note">The asking price is what the creator sets. No sales or payouts are shown, because none exist yet.</p>`;
 }
 function openWs(i) {
   selectStation(i);
-  const show = () => { const p = PILLARS[i]; $("#ws-title").innerHTML = `<i class="dot" style="background:${p.color};width:12px;height:12px"></i>${p.name}`; $("#ws-body").innerHTML = wsBody(i); $("#ws").classList.add("on"); $("#ws-back").focus({ preventScroll: true }); };
+  const show = () => { const p = PILLARS[i]; $("#ws-title").innerHTML = `<i class="dot" style="background:${p.color};width:12px;height:12px"></i>${p.name} <span class="mono" style="color:var(--muted);font-weight:400">quick look</span>`; $("#ws-studio").innerHTML = studioBtn(i); $("#ws-body").innerHTML = wsBody(i); $("#ws").classList.add("on"); $("#ws-back").focus({ preventScroll: true }); };
   if (lobby3d && !$("#stage").classList.contains("is-flat") && !phone.matches) lobby3d.fly(i, show); else show();
 }
 function closeWs() { $("#ws").classList.remove("on"); if (lobby3d) lobby3d.back(); $("#stage").focus({ preventScroll: true }); }
 $("#ws-back").onclick = closeWs;
 document.addEventListener("click", (e) => {
+  const so = e.target.closest("[data-studio]"); if (so) { openStudio(+so.dataset.studio); return; }
   const o = e.target.closest("[data-open]"); if (o) { openWs(+o.dataset.open); return; }
   const st = e.target.closest("[data-station]"); if (st) { const i = +st.dataset.station; if (i === sel && st.closest(".st-tags")) openWs(i); else selectStation(i); return; }
   const sp = e.target.closest("[data-step]"); if (sp && sp.closest("#sel-card")) { selectStation(sel + +sp.dataset.step); return; }
@@ -815,6 +842,22 @@ $("#lb-2d").onclick = () => setLobbyFlat(true);
 
 /* =========== shared agent: proposals and context prompts =========== */
 const clipIdx = (id) => CLIPS.findIndex((c) => c.id === id);
+const trimsOf = (cid) => S.props.filter((p) => p.state === "accepted" && p.kind === "edit" && p.at && !p.at.track && p.at.clip === cid);
+function bounds(c) {
+  const d0 = (c.e - c.s) / 1000; let s = c.s, e = c.e, cut = 0;
+  for (const p of trimsOf(c.id)) { const len = p.at.to - p.at.from; cut += len; if (p.at.from <= 0.01) s += len * 1000; else if (p.at.to >= d0 - 0.01) e -= len * 1000; }
+  return { s, e, cut: Math.round(cut * 10) / 10, dur: Math.round((d0 - cut) * 10) / 10, d0 };
+}
+const fmtS = (x) => `${Math.round(x * 10) / 10} s`;
+// One selection path for pointer, keyboard, 2D, 3D, phone list and "Open in Studio".
+function selectItem(key) {
+  S.rsel = key; const [k, id] = key.split(":");
+  if (k === "clip") S.step = clipIdx(id);
+  else if (k === "scene") S.step = CLIPS.findIndex((c) => c.scene === id);
+  else if (k === "out") S.step = CLIPS.findIndex((c) => c.outputs.some((o) => o.id === id));
+  else if (k === "person" && !CLIPS[S.step].people.includes(id)) S.step = CLIPS.findIndex((c) => c.people.includes(id));
+  refresh();
+}
 function labelOf(key) {
   const [k, id] = key.split(":");
   if (k === "person") return person(id).name;
@@ -843,7 +886,14 @@ function askAgent(key, text) {
   S.msgs.push({ r: "u", t: text, ctx: label }, { r: "a", t: `Here's a proposal for ${label}. It's in the workspace too. Nothing changes until you approve it.` }, { r: "p", id: p.id });
   refresh(); toast("Proposal added to the workspace and the conversation");
 }
-function setProp(id, state) { const p = S.props.find((x) => x.id === id); if (!p) return; p.state = state; refresh(); toast(state === "accepted" ? "Applied (mockup). Undo from the card." : "Rejected"); }
+function setProp(id, state) {
+  const p = S.props.find((x) => x.id === id); if (!p) return;
+  const was = p.state; p.state = state; refresh();
+  const trim = p.kind === "edit" && p.at && !p.at.track, c = trim && CLIPS[clipIdx(p.at.clip)];
+  if (state === "accepted") toast(trim ? `Trim applied: Clip ${clipIdx(c.id) + 1} is now ${fmtS(bounds(c).dur)}. Undo from the card or the timeline.` : "Applied (mockup). Undo from the card.");
+  else if (state === "rejected") toast("Rejected. Undo from the card.");
+  else toast(trim && was === "accepted" ? `Undone: Clip ${clipIdx(c.id) + 1} is back to ${fmtS(bounds(c).dur)}.` : "Back to waiting for you.");
+}
 const cprompt = (key, place = "Ask IZWI about this…") => `<div class="cprompt" data-ctx="${key}"><form><span class="ctx" title="${esc(labelOf(key))}">@${esc(labelOf(key))}</span><input aria-label="Ask IZWI about ${esc(labelOf(key))}" placeholder="${place}"><button type="submit" aria-label="Send">↑</button></form><div class="ideas">${ideasFor(key).map((t) => `<button type="button" data-idea="${esc(t)}">${esc(t)}</button>`).join("")}</div></div>`;
 document.addEventListener("submit", (e) => { const c = e.target.closest(".cprompt"); if (!c) return; e.preventDefault(); const inp = e.target.querySelector("input"); const t = inp.value.trim(); if (!t) { inp.focus(); return; } askAgent(c.dataset.ctx, t); });
 document.addEventListener("click", (e) => {
@@ -875,7 +925,7 @@ const REVIEW = {
   outRows.forEach(({ o, ci, y }) => { s += `<path data-k="out:${o.id}" data-p="stroke" d="${curve(CX + CW, ROW[ci] + 40, OX, y + 20)}" fill="none" stroke-width="1.6" opacity=".85"/>`; });
   PEOPLE0.forEach((p, i) => { const ini = p.name.replace(".", "").split(" ").map((w) => w[0]).join("");
     s += `<g data-sel="person:${p.id}" tabindex="0" role="button" aria-label="${p.name}, ${p.role}" transform="translate(${PX},${ROW[i] + 4})"><rect data-k="pcard:${p.id}" data-p="stroke" width="${PW}" height="72" rx="16" fill="#fff" stroke-width="1.4"/><circle data-k="ptint:${p.id}" data-p="fill" cx="36" cy="36" r="20"/><text class="ini" x="36" y="41" text-anchor="middle">${ini}</text><text class="nm" x="68" y="31">${p.name}</text><text class="sb" x="68" y="51">${p.role}</text><circle data-k="person:${p.id}" data-p="fill" cx="${PW - 18}" cy="36" r="6"/><rect class="hit" x="-3" y="-3" width="${PW + 6}" height="78" rx="18"/></g>`; });
-  CLIPS.forEach((c, ci) => { s += `<g data-sel="clip:${c.id}" tabindex="0" role="button" aria-label="Clip ${ci + 1}, ${c.title}" transform="translate(${CX},${ROW[ci]})"><rect data-k="clip:${c.id}" data-p="stroke" width="${CW}" height="80" rx="16" fill="#fff" stroke-width="1.5"/><rect data-k="clip:${c.id}" data-p="fill" width="6" height="80" rx="3"/><text class="mo" x="22" y="28">${ci + 1} · ${clock(c.s)}–${clock(c.e)}</text><text class="nm" x="22" y="52">${c.title}</text><rect data-k="clip:${c.id}" data-p="fill" x="${CW - 72}" y="14" width="58" height="22" rx="11"/><text class="pl" data-t="word:${c.id}" x="${CW - 43}" y="29" text-anchor="middle"></text><text class="sb" data-t="props:${c.id}" x="22" y="70"></text><rect class="hit" x="-3" y="-3" width="${CW + 6}" height="86" rx="18"/></g>`; });
+  CLIPS.forEach((c, ci) => { s += `<g data-sel="clip:${c.id}" tabindex="0" role="button" aria-label="Clip ${ci + 1}, ${c.title}" transform="translate(${CX},${ROW[ci]})"><rect data-k="clip:${c.id}" data-p="stroke" width="${CW}" height="80" rx="16" fill="#fff" stroke-width="1.5"/><rect data-k="clip:${c.id}" data-p="fill" width="6" height="80" rx="3"/><text class="mo" data-t="times:${c.id}" x="22" y="28"></text><text class="nm" x="22" y="52">${c.title}</text><rect data-k="clip:${c.id}" data-p="fill" x="${CW - 72}" y="14" width="58" height="22" rx="11"/><text class="pl" data-t="word:${c.id}" x="${CW - 43}" y="29" text-anchor="middle"></text><text class="sb" data-t="props:${c.id}" x="22" y="70"></text><rect class="hit" x="-3" y="-3" width="${CW + 6}" height="86" rx="18"/></g>`; });
   outRows.forEach(({ o, y }) => { s += `<g data-sel="out:${o.id}" tabindex="0" role="button" aria-label="${o.label}" transform="translate(${OX},${y})"><rect width="${OW}" height="40" rx="12" fill="#fff" stroke="#ddd8cc"/><circle data-k="out:${o.id}" data-p="fill" cx="18" cy="20" r="5"/><text class="ou" x="32" y="18">${o.label} → ${o.dest}</text><text class="sb" data-t="note:${o.id}" x="32" y="32"></text><rect class="hit" x="-3" y="-3" width="${OW + 6}" height="46" rx="14"/></g>`; });
   $("#rm-svg").innerHTML = s;
 }
@@ -891,16 +941,16 @@ function colourFor(key) {
 function renderMap() {
   document.querySelectorAll("#rm-svg [data-k]").forEach((el) => { el.style[el.dataset.p] = colourFor(el.dataset.k); if (el.dataset.k.startsWith("link:")) { const w = person(el.dataset.k.slice(5)).consent === "waiting"; el.style.strokeDasharray = w ? "6 6" : "none"; el.classList.toggle("wait", w); } });
   document.querySelectorAll("#rm-svg [data-t]").forEach((el) => { const [k, id] = el.dataset.t.split(":");
-    el.textContent = k === "word" ? WORD[statusOf(CLIPS[clipIdx(id)])] : k === "note" ? allOutputs().find((o) => o.id === id).note : (() => { const n = S.props.filter((p) => p.target === "clip:" + id && p.state === "open").length; const c = CLIPS[clipIdx(id)]; return `${c.people.length} ${c.people.length === 1 ? "person" : "people"} · ${c.outputs.length} output${c.outputs.length > 1 ? "s" : ""}${n ? ` · ${n} proposal${n > 1 ? "s" : ""}` : ""}`; })(); });
+    el.textContent = k === "times" ? (() => { const c = CLIPS[clipIdx(id)], b = bounds(c); return `${clipIdx(id) + 1} · ${clock(b.s)}–${clock(b.e)}${b.cut ? ` · trimmed ${fmtS(b.cut)}` : ""}`; })() : k === "word" ? WORD[statusOf(CLIPS[clipIdx(id)])] : k === "note" ? allOutputs().find((o) => o.id === id).note : (() => { const n = S.props.filter((p) => p.target === "clip:" + id && p.state === "open").length; const c = CLIPS[clipIdx(id)]; return `${c.people.length} ${c.people.length === 1 ? "person" : "people"} · ${c.outputs.length} output${c.outputs.length > 1 ? "s" : ""}${n ? ` · ${n} proposal${n > 1 ? "s" : ""}` : ""}`; })(); });
   document.querySelectorAll("#rm-svg [data-sel]").forEach((g) => g.classList.toggle("sel", g.dataset.sel === S.rsel));
   const h = held().length; $("#rm-count").textContent = h ? `${h} clip held` : "Nothing held";
   $("#rm-list").innerHTML = S.people.map((p) => `<li><button type="button" data-sel="person:${p.id}" aria-pressed="${S.rsel === "person:" + p.id}" style="--sc:${p.consent === "waiting" ? "var(--clay)" : "var(--moss)"}"><span class="lh"><b style="color:var(--ink)">${p.name}</b><span class="pill ${p.consent === "waiting" ? "p-held" : "p-ready"}">${p.consent === "waiting" ? "Waiting" : p.consent === "declared" ? "Declared" : "Said yes"}</span></span><span class="mono">${p.role}</span></button></li>`).join("")
-    + CLIPS.map((c, ci) => { const st = statusOf(c); return `<li><button type="button" data-sel="clip:${c.id}" aria-pressed="${S.rsel === "clip:" + c.id}" style="--sc:${COLOR[st]}"><span class="lh"><span class="mono">${ci + 1} · ${clock(c.s)}–${clock(c.e)}</span><span class="pill p-${st}">${WORD[st]}</span></span><b>${c.title}</b><span class="ppl">${c.outputs.map((o0) => { const o = outOf(o0); return `<span class="pill p-${o.status}">${o.label}</span>`; }).join("")}</span></button></li>`; }).join("");
+    + CLIPS.map((c, ci) => { const st = statusOf(c); return `<li><button type="button" data-sel="clip:${c.id}" aria-pressed="${S.rsel === "clip:" + c.id}" style="--sc:${COLOR[st]}"><span class="lh"><span class="mono">${ci + 1} · ${clock(bounds(c).s)}–${clock(bounds(c).e)}</span><span class="pill p-${st}">${WORD[st]}</span></span><b>${c.title}</b><span class="ppl">${c.outputs.map((o0) => { const o = outOf(o0); return `<span class="pill p-${o.status}">${o.label}</span>`; }).join("")}</span></button></li>`; }).join("");
   renderInsp();
 }
 views.push(renderMap);
-document.addEventListener("click", (e) => { const g = e.target.closest("[data-sel]"); if (!g) return; S.rsel = g.dataset.sel; const [k, id] = S.rsel.split(":"); if (k === "clip") S.step = clipIdx(id); refresh(); });
-$("#rm-svg").addEventListener("keydown", (e) => { const g = e.target.closest("[data-sel]"); if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); g.click(); } });
+document.addEventListener("click", (e) => { const g = e.target.closest("[data-sel]"); if (g) selectItem(g.getAttribute("data-sel")); });
+$("#rm-svg").addEventListener("keydown", (e) => { const g = e.target.closest("[data-sel]"); if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); selectItem(g.getAttribute("data-sel")); } });
 
 function fakeQr() {
   const n = 25; let cells = "";
@@ -925,9 +975,9 @@ function renderInsp() {
       <p>Appears in ${clips.map((c) => `Clip ${clipIdx(c.id) + 1}`).join(", ")}.</p>
       ${p.consent === "waiting" ? `<div class="qrbox">${QR}<span><b>Scan to consent</b><br>Opens on their own phone. No account needed. isiZulu, Sesotho, Afrikaans or English.</span></div><div class="row" style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-q btn-s">Show QR full screen</button><button type="button" class="btn btn-q btn-s">Send link</button><button type="button" class="btn btn-s" data-consent="1">▶ Simulate yes</button></div>` : id === "sipho" ? `<button type="button" class="btn btn-q btn-s" data-reset="1" style="justify-self:start">↺ Reset the consent demo</button>` : ""}`;
   } else if (k === "clip") {
-    const c = CLIPS[clipIdx(id)], st = statusOf(c);
-    h = `<span class="kick">Clip ${clipIdx(id) + 1} · ${clock(c.s)}–${clock(c.e)}</span><h3>${c.title}</h3><span class="pill p-${st}" style="justify-self:start">${WORD[st]}${st === "held" ? " · waiting on Sipho" : ""}</span>
-      <div class="fields"><label for="f-title">Title<input id="f-title" value="${esc(c.title)}"></label><div class="two"><label for="f-in">In<input id="f-in" class="mono" value="${clock(c.s)}"></label><label for="f-out">Out<input id="f-out" class="mono" value="${clock(c.e)}"></label></div></div>
+    const c = CLIPS[clipIdx(id)], st = statusOf(c), b = bounds(c);
+    h = `<span class="kick">Clip ${clipIdx(id) + 1} · ${clock(b.s)}–${clock(b.e)} · ${fmtS(b.dur)}</span><h3>${c.title}</h3><span class="pill p-${st}" style="justify-self:start">${WORD[st]}${st === "held" ? " · waiting on Sipho" : ""}</span>${b.cut ? `<span class="pill p-ready" style="justify-self:start">Trimmed ${fmtS(b.cut)} · was ${fmtS(b.d0)}</span>` : ""}
+      <div class="fields"><label for="f-title">Title<input id="f-title" value="${esc(c.title)}"></label><div class="two"><label for="f-in">In<input id="f-in" class="mono" value="${clock(b.s)}"></label><label for="f-out">Out<input id="f-out" class="mono" value="${clock(b.e)}"></label></div></div>
       ${reviewHtml(id)}`;
   } else if (k === "out") {
     const o = allOutputs().find((x) => x.id === id);
@@ -942,10 +992,10 @@ function renderInsp() {
 
 /* =========== B. 3D workspace =========== */
 let ws3 = null;
-function setRm3(on) { $("#rm-canvas").classList.toggle("is-3d", on); $("#rm-2d").setAttribute("aria-pressed", !on); $("#rm-3d").setAttribute("aria-pressed", on); if (on && !ws3) ws3 = buildWs3(); if (on && S.rsel.startsWith("person")) { S.rsel = "clip:" + CLIPS[S.step].id; refresh(); } }
+function setRm3(on) { $("#rm-canvas").classList.toggle("is-3d", on); $("#rm-2d").setAttribute("aria-pressed", !on); $("#rm-3d").setAttribute("aria-pressed", on); if (on && !ws3) ws3 = buildWs3(); refresh(); }
 $("#rm-2d").onclick = () => setRm3(false);
 $("#rm-3d").onclick = () => setRm3(true);
-const goStep = (k) => { S.step = (k + CLIPS.length) % CLIPS.length; S.rsel = "clip:" + CLIPS[S.step].id; refresh(); };
+const goStep = (k) => selectItem("clip:" + CLIPS[(k + CLIPS.length) % CLIPS.length].id);
 $("#ws3-prev").onclick = () => goStep(S.step - 1);
 $("#ws3-next").onclick = () => goStep(S.step + 1);
 $("#ws3").addEventListener("keydown", (e) => { if (e.target.closest("input")) return; if (e.key === "ArrowRight") goStep(S.step + 1); if (e.key === "ArrowLeft") goStep(S.step - 1); });
@@ -954,7 +1004,7 @@ function drawReel(ctx, c, k) {
   const W = 270, H = 480, st = statusOf(c), pk = samplePeaks(60);
   ctx.fillStyle = "#faf8f4"; ctx.fillRect(0, 0, W, H);
   const g = ctx.createRadialGradient(W / 2, H * 0.42, 10, W / 2, H * 0.42, 200); g.addColorStop(0, "#fff1cf"); g.addColorStop(1, "#faf8f4"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = "#6b655c"; ctx.font = "600 15px Martian Mono, monospace"; ctx.fillText(`REEL ${k + 1} · ${clock(c.e - c.s)}`, 18, 34);
+  ctx.fillStyle = "#6b655c"; ctx.font = "600 15px Martian Mono, monospace"; const bb = bounds(c); ctx.fillText(`REEL ${k + 1} · ${clock(bb.dur * 1000)}${bb.cut ? " · TRIMMED" : ""}`, 18, 34);
   pk.forEach((p, i) => { const x = 18 + i * 3.9, h = 10 + p * 90; ctx.fillStyle = p > 0.6 ? "#E9A21B" : "#B77913"; ctx.fillRect(x, 200 - h / 2, 2.4, h); });
   ctx.fillStyle = "#211e1a"; ctx.font = "700 24px Inter, sans-serif"; wrapText(ctx, c.title, 18, 320, W - 36, 30);
   ctx.fillStyle = "rgba(33,30,26,.82)"; ctx.beginPath(); ctx.roundRect(18, 382, W - 36, 34, 8); ctx.fill(); ctx.fillStyle = "#ffe0a0"; ctx.font = "600 14px Inter, sans-serif"; ctx.fillText(k === 1 ? "Ngifunde ukudayisa eSoweto…" : k === 0 ? "Just start. Before you're ready." : "Caller: you changed my mind…", 28, 404);
@@ -998,7 +1048,7 @@ function buildWs3() {
     const sc = mkCard(2.4, 1.35, 480, 270, (ctx) => drawScene(ctx, scene_), "scene:" + scene_.id, new THREE.Vector3(x - 0.3, 4.15, -1.4));
     line(sc.position.clone().add(new THREE.Vector3(0, -0.68, 0)), reel.position.clone().add(new THREE.Vector3(0, 1.34, 0)), 0xb77913);
     c.outputs.forEach((o, j) => { const ox = x + 1.55 + j * 0.95; const om = mkCard(0.8, 1.42, 160, 284, (ctx) => drawOut(ctx, allOutputs().find((q) => q.id === o.id)), "out:" + o.id, new THREE.Vector3(ox, 0.75, 0.5)); line(reel.position.clone().add(new THREE.Vector3(0.75, -0.5, 0)), om.position.clone().add(new THREE.Vector3(-0.4, 0, 0))); });
-    c.people.forEach((pid, j) => { const s = new THREE.Mesh(new THREE.SphereGeometry(0.16, 28, 18), new THREE.MeshStandardMaterial({ color: 0x4f6b3a, roughness: 0.4 })); s.position.set(x - 1.25, 2.4 - j * 0.55, 0.3); world.add(s); people.push({ s, pid, k }); line(s.position.clone(), reel.position.clone().add(new THREE.Vector3(-0.75, 0.7 - j * 0.4, 0)), 0x4f6b3a); });
+    c.people.forEach((pid, j) => { const s = new THREE.Mesh(new THREE.SphereGeometry(0.16, 28, 18), new THREE.MeshStandardMaterial({ color: 0x4f6b3a, roughness: 0.4 })); s.position.set(x - 1.25, 2.4 - j * 0.55, 0.3); s.userData.key = "person:" + pid; world.add(s); people.push({ s, pid, k }); line(s.position.clone(), reel.position.clone().add(new THREE.Vector3(-0.75, 0.7 - j * 0.4, 0)), 0x4f6b3a); });
     if (k < CLIPS.length - 1) line(new THREE.Vector3(x + 0.75, 2.9, 0), new THREE.Vector3(x + GAP - 0.75, 2.9, 0), 0xe9a21b);
   });
   scene.add(new THREE.DirectionalLight(0xffffff, 1).translateX(-3).translateY(6).translateZ(5));
@@ -1016,7 +1066,7 @@ function buildWs3() {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   el.addEventListener("pointerdown", (e) => { drag = true; moved = 0; lx = e.clientX; el.setPointerCapture(e.pointerId); });
   el.addEventListener("pointermove", (e) => { if (drag) { moved += Math.abs(e.clientX - lx); yaw = Math.max(-0.35, Math.min(0.35, yaw + (e.clientX - lx) * 0.003)); lx = e.clientX; } });
-  el.addEventListener("pointerup", (e) => { drag = false; if (moved > 5) return; const r = el.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, cam); const h = ray.intersectObjects(cards.map((c) => c.m))[0]; if (h) { S.rsel = h.object.userData.key; const [k, id] = S.rsel.split(":"); S.step = k === "clip" ? clipIdx(id) : k === "scene" ? CLIPS.findIndex((c) => c.scene === id) : CLIPS.findIndex((c) => c.outputs.some((o) => o.id === id)); refresh(); } });
+  el.addEventListener("pointerup", (e) => { drag = false; if (moved > 5) return; const r = el.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, cam); const h = ray.intersectObjects([...cards.map((c) => c.m), ...people.map((p) => p.s)])[0]; if (h) selectItem(h.object.userData.key); });
   const v = new THREE.Vector3(), pr = $("#ws3-prompt");
   let lastKey = "";
   const tick = () => {
@@ -1026,9 +1076,10 @@ function buildWs3() {
     world.rotation.y += (yaw - world.rotation.y) * 0.1; cam.position.copy(camPos); cam.lookAt(look);
     cards.forEach((c) => { const on = c.key === S.rsel; c.frame.material.opacity += ((on ? 1 : 0) - c.frame.material.opacity) * 0.2; });
     const r = el.getBoundingClientRect();
-    people.forEach((p, i) => { const w = person(p.pid).consent === "waiting"; p.s.material.color.set(w ? 0xc4552d : 0x4f6b3a); p.s.getWorldPosition(v); v.y += 0.3; v.project(cam); const ch = chips[i]; ch.textContent = person(p.pid).name + (w ? " · waiting" : ""); ch.classList.toggle("wait", w); ch.style.transform = `translate(${(v.x * 0.5 + 0.5) * r.width}px, ${(-v.y * 0.5 + 0.5) * r.height}px) translate(-50%, -100%)`; ch.style.opacity = Math.abs(p.k - S.step) > 1 ? 0 : 1; });
+    people.forEach((p, i) => { const w = person(p.pid).consent === "waiting"; p.s.material.color.set(w ? 0xc4552d : 0x4f6b3a); p.s.scale.setScalar(S.rsel === "person:" + p.pid ? 1.45 : 1); p.s.getWorldPosition(v); v.y += 0.3; v.project(cam); const ch = chips[i]; ch.textContent = person(p.pid).name + (w ? " · waiting" : ""); ch.classList.toggle("wait", w); ch.style.transform = `translate(${(v.x * 0.5 + 0.5) * r.width}px, ${(-v.y * 0.5 + 0.5) * r.height}px) translate(-50%, -100%)`; ch.style.opacity = Math.abs(p.k - S.step) > 1 ? 0 : 1; });
+    const pp = S.rsel.startsWith("person:") && (people.find((p) => "person:" + p.pid === S.rsel && p.k === S.step) ?? people.find((p) => "person:" + p.pid === S.rsel));
     const sc = cards.find((c) => c.key === S.rsel) ?? cards.find((c) => c.key === "clip:" + CLIPS[S.step].id);
-    sc.m.getWorldPosition(v); v.y -= sc.h / 2; v.project(cam);
+    if (pp) { pp.s.getWorldPosition(v); v.y -= 0.3; } else { sc.m.getWorldPosition(v); v.y -= sc.h / 2; } v.project(cam);
     const px = Math.max(8, Math.min(r.width - pr.offsetWidth - 8, (v.x * 0.5 + 0.5) * r.width - pr.offsetWidth / 2)), py = Math.min(r.height - pr.offsetHeight - 56, (-v.y * 0.5 + 0.5) * r.height + 12);
     pr.style.transform = `translate(${r2(px)}px, ${r2(py)}px)`;
     if (lastKey !== S.rsel) { lastKey = S.rsel; pr.innerHTML = cprompt(S.rsel, "Prompt about this card…"); }
@@ -1041,21 +1092,22 @@ function buildWs3() {
 views.push(() => { if (ws3) ws3.redraw(); });
 
 /* =========== C. Editor with one agent =========== */
-const durS = (c) => (c.e - c.s) / 1000;
-const TOTAL = CLIPS.reduce((a, c) => a + durS(c), 0);
+const durS = (c) => bounds(c).dur;
+const tot = () => CLIPS.reduce((a, c) => a + durS(c), 0);
 const offS = (id) => { let t = 0; for (const c of CLIPS) { if (c.id === id) return t; t += durS(c); } return 0; };
-const pct = (s) => r2((s / TOTAL) * 100);
+const pct = (s) => r2((s / tot()) * 100);
 const pvClip = () => { const [k, id] = S.edSel.split(":"); if (k === "clip") return CLIPS[clipIdx(id)]; if (k === "out") return CLIPS.find((c) => c.outputs.some((o) => o.id === id)); if (k === "scene") return CLIPS.find((c) => c.scene === id); return CLIPS[1]; };
 function renderBin() {
   const b = (key, name, sub) => `<li><button type="button" data-ed="${key}" aria-pressed="${S.edSel === key}"><span>${esc(name)}</span><small>${esc(sub)}</small></button></li>`;
   $("#bin-scenes").innerHTML = SCENES.map((s) => b("scene:" + s.id, s.name, `${clock(s.s)}–${clock(s.e)}`)).join("");
-  $("#bin-reels").innerHTML = CLIPS.map((c, k) => b("clip:" + c.id, `Clip ${k + 1} · ${c.title}`, `${WORD[statusOf(c)]} · ${durS(c)} s`)).join("");
+  $("#bin-reels").innerHTML = CLIPS.map((c, k) => b("clip:" + c.id, `Clip ${k + 1} · ${c.title}`, `${WORD[statusOf(c)]} · ${fmtS(durS(c))}${bounds(c).cut ? " · trimmed" : ""}`)).join("");
   $("#bin-assets").innerHTML = allOutputs().map((o) => b("out:" + o.id, o.label, `${o.dest} · ${o.note}`)).join("") + b("track:zu", "isiZulu captions", "Draft · 9 of 14 lines");
 }
 function renderTimeline() {
   const c0 = pvClip();
-  let h = `<div class="ph" id="ph"></div><div class="lane"><span class="lab">REELS</span>${CLIPS.map((c, k) => `<button type="button" class="blk${S.edSel === "clip:" + c.id ? " sel" : ""}" data-ed="clip:${c.id}" style="left:${pct(offS(c.id))}%;width:calc(${pct(durS(c))}% - 3px);background:${COLOR[statusOf(c)]}">${k + 1} · ${esc(c.title)}</button>`).join("")}`;
-  S.props.filter((p) => p.at && !p.at.track && p.state === "open").forEach((p) => { const l = pct(offS(p.at.clip) + p.at.from), w = Math.max(1.2, pct(p.at.to - p.at.from)); h += `<span class="ghost" style="left:${l}%;width:${w}%"></span><span class="ghost-tag" style="left:${Math.min(l, 56)}%">${esc(p.title)}<button type="button" data-acc="${p.id}" aria-label="Accept">✓</button><button type="button" data-rej="${p.id}" aria-label="Reject">✕</button></span>`; });
+  let h = `<div class="ph" id="ph"></div><div class="lane"><span class="lab">REELS</span>${CLIPS.map((c, k) => `<button type="button" class="blk${S.edSel === "clip:" + c.id ? " sel" : ""}" data-ed="clip:${c.id}" style="left:${pct(offS(c.id))}%;width:calc(${pct(durS(c))}% - 3px);background:${COLOR[statusOf(c)]}">${k + 1} · ${esc(c.title)}${bounds(c).cut ? `<span class="cut">−${fmtS(bounds(c).cut)}</span>` : ""}</button>`).join("")}`;
+  S.props.filter((p) => p.at && !p.at.track && p.state === "accepted").forEach((p) => { const c = CLIPS[clipIdx(p.at.clip)]; h += `<span class="ghost-tag applied" style="left:${Math.min(pct(offS(c.id)), 56)}%">✓ ${esc(p.title)}<button type="button" data-undo="${p.id}" aria-label="Undo: ${esc(p.title)}">↺</button></span>`; });
+  S.props.filter((p) => p.at && !p.at.track && p.state === "open").forEach((p) => { const c = CLIPS[clipIdx(p.at.clip)], shift = (bounds(c).s - c.s) / 1000; const l = pct(offS(p.at.clip) + Math.max(0, p.at.from - shift)), w = Math.max(1.2, pct(p.at.to - p.at.from)); h += `<span class="ghost" style="left:${l}%;width:${w}%"></span><span class="ghost-tag" style="left:${Math.min(l, 56)}%">${esc(p.title)}<button type="button" data-acc="${p.id}" aria-label="Accept">✓</button><button type="button" data-rej="${p.id}" aria-label="Reject">✕</button></span>`; });
   h += `</div><div class="lane cap"><span class="lab">EN CAPS</span>${CLIPS.map((c) => `<span class="capseg" style="left:${pct(offS(c.id))}%;width:calc(${pct(durS(c))}% - 3px);background:var(--moss-tint);border:1px solid #c9d6bb"></span>`).join("")}</div>`;
   h += `<div class="lane cap"><span class="lab">ZU CAPS</span>${CLIPS.slice(1).map((c, k) => { const done = k === 0 ? 9 / 14 : 6 / 11; return `<span class="capseg" style="left:${pct(offS(c.id))}%;width:calc(${pct(durS(c) * done)}% - 1px);background:var(--moss-tint);border:1px solid #c9d6bb"></span><span class="capseg" style="left:${pct(offS(c.id) + durS(c) * done)}%;width:calc(${pct(durS(c) * (1 - done))}% - 3px);background:var(--tint-2);border:1px dashed var(--gold)"></span>`; }).join("")}`;
   S.props.filter((p) => p.at && p.at.track && p.state === "open").forEach((p) => { const l = pct(offS(p.at.clip) + p.at.from), w = Math.max(1.2, pct(p.at.to - p.at.from)); h += `<span class="ghost" style="left:${l}%;width:${w}%;top:-3px;bottom:-3px"></span>`; });
@@ -1064,7 +1116,7 @@ function renderTimeline() {
   const sel = S.edSel, [k, id] = sel.split(":"), left = k === "clip" ? pct(offS(id)) : k === "track" ? pct(offS("c2")) : 0;
   $("#tl-cprompt").innerHTML = `<div style="margin-left:min(${left}%, calc(100% - min(100%, 27rem)));max-width:27rem">${cprompt(sel, "Ask about the selection…")}</div>`;
   const open = S.props.filter((p) => p.target === sel && p.state === "open").length, st = statusOf(c0);
-  $("#pv-side").innerHTML = `<span class="mono" style="color:var(--muted)">Selected · ${esc(labelOf(sel))}</span><h4>${esc(c0.title)}</h4><span class="pill p-${st}" style="justify-self:start">${WORD[st]}${st === "held" ? " · preview only until Sipho says yes" : ""}</span><p>${durS(c0)} s · ${c0.people.map((p) => person(p).name).join(", ")} · ${open} open proposal${open === 1 ? "" : "s"} on this selection</p><div style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-s" id="play">${playing ? "❚❚ Pause" : "▶ Play"}</button><button type="button" class="btn btn-q btn-s" data-jump="rights">See on the Rights map</button></div>`;
+  $("#pv-side").innerHTML = `<span class="mono" style="color:var(--muted)">Selected · ${esc(labelOf(sel))}</span><h4>${esc(c0.title)}</h4><span class="pill p-${st}" style="justify-self:start">${WORD[st]}${st === "held" ? " · preview only until Sipho says yes" : ""}</span><p>${clock(bounds(c0).s)}–${clock(bounds(c0).e)} · ${fmtS(bounds(c0).dur)}${bounds(c0).cut ? ` (trimmed ${fmtS(bounds(c0).cut)} from ${fmtS(bounds(c0).d0)})` : ""} · ${c0.people.map((p) => person(p).name).join(", ")} · ${open} open proposal${open === 1 ? "" : "s"} on this selection</p><div style="display:flex;gap:.4rem;flex-wrap:wrap"><button type="button" class="btn btn-s" id="play">${playing ? "❚❚ Pause" : "▶ Play"}</button><button type="button" class="btn btn-q btn-s" data-jump="rights">See on the Rights map</button></div>`;
 }
 function renderChat() {
   const log = $("#chat-log"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
@@ -1094,13 +1146,15 @@ document.addEventListener("click", (e) => { if (e.target.closest("#play")) { pla
     requestAnimationFrame(draw);
     const now = performance.now(), dt = (now - last) / 1000; last = now;
     if (!vis) return;
-    if (playing) playT = (playT + dt) % TOTAL;
-    const ph = $("#ph"); if (ph) ph.style.left = `calc(4.6rem + (100% - 5.3rem) * ${r2(playT / TOTAL)})`;
+    if (playing) playT = (playT + dt) % tot();
+    const ph = $("#ph"); if (ph) ph.style.left = `calc(4.6rem + (100% - 5.3rem) * ${r2(playT / tot())})`;
     const c = pvClip(), st = statusOf(c), t = reduce ? 0 : (now - t0) / 1000;
     ctx.fillStyle = "#faf8f4"; ctx.fillRect(0, 0, 360, 640);
     const g = ctx.createRadialGradient(180, 260, 10, 180, 260, 260); g.addColorStop(0, "#fff1cf"); g.addColorStop(1, "#faf8f4"); ctx.fillStyle = g; ctx.fillRect(0, 0, 360, 640);
     pk.forEach((p, i) => { const h = 16 + p * 140 * (0.75 + 0.25 * Math.sin(t * 4 + i * 0.6) * (playing ? 1 : 0)); ctx.fillStyle = p > 0.6 ? "#E9A21B" : "#B77913"; ctx.fillRect(28 + i * 6.4, 270 - h / 2, 3.6, h); });
     ctx.fillStyle = "#211e1a"; ctx.font = "700 30px Inter, sans-serif"; wrapText(ctx, c.title, 28, 70, 300, 36);
+    const bb = bounds(c); ctx.fillStyle = "#6b655c"; ctx.font = "500 15px Martian Mono, monospace"; ctx.fillText(`${clock(bb.s)}–${clock(bb.e)} · ${fmtS(bb.dur)}`, 28, 160);
+    if (bb.cut) { ctx.fillStyle = "#4F6B3A"; ctx.beginPath(); ctx.roundRect(28, 172, 190, 30, 15); ctx.fill(); ctx.fillStyle = "#fff"; ctx.font = "700 14px Inter, sans-serif"; ctx.fillText(`TRIMMED −${fmtS(bb.cut)}`, 42, 192); }
     const ln = LINES[c.id][Math.floor(t / 2.2) % 3];
     ctx.fillStyle = "rgba(33,30,26,.85)"; ctx.beginPath(); ctx.roundRect(24, 470, 312, 56, 12); ctx.fill(); ctx.fillStyle = "#ffe0a0"; ctx.font = "600 19px Inter, sans-serif"; ctx.fillText(ln, 40, 505);
     if (st !== "ready") { ctx.fillStyle = COLOR[st]; ctx.fillRect(0, 590, 360, 50); ctx.fillStyle = "#fff"; ctx.font = "700 18px Inter, sans-serif"; ctx.fillText(st === "held" ? "HELD · PREVIEW ONLY" : "DRAFT", 24, 622); }
