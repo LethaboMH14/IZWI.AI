@@ -3,7 +3,7 @@ import { z } from "zod";
 import { all, newId, now, one, parse, run, tx } from "./db";
 import { projectOf, requireRole, type Ctx } from "./guard";
 import { HttpError, fail } from "./http";
-import { enqueue, requeueBlocked } from "./jobs";
+import { enqueue, publicJob, requeueBlocked } from "./jobs";
 import { audit } from "./audit";
 import { hashToken, newToken } from "./crypto";
 import { LIMITS, PUBLIC_URL } from "./env";
@@ -28,6 +28,7 @@ export function createProject(ctx: Ctx, input: z.infer<typeof ProjectIn>) {
 export function updateProject(ctx: Ctx, id: string, patch: Partial<z.infer<typeof ProjectIn>>) {
   const p = projectOf(ctx, id);
   run(`UPDATE project SET title = ?, kind = ?, spoken_language = ?, updated_at = ? WHERE id = ?`, patch.title ?? p.title, patch.kind ?? p.kind, patch.spokenLanguage ?? p.spoken_language, now(), p.id);
+  audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "project.updated", target: p.id, meta: { fields: Object.keys(patch) } });
 }
 
 export function deleteProject(ctx: Ctx, id: string) {
@@ -47,7 +48,12 @@ export const StepIn = z.discriminatedUnion("type", [
   z.object({ type: z.literal("package") }),
 ]);
 
+// Returns only the public job shape: no worker id, lease or idempotency key goes back to the browser.
 export function runStep(ctx: Ctx, projectId: string, step: z.infer<typeof StepIn>, idem: string | null) {
+  return publicJob(queueStep(ctx, projectId, step, idem));
+}
+
+function queueStep(ctx: Ctx, projectId: string, step: z.infer<typeof StepIn>, idem: string | null) {
   const p = projectOf(ctx, projectId);
   const key = idem ? `api:${idem.slice(0, 80)}` : `api:${step.type}:${p.id}:${now()}`;
   const base = { workspaceId: ctx.workspaceId, projectId: p.id, createdBy: ctx.userId, idempotencyKey: key };
@@ -126,6 +132,7 @@ export function updateLine(ctx: Ctx, id: string, patch: z.infer<typeof LineIn>, 
   }
   if (patch.approve !== undefined) {
     run(`UPDATE caption_line SET status = ?, approved_by = ?, approved_at = ? WHERE id = ?`, patch.approve ? "approved" : "draft", patch.approve ? by : null, patch.approve ? now() : null, l.id);
+    audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: patch.approve ? "caption.line_approved" : "caption.line_reopened", target: l.id });
   }
   refreshTrack(l.track_id);
   touch(l.project_id);
@@ -133,7 +140,8 @@ export function updateLine(ctx: Ctx, id: string, patch: z.infer<typeof LineIn>, 
 
 export function approveAll(ctx: Ctx, trackId: string, by: string) {
   const t = one<{ id: string; project_id: string }>(`SELECT id, project_id FROM caption_track WHERE id = ? AND workspace_id = ?`, trackId, ctx.workspaceId) ?? fail(404, "Not found.");
-  run(`UPDATE caption_line SET status = 'approved', approved_by = ?, approved_at = ? WHERE track_id = ? AND status = 'draft' AND flag IS NULL`, by, now(), t.id);
+  const approved = run(`UPDATE caption_line SET status = 'approved', approved_by = ?, approved_at = ? WHERE track_id = ? AND status = 'draft' AND flag IS NULL`, by, now(), t.id).changes;
+  audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "caption.approved_all", target: t.id, meta: { lines: approved } });
   refreshTrack(t.id);
   const left = one<{ n: number }>(`SELECT COUNT(*) n FROM caption_line WHERE track_id = ? AND status = 'draft'`, t.id)!.n;
   return { left };
@@ -154,8 +162,9 @@ export function learnGlossary(ctx: Ctx, entry: z.infer<typeof GlossaryIn>) {
   let fixed = 0;
   if (entry.heard) {
     const rows = all<{ id: string; text: string; words: string | null; start_ms: number; end_ms: number }>(
-      `SELECT l.id, l.text, l.words, l.start_ms, l.end_ms FROM caption_line l JOIN caption_track t ON t.id = l.track_id WHERE t.workspace_id = ? AND t.kind = 'source' AND l.status = 'draft' AND l.text LIKE ?`,
-      ctx.workspaceId, `%${entry.heard}%`,
+      `SELECT l.id, l.text, l.words, l.start_ms, l.end_ms FROM caption_line l JOIN caption_track t ON t.id = l.track_id WHERE t.workspace_id = ? AND t.kind = 'source' AND l.status = 'draft' AND l.text LIKE ? ESCAPE '!'`,
+      // A typed % or _ is matched literally, not as a wildcard.
+      ctx.workspaceId, `%${entry.heard.replace(/[!%_]/g, (c) => `!${c}`)}%`,
     );
     // Fix the words with their timing (same routine as new transcripts), then rebuild the line text from them.
     tx(() => rows.forEach((r) => {
@@ -208,7 +217,7 @@ export function requestConsent(ctx: Ctx, projectId: string, personId: string, sc
     `INSERT INTO consent (id, workspace_id, project_id, person_id, scope, status, statement, requested_by, requested_at, updated_at) VALUES (?, ?, ?, ?, ?, 'requested', ?, ?, ?, ?)`,
     consentId, ctx.workspaceId, p.id, person.id, scope, consentStatement(person.name, p.title, scope), ctx.userId, now(), now(),
   );
-  const link = makeLink(ctx, p.id, "consent", consentId, `Consent: ${person.name}`, 30);
+  const link = makeLink(ctx, p.id, "consent", consentId, `Consent: ${person.name}`, LIMITS.linkDays);
   audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "consent.requested", target: consentId });
   return { url: link.url, message: `Hi ${person.name}, please confirm you're happy for me to use your part of “${p.title}”. It takes a minute: ${link.url}` };
 }
@@ -244,7 +253,8 @@ export function addComment(ctx: Ctx, projectId: string, atMs: number | null, bod
 }
 
 export function resolveComment(ctx: Ctx, id: string, resolved: boolean) {
-  run(`UPDATE comment SET resolved_at = ? WHERE id = ? AND workspace_id = ?`, resolved ? now() : null, id, ctx.workspaceId);
+  const n = run(`UPDATE comment SET resolved_at = ? WHERE id = ? AND workspace_id = ?`, resolved ? now() : null, id, ctx.workspaceId).changes;
+  if (!n) fail(404, "Not found.");
 }
 
 export const OutputIn = z.object({ clipId: z.string(), preset: z.string(), language: z.string().max(5).nullable(), burn: z.boolean().default(true) });

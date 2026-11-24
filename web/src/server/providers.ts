@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { all, parse } from "./db";
 import { unseal } from "./crypto";
+import { BlockedAddressError, guardedFetch, type GuardedInit } from "./ssrf";
 
 export type ProviderKind = "openai_compat" | "madlad_endpoint" | "asr_endpoint";
 export type ProviderRow = {
@@ -25,8 +26,9 @@ export function providerFor(workspaceId: string, role: Role): ProviderRow | unde
   );
 }
 
-// Outbound calls go only to http(s). Cloud metadata addresses are always refused; private ranges are refused
-// when IZWI_HOSTED=1 (a local install needs localhost for Ollama).
+// Early feedback when a provider is saved. The real check is in guardedFetch, at connect time, after DNS.
+// Cloud metadata addresses are always refused; private ranges are refused when IZWI_HOSTED=1
+// (a local install needs localhost for Ollama).
 export function checkBaseUrl(raw: string): string {
   let u: URL;
   try {
@@ -35,32 +37,61 @@ export function checkBaseUrl(raw: string): string {
     throw new ProviderError("That address is not a valid URL.");
   }
   if (u.protocol !== "https:" && u.protocol !== "http:") throw new ProviderError("Only http and https addresses are allowed.");
+  if (u.username || u.password) throw new ProviderError("Put the key in the key field, not in the address.");
+  if (u.search || u.hash) throw new ProviderError("Leave out the ? and # parts of the address.");
   const h = u.hostname;
   if (/^169\.254\./.test(h) || h === "metadata.google.internal" || h === "[fd00:ec2::254]") throw new ProviderError("That address is not allowed.");
   if (process.env.IZWI_HOSTED === "1" && /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\])/.test(h)) throw new ProviderError("Private addresses are not allowed on a hosted install.");
   return u.toString().replace(/\/$/, "");
 }
 
+// The key is unsealed here, inside the request that needs it, and never stored decrypted.
 const authHeader = (p: ProviderRow): Record<string, string> => (p.key_sealed ? { authorization: `Bearer ${unseal(p.key_sealed)}` } : {});
 
-export async function chatJSON<T>(p: ProviderRow, system: string, user: string, schema: z.ZodType<T>, o: { maxTokens?: number; timeoutMs?: number } = {}) {
-  let res: Response;
+// Fixed messages only: the upstream body is never shown, because it can echo the request, the key or internal detail.
+const STATUS_HINT: Record<number, string> = {
+  400: "refused the request. Check the model name.",
+  401: "refused the key.",
+  403: "refused the key.",
+  404: "has no such address or model.",
+  413: "said the request is too large.",
+  429: "is rate-limiting this key. Try again in a minute.",
+};
+export function statusError(p: ProviderRow, status: number) {
+  const hint = STATUS_HINT[status] ?? (status >= 500 ? "had a problem on its side." : `answered ${status}.`);
+  return new ProviderError(`${p.label} ${hint}`, status === 429 || status >= 500);
+}
+
+async function call(p: ProviderRow, url: string, init: GuardedInit): Promise<Response> {
   try {
-    res = await fetch(`${p.base_url}/chat/completions`, {
+    return await guardedFetch(url, init);
+  } catch (e) {
+    if (e instanceof BlockedAddressError) throw new ProviderError(`${p.label}: that address is not allowed.`);
+    throw new ProviderError(`Could not reach ${p.label}.`, true);
+  }
+}
+
+export async function chatJSON<T>(p: ProviderRow, system: string, user: string, schema: z.ZodType<T>, o: { maxTokens?: number; timeoutMs?: number } = {}) {
+  if (!p.model) throw new ProviderError(`${p.label} has no model name. Add one in Run on.`);
+  const send = (jsonMode: boolean) =>
+    call(p, `${p.base_url}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", ...authHeader(p) },
       body: JSON.stringify({
-        model: p.model, temperature: 0.2, max_tokens: o.maxTokens ?? 2000, response_format: { type: "json_object" },
+        model: p.model, temperature: 0.2, max_tokens: o.maxTokens ?? 2000, ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
       }),
       signal: AbortSignal.timeout(o.timeoutMs ?? 120_000),
     });
-  } catch (e) {
-    throw new ProviderError(`Could not reach ${p.label}: ${(e as Error).message}`, true);
+  let res = await send(true);
+  // Some models refuse response_format with a 400. The prompt already asks for JSON, so try once without it.
+  if (res.status === 400) {
+    await res.body?.cancel();
+    res = await send(false);
   }
   if (!res.ok) {
-    const t = (await res.text()).replace(/\s+/g, " ").slice(0, 240);
-    throw new ProviderError(`${p.label} answered ${res.status}. ${t}`, res.status === 429 || res.status >= 500);
+    await res.body?.cancel();
+    throw statusError(p, res.status);
   }
   const d = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
   const text = d.choices?.[0]?.message?.content ?? "";
@@ -78,13 +109,13 @@ export async function chatJSON<T>(p: ProviderRow, system: string, user: string, 
 }
 
 async function madlad(p: ProviderRow, text: string, lang: string) {
-  const res = await fetch(p.base_url, {
+  const res = await call(p, p.base_url, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeader(p) },
     body: JSON.stringify({ inputs: `<2${lang}> ${text}` }),
     signal: AbortSignal.timeout(60_000),
   });
-  if (!res.ok) throw new ProviderError(`${p.label} answered ${res.status}.`, res.status === 429 || res.status >= 500);
+  if (!res.ok) throw statusError(p, res.status);
   const d = (await res.json()) as { generated_text?: string }[] | { generated_text?: string };
   const out = Array.isArray(d) ? d[0]?.generated_text : d.generated_text;
   if (!out) throw new ProviderError("The translation endpoint returned no text.", true);
@@ -101,10 +132,11 @@ export async function testProvider(p: ProviderRow): Promise<{ ok: boolean; note:
       const t = await madlad(p, "Good morning", "zu");
       return { ok: true, note: `Translated a test phrase (“${t.slice(0, 40)}”).` };
     }
-    const res = await fetch(p.base_url, { method: "GET", headers: authHeader(p), signal: AbortSignal.timeout(20_000) });
+    const res = await call(p, p.base_url, { method: "GET", headers: authHeader(p), signal: AbortSignal.timeout(20_000) });
+    await res.body?.cancel();
     return { ok: res.status < 500, note: `Endpoint answered ${res.status}.` };
   } catch (e) {
-    return { ok: false, note: (e as Error).message.slice(0, 220) };
+    return { ok: false, note: e instanceof ProviderError ? e.message : "The test did not finish." };
   }
 }
 
@@ -147,8 +179,8 @@ export async function translateLines(p: ProviderRow, lines: { i: number; t: stri
 }
 
 export async function transcribeEndpoint(p: ProviderRow, wav: Buffer) {
-  const res = await fetch(p.base_url, { method: "POST", headers: { "content-type": "audio/wav", ...authHeader(p) }, body: new Uint8Array(wav), signal: AbortSignal.timeout(600_000) });
-  if (!res.ok) throw new ProviderError(`${p.label} answered ${res.status}.`, res.status === 429 || res.status >= 500);
+  const res = await call(p, p.base_url, { method: "POST", headers: { "content-type": "audio/wav", ...authHeader(p) }, body: new Uint8Array(wav), signal: AbortSignal.timeout(600_000) });
+  if (!res.ok) throw statusError(p, res.status);
   const d = (await res.json()) as { text?: string; chunks?: { timestamp: [number, number]; text: string }[] };
   if (!d.text) throw new ProviderError("The speech endpoint returned no text.", true);
   return d;

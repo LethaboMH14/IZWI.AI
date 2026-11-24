@@ -22,8 +22,9 @@ type Asset = { id: string; workspace_id: string; project_id: string; kind: strin
 type Project = { id: string; workspace_id: string; title: string; kind: string; spoken_language: string };
 type LineRow = { id: string; idx: number; start_ms: number; end_ms: number; text: string; words: string | null; status: string };
 
-const project = (id: string) => one<Project>(`SELECT * FROM project WHERE id = ?`, id) ?? fail("The project no longer exists.");
-const asset = (id: unknown) => one<Asset>(`SELECT * FROM asset WHERE id = ?`, String(id)) ?? fail("A file this step needs is missing.");
+// Every lookup is scoped to the job's own workspace, so a job can never read another tenant's rows.
+const project = (ws: string, id: string) => one<Project>(`SELECT * FROM project WHERE id = ? AND workspace_id = ?`, id, ws) ?? fail("The project no longer exists.");
+const asset = (ws: string, id: unknown) => one<Asset>(`SELECT * FROM asset WHERE id = ? AND workspace_id = ?`, String(id), ws) ?? fail("A file this step needs is missing.");
 const latest = (projectId: string, kind: string) => one<Asset>(`SELECT * FROM asset WHERE project_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1`, projectId, kind);
 function fail(msg: string, retryable = false): never {
   throw new ToolError(msg, retryable);
@@ -52,6 +53,7 @@ export async function handle(c: JobCtx): Promise<unknown> {
     case "transcribe": return transcribeJob(c);
     case "suggest_clips": return suggestJob(c);
     case "translate": return translateJob(c);
+    case "publish": return publishJob(c);
     case "render": return renderJob(c);
     case "package": return packageJob(c);
     default: return fail(`Unknown step ${c.job.type}`);
@@ -59,7 +61,7 @@ export async function handle(c: JobCtx): Promise<unknown> {
 }
 
 async function probeJob(c: JobCtx) {
-  const a = asset(c.input.assetId);
+  const a = asset(c.job.workspace_id, c.input.assetId);
   c.beat(0.1, "Reading the file");
   const p = await probe(absPath(a.storage_key));
   if (!p.hasAudio && !p.hasVideo) fail("No audio or video was found in this file.");
@@ -71,7 +73,7 @@ async function probeJob(c: JobCtx) {
 }
 
 async function proxyJob(c: JobCtx) {
-  const a = asset(c.input.assetId);
+  const a = asset(c.job.workspace_id, c.input.assetId);
   const p = parse<Probe>(a.meta, { durationMs: a.duration_ms ?? 0, hasAudio: true, hasVideo: false, format: "" });
   const src = absPath(a.storage_key);
   const key = (name: string) => storageKey(a.workspace_id, a.project_id, name);
@@ -106,8 +108,8 @@ async function proxyJob(c: JobCtx) {
 }
 
 async function transcribeJob(c: JobCtx) {
-  const src = asset(c.input.assetId);
-  const proj = project(src.project_id);
+  const src = asset(c.job.workspace_id, c.input.assetId);
+  const proj = project(c.job.workspace_id, src.project_id);
   const wav = one<Asset>(`SELECT * FROM asset WHERE project_id = ? AND kind = 'audio' ORDER BY created_at DESC LIMIT 1`, proj.id) ?? fail("The audio for listening is missing. Run the preview step again.");
   const pf = prefs(proj.workspace_id);
   const glossary = parse<GlossaryEntry[]>(pf?.glossary, []);
@@ -161,26 +163,67 @@ function sourceLines(projectId: string) {
 }
 
 async function suggestJob(c: JobCtx) {
-  const proj = project(c.job.project_id!);
+  const proj = project(c.job.workspace_id, c.job.project_id!);
   const { rows } = sourceLines(proj.id);
   const segs: Seg[] = rows.map((r) => ({ startMs: r.start_ms, endMs: r.end_ms, text: r.text.replace(/\n/g, " "), words: parse<Word[]>(r.words, []) }));
   const count = Math.max(1, Math.min(10, Number(c.input.count ?? 3)));
   const ideas = suggestClips(segs, { count, ...(clipDefaults[proj.kind] ?? clipDefaults.podcast) });
   const existing = all<{ start_ms: number; end_ms: number }>(`SELECT start_ms, end_ms FROM clip WHERE project_id = ? AND status != 'dropped'`, proj.id);
-  let added = 0;
+  const clipIds: string[] = [];
   for (const idea of ideas) {
     if (existing.some((e) => idea.startMs < e.end_ms && idea.endMs > e.start_ms)) continue;
+    const id = newId("clp");
     run(
       `INSERT INTO clip (id, workspace_id, project_id, title, start_ms, end_ms, reason, origin, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'heuristic', 'suggested', ?, ?)`,
-      newId("clp"), proj.workspace_id, proj.id, idea.title, idea.startMs, idea.endMs, idea.reason, now(), now(),
+      id, proj.workspace_id, proj.id, idea.title, idea.startMs, idea.endMs, idea.reason, now(), now(),
     );
-    added++;
+    clipIds.push(id);
   }
-  return { added, considered: ideas.length };
+  return { added: clipIds.length, considered: ideas.length, clipIds };
+}
+
+// The Publish step of an approved plan. It runs after Cut, so it sees the clips Cut just made. The person approved a plan
+// that renders them, so those suggestions become kept. Each render still passes the consent gate on its own.
+async function publishJob(c: JobCtx) {
+  const ws = c.job.workspace_id;
+  const proj = project(ws, c.job.project_id!);
+  const cutJobId = typeof c.input.cutJobId === "string" ? c.input.cutJobId : null;
+  if (cutJobId) {
+    const cutJob = one<{ output: string | null }>(`SELECT output FROM job WHERE id = ? AND workspace_id = ? AND project_id = ? AND type = 'suggest_clips'`, cutJobId, ws, proj.id);
+    for (const id of parse<{ clipIds?: string[] }>(cutJob?.output, {}).clipIds ?? []) {
+      run(`UPDATE clip SET status = 'kept', updated_at = ? WHERE id = ? AND project_id = ? AND workspace_id = ? AND status = 'suggested'`, now(), id, proj.id, ws);
+    }
+  }
+  const clips = all<{ id: string }>(
+    `SELECT c.id FROM clip c WHERE c.project_id = ? AND c.workspace_id = ? AND c.status = 'kept'
+       AND NOT EXISTS (SELECT 1 FROM output o WHERE o.clip_id = c.id AND o.preset = 'vertical' AND o.status IN ('queued','ready','blocked'))
+     ORDER BY c.start_ms`,
+    proj.id, ws,
+  );
+  if (!clips.length) fail("There are no kept clips to render. Keep at least one clip, then run Publish again.");
+  const language = one<{ language: string }>(`SELECT language FROM caption_track WHERE project_id = ? AND kind = 'source'`, proj.id)?.language ?? null;
+  let lastRender: string | null = null;
+  const renders: string[] = [];
+  tx(() => {
+    for (const clip of clips) {
+      const outId = newId("out");
+      run(
+        `INSERT INTO output (id, workspace_id, project_id, clip_id, preset, language, burn, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, 'vertical', ?, 1, 'queued', ?, ?, ?)`,
+        outId, ws, proj.id, clip.id, language, c.job.created_by ?? "system", now(), now(),
+      );
+      const j = enqueue({ workspaceId: ws, projectId: proj.id, type: "render", input: { outputId: outId }, idempotencyKey: `${c.job.id}:${clip.id}`, createdBy: c.job.created_by });
+      run(`UPDATE output SET job_id = ? WHERE id = ?`, j.id, outId);
+      renders.push(j.id);
+      lastRender = j.id;
+    }
+    // A Record step queued after Publish should wait for the renders, not just for this fan-out.
+    if (lastRender) run(`UPDATE job SET depends_on = ? WHERE depends_on = ? AND status = 'queued' AND workspace_id = ?`, lastRender, c.job.id, ws);
+  });
+  return { renders: renders.length, jobIds: renders };
 }
 
 async function translateJob(c: JobCtx) {
-  const proj = project(c.job.project_id!);
+  const proj = project(c.job.workspace_id, c.job.project_id!);
   const code = String(c.input.language ?? "");
   const target = LANGUAGES.find((l) => l.code === code) ?? fail("Choose a language IZWI knows.");
   const p: ProviderRow =
@@ -220,9 +263,9 @@ async function translateJob(c: JobCtx) {
 type OutputRow = { id: string; workspace_id: string; project_id: string; clip_id: string | null; preset: string; language: string | null; burn: number; status: string };
 
 async function renderJob(c: JobCtx) {
-  const out = one<OutputRow>(`SELECT * FROM output WHERE id = ?`, String(c.input.outputId)) ?? fail("This export was removed.");
-  const clip = one<{ id: string; title: string; start_ms: number; end_ms: number }>(`SELECT * FROM clip WHERE id = ?`, out.clip_id) ?? fail("The clip for this export was removed.");
-  const proj = project(out.project_id);
+  const out = one<OutputRow>(`SELECT * FROM output WHERE id = ? AND workspace_id = ?`, String(c.input.outputId), c.job.workspace_id) ?? fail("This export was removed.");
+  const clip = one<{ id: string; title: string; start_ms: number; end_ms: number }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ?`, out.clip_id, out.workspace_id) ?? fail("The clip for this export was removed.");
+  const proj = project(c.job.workspace_id, out.project_id);
   if (!isPreset(out.preset)) fail("Unknown export format.");
   const gate = gateFor(proj.id, clip.start_ms, clip.end_ms);
   if (!gate.ok) {
@@ -264,7 +307,7 @@ async function renderJob(c: JobCtx) {
 }
 
 async function packageJob(c: JobCtx) {
-  const proj = project(c.job.project_id!);
+  const proj = project(c.job.workspace_id, c.job.project_id!);
   const src = latest(proj.id, "source") ?? fail("The original recording is missing.");
   const p = parse<Probe>(src.meta, { durationMs: src.duration_ms ?? 0, hasAudio: true, hasVideo: false, format: "" });
   const files: Zippable = {};

@@ -3,7 +3,7 @@
 // Idempotency keys make "run this again" safe: the same key returns the existing job instead of a duplicate.
 import { all, newId, now, one, parse, run, tx } from "./db";
 
-export type JobType = "probe" | "proxy" | "transcribe" | "suggest_clips" | "translate" | "render" | "package";
+export type JobType = "probe" | "proxy" | "transcribe" | "suggest_clips" | "translate" | "publish" | "render" | "package";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "blocked";
 export type JobRow = {
   id: string; workspace_id: string; project_id: string | null; type: JobType; status: JobStatus;
@@ -17,9 +17,11 @@ export function enqueue(j: {
   workspaceId: string; projectId: string | null; type: JobType; input?: unknown;
   idempotencyKey?: string; dependsOn?: string | null; createdBy?: string | null; maxAttempts?: number;
 }): JobRow {
+  // Keys are scoped to the workspace: the same key in two workspaces names two different jobs.
+  const key = j.idempotencyKey ? `${j.workspaceId}:${j.idempotencyKey}` : null;
   return tx(() => {
-    if (j.idempotencyKey) {
-      const existing = one<JobRow>(`SELECT * FROM job WHERE idempotency_key = ?`, j.idempotencyKey);
+    if (key) {
+      const existing = one<JobRow>(`SELECT * FROM job WHERE idempotency_key = ? AND workspace_id = ?`, key, j.workspaceId);
       if (existing && existing.status !== "failed" && existing.status !== "cancelled") return existing;
       if (existing) run(`UPDATE job SET idempotency_key = NULL WHERE id = ?`, existing.id); // allow a fresh retry
     }
@@ -27,7 +29,7 @@ export function enqueue(j: {
     run(
       `INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, depends_on, run_after, created_by, created_at, max_attempts)
        VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)`,
-      id, j.workspaceId, j.projectId, j.type, JSON.stringify(j.input ?? {}), j.idempotencyKey ?? null,
+      id, j.workspaceId, j.projectId, j.type, JSON.stringify(j.input ?? {}), key,
       j.dependsOn ?? null, now(), j.createdBy ?? null, now(), j.maxAttempts ?? 3,
     );
     return one<JobRow>(`SELECT * FROM job WHERE id = ?`, id)!;
@@ -56,23 +58,31 @@ export function heartbeat(id: string, workerId: string, leaseMs: number, progres
   );
 }
 
-export function succeed(id: string, output: unknown) {
-  run(`UPDATE job SET status = 'succeeded', output = ?, progress = 1, stage = 'done', lease_until = NULL, finished_at = ? WHERE id = ?`, JSON.stringify(output ?? {}), now(), id);
+// Only the worker that holds the lease may finish a job, and only while it is still running. A job cancelled meanwhile,
+// or one whose lease expired and was claimed by another worker, is left alone. Each returns whether it applied.
+export function succeed(id: string, workerId: string, output: unknown) {
+  return run(
+    `UPDATE job SET status = 'succeeded', output = ?, progress = 1, stage = 'done', lease_until = NULL, finished_at = ? WHERE id = ? AND worker_id = ? AND status = 'running'`,
+    JSON.stringify(output ?? {}), now(), id, workerId,
+  ).changes > 0;
 }
 
-export function failJob(id: string, message: string, retryable: boolean) {
-  const j = one<JobRow>(`SELECT * FROM job WHERE id = ?`, id);
-  if (!j) return;
-  if (retryable && j.attempts < j.max_attempts) {
-    const backoff = 5000 * 2 ** (j.attempts - 1);
-    run(`UPDATE job SET status = 'queued', error = ?, run_after = ?, lease_until = NULL, worker_id = NULL WHERE id = ?`, message, now() + backoff, id);
-  } else {
-    run(`UPDATE job SET status = 'failed', error = ?, lease_until = NULL, finished_at = ? WHERE id = ?`, message, now(), id);
-  }
+export function failJob(id: string, workerId: string, message: string, retryable: boolean) {
+  return tx(() => {
+    const j = one<JobRow>(`SELECT * FROM job WHERE id = ? AND worker_id = ? AND status = 'running'`, id, workerId);
+    if (!j) return false;
+    if (retryable && j.attempts < j.max_attempts) {
+      const backoff = 5000 * 2 ** (j.attempts - 1);
+      run(`UPDATE job SET status = 'queued', error = ?, run_after = ?, lease_until = NULL, worker_id = NULL WHERE id = ?`, message, now() + backoff, id);
+    } else {
+      run(`UPDATE job SET status = 'failed', error = ?, lease_until = NULL, finished_at = ? WHERE id = ?`, message, now(), id);
+    }
+    return true;
+  });
 }
 
-export function block(id: string, reason: string) {
-  run(`UPDATE job SET status = 'blocked', error = ?, lease_until = NULL, worker_id = NULL WHERE id = ?`, reason, id);
+export function block(id: string, workerId: string, reason: string) {
+  return run(`UPDATE job SET status = 'blocked', error = ?, lease_until = NULL, worker_id = NULL WHERE id = ? AND worker_id = ? AND status = 'running'`, reason, id, workerId).changes > 0;
 }
 
 export function cancel(id: string, workspaceId: string) {

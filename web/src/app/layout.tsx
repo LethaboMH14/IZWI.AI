@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Fraunces, Martian_Mono } from "next/font/google";
 import "./globals.css";
 import "./app.css";
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
   description: "Turn one story into many. A creative workspace for South African creators.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Render per request, so every page carries this request's CSP nonce (src/proxy.ts). Static pages would have none.
+  await connection();
   return (
     <html lang="en-ZA" className={`${fraunces.variable} ${mono.variable}`}>
       <head>

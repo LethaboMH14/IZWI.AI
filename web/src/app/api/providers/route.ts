@@ -6,6 +6,7 @@ import { all, newId, now, one, parse, run } from "@/server/db";
 import { keyHint, seal } from "@/server/crypto";
 import { checkBaseUrl, testProvider, type ProviderRow } from "@/server/providers";
 import { audit } from "@/server/audit";
+import { limit, LIMIT } from "@/server/ratelimit";
 
 export const runtime = "nodejs";
 
@@ -26,11 +27,12 @@ const ProviderIn = z.object({
   model: z.string().trim().max(120).optional(),
   key: z.string().trim().max(400).optional(),
   roles: z.array(z.enum(["plan", "translate", "clips", "asr"])).min(1),
-});
+}).refine((x) => x.kind !== "openai_compat" || !!x.model, { path: ["model"], message: "Add the model name, for example qwen3:4b." });
 
 export const POST = route(async (req) => {
   const ctx = await requireCtx();
   requireRole(ctx, ["owner", "admin"]);
+  limit(`provider-test:${ctx.workspaceId}:${ctx.userId}`, LIMIT.providerTest);
   const x = await body(req, ProviderIn);
   const id = newId("prv");
   run(

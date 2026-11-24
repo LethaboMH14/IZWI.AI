@@ -20,7 +20,7 @@ Source: the team's hackathon profile (team Sonar, project Izwi.AI, challenge "Cr
 | P2 | "Progress Updates 0" | planned | | Post a progress update after each build wave | team |
 | P3 | "Mentors Feedback 0" | planned | | Ask a mentor to review the studio and Earn flows | team |
 | P4 | "Lean Business Canvas ✅ Filled in" | done | `docs/business/LEAN-CANVAS.md` | Keep in step with the prices in AGENTS.md | team |
-| P5 | "Security (SSDLC) ✅ Filled in" | partial | | Filled in on the portal; no copy in the repo. Add `docs/business/SSDLC.md` | team |
+| P5 | "Security (SSDLC) ✅ Filled in" | partial | `SECURITY.md`, `docs/security/THREAT-MODEL.md`, `docs/security/SECURITY-REVIEW-2026-11.md` | Filled in on the portal. Security policy, threat model and review are in the repo; the SSDLC copy is not. Add `docs/business/SSDLC.md` | team |
 | P6 | "What technologies are you using and for what?" (the seven headings are empty on the portal) | planned | | Draft the seven sections from the real stack, then paste them into the portal | Claude |
 
 ## The six capabilities
@@ -29,10 +29,10 @@ Source: the team's hackathon profile (team Sonar, project Izwi.AI, challenge "Cr
 |---|---|---|---|---|---|
 | C1 | "AI-Powered Creation: Transform videos, podcasts, music-related content, animations and educational materials into professional, platform-ready content" | partial | `docs/BUILD-STATUS.md`, `web/src/server/render.ts` | Talking video and podcasts work: transcript, clips, 9:16 render with captions. Music content, animation and education scenarios not yet built or tested (X10) | Claude |
 | C2 | "Global Localisation: Translate and culturally adapt content ... subtitles, supported voice dubbing" | partial | `web/tests/captions.test.ts` | Source-language subtitles work. Translation is `limited by access` until a provider key is entered. Dubbing is planned (X3) | Claude |
-| C3 | "Agentic Creative Workspace: ... AI to inspect projects, understand instructions, operate editing tools, coordinate workflows and execute approved actions" | partial | `web/src/server/planner.ts` | Prompt → plan → approve → run works with rule-based planning. Needs a connected model and more editing tools (X7) | Claude |
+| C3 | "Agentic Creative Workspace: ... AI to inspect projects, understand instructions, operate editing tools, coordinate workflows and execute approved actions" | partial | `web/src/server/planner.ts`, `web/tests/planner-publish.test.ts` | Prompt → plan → approve → run works with rule-based planning. "Clips plus publish" on a fresh project now renders the clips Cut finds (tested with a stand-in transcript, not yet on a real recording). Needs a connected model and more editing tools (X7) | Claude |
 | C4 | "Audience & Content Intelligence: Analyse engagement, retention, audience preferences and content performance across connected platforms" | planned | | Needs platform analytics connectors (X9) and the growth agents (X8) | Claude |
 | C5 | "Distribution & Global Reach: Connect supported social media and creator platforms to prepare, schedule and manage multilingual content" | partial | `web/src/components/studio/PublishTab.tsx` | Export plus "mark as posted" works. Posting and scheduling through platform APIs are `limited by access` until apps are approved (X9) | Claude |
-| C6 | "Creator Rights & Monetisation: Support content provenance, collaboration agreements, licensing, digital storefronts and integrated payment options" | partial | `web/src/server/public.ts`, `web/src/components/studio/ProtectTab.tsx` | Consent gate, ownership declaration, licence listing and enquiries work. Provenance (C2PA), storefront and payments are planned (X11) | Claude |
+| C6 | "Creator Rights & Monetisation: Support content provenance, collaboration agreements, licensing, digital storefronts and integrated payment options" | partial | `web/src/server/public.ts`, `web/src/components/studio/ProtectTab.tsx`, `web/src/server/ledger.ts`, `web/tests/security-db.test.ts` | Consent gate, ownership declaration, licence listing and enquiries work. Each consent answer is now appended to a signed, hash-chained ledger. Provenance (C2PA), storefront and payments are planned (X11) | Claude |
 
 ## User journey
 
@@ -58,7 +58,7 @@ Source: the team's hackathon profile (team Sonar, project Izwi.AI, challenge "Cr
 | A8 | "This information is not automatically used to train shared models" | partial | | True today, because no training code exists. Write `docs/DATA-USE.md` and keep training opt-in | Claude |
 | A9 | "Training on private content or voice recordings requires explicit authorisation" | planned | | Add an opt-in consent record before any creator media enters a training set | Claude |
 | A10 | "Creator Personalisation: Izwi AI can retain approved style preferences, reusable templates and performance insights" | partial | `web/src/server/actions.ts` | The glossary learns spellings. Style templates and performance insights are planned | Claude |
-| A11 | "External AI calls, model licences and sensitive actions are subject to provider policies, security controls and user approval" | done | `web/src/server/crypto.ts`, `web/src/server/planner.ts` | Keys sealed with AES-256-GCM; plans need approval before they run | Claude |
+| A11 | "External AI calls, model licences and sensitive actions are subject to provider policies, security controls and user approval" | done | `web/src/server/crypto.ts`, `web/src/server/planner.ts`, `web/src/server/ssrf.ts`, `web/tests/ssrf.test.ts`, `docs/security/SECURITY-REVIEW-2026-11.md` | Keys sealed with AES-256-GCM; plans need approval before they run; outbound provider calls pass an SSRF guard with fixed error messages. Provider privacy classes are planned (Lane C) | Claude |
 | A12 | "Statistics South Africa's Census 2022 ... 8.7% ... English most often at home" and "17.4% of households had fixed internet" | partial | | Figures come from the profile; add their source links to `docs/RESEARCH-SOURCES.md` with quoted spans | Claude |
 
 ## Build asks agreed with the team (20 Nov 2026)

@@ -12,7 +12,7 @@ export const PRESETS = {
   small: { label: "Small file", w: 720, h: 1280, crf: 28, abr: "96k", use: "WhatsApp Status and low data" },
 } as const;
 export type PresetId = keyof typeof PRESETS;
-export const isPreset = (p: string): p is PresetId => p in PRESETS;
+export const isPreset = (p: string): p is PresetId => Object.hasOwn(PRESETS, p);
 
 export async function renderClip(o: {
   src: string; out: string; workDir: string; startMs: number; endMs: number; preset: PresetId;
