@@ -15,6 +15,7 @@ type RunOpts = { cwd?: string; timeoutMs?: number; signal?: AbortSignal; onLine?
 
 export function runTool(cmd: string, args: string[], o: RunOpts = {}): Promise<{ code: number; stdout: Buffer; stderr: string }> {
   return new Promise((resolve, reject) => {
+    if (o.signal?.aborted) return reject(new ToolError("Cancelled"));
     const p = spawn(cmd, args, { cwd: o.cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     const out: Buffer[] = [];
     let err = "";
@@ -34,10 +35,12 @@ export function runTool(cmd: string, args: string[], o: RunOpts = {}): Promise<{
     });
     p.on("error", (e) => {
       if (timer) clearTimeout(timer);
+      o.signal?.removeEventListener("abort", kill);
       reject(new ToolError(`Could not start ${cmd}: ${e.message}`));
     });
     p.on("close", (code) => {
       if (timer) clearTimeout(timer);
+      o.signal?.removeEventListener("abort", kill);
       if (o.signal?.aborted) return reject(new ToolError("Cancelled"));
       resolve({ code: code ?? -1, stdout: Buffer.concat(out), stderr: err });
     });

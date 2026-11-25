@@ -287,22 +287,55 @@ async function renderJob(c: JobCtx) {
     lines = sliceLines(rows.map((r) => ({ startMs: r.start_ms, endMs: r.end_ms, text: r.text, words: parse<Word[] | null>(r.words, null) })), clip.start_ms, clip.end_ms);
   }
   const preset = PRESETS[out.preset];
-  const key = storageKey(proj.workspace_id, proj.id, `render-${out.id}.mp4`);
+  const key = storageKey(proj.workspace_id, proj.id, `render-${out.id}-${c.job.attempts}-${c.job.worker_id}.mp4`);
   ensureDirFor(absPath(key));
   const ass = out.burn && lines.length ? toASS(lines, { width: preset.w, height: preset.h, font: BIN.captionFont, karaoke: lines.some((l) => l.words.length > 0) }) : undefined;
-  await renderClip({
-    src: absPath(src.storage_key), out: absPath(key), workDir: tmpDir(c.job.id), startMs: clip.start_ms, endMs: clip.end_ms,
-    preset: out.preset, hasVideo: p.hasVideo, hasAudio: p.hasAudio, ass, onProgress: (x) => c.beat(x * 0.95, `Rendering ${preset.label}`), signal: c.signal,
-  });
-  rmSync(tmpDir(c.job.id), { recursive: true, force: true });
+  const renderDir = tmpDir(`${c.job.id}-${c.job.attempts}`);
+  try {
+    await renderClip({
+      src: absPath(src.storage_key), out: absPath(key), workDir: renderDir, startMs: clip.start_ms, endMs: clip.end_ms,
+      preset: out.preset, hasVideo: p.hasVideo, hasAudio: p.hasAudio, ass, onProgress: (x) => c.beat(x * 0.95, `Rendering ${preset.label}`), signal: c.signal,
+    });
+  } catch (e) {
+    rmSync(absPath(key), { force: true });
+    throw e;
+  } finally {
+    rmSync(renderDir, { recursive: true, force: true });
+  }
   const slug = clip.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40).replace(/^-|-$/g, "") || "clip";
   const assetId = await addAsset({ ws: proj.workspace_id, projectId: proj.id, kind: "render", key, filename: `${slug}-${out.preset}${out.language ? "-" + out.language : ""}.mp4`, mime: "video/mp4", durationMs: clip.end_ms - clip.start_ms, width: preset.w, height: preset.h, meta: { outputId: out.id, clipId: clip.id } });
+  let captionAssetId: string | undefined;
+  let srtKey: string | undefined;
   if (lines.length) {
-    const srtKey = storageKey(proj.workspace_id, proj.id, `render-${out.id}.srt`);
+    srtKey = storageKey(proj.workspace_id, proj.id, `render-${out.id}-${c.job.attempts}-${c.job.worker_id}.srt`);
     writeFileSync(absPath(srtKey), toSRT(lines), "utf8");
-    await addAsset({ ws: proj.workspace_id, projectId: proj.id, kind: "caption", key: srtKey, filename: `${slug}-${out.language}.srt`, mime: "application/x-subrip", meta: { outputId: out.id } });
+    captionAssetId = await addAsset({ ws: proj.workspace_id, projectId: proj.id, kind: "caption", key: srtKey, filename: `${slug}-${out.language}.srt`, mime: "application/x-subrip", meta: { outputId: out.id } });
   }
-  run(`UPDATE output SET status = 'ready', asset_id = ?, note = NULL, updated_at = ? WHERE id = ?`, assetId, now(), out.id);
+  // Serialize the final gate and publication with consent changes in SQLite.
+  const release = tx(() => {
+    const active = one(`SELECT 1 FROM job WHERE id = ? AND worker_id = ? AND attempts = ? AND status = 'running' AND lease_until > ?`, c.job.id, c.job.worker_id, c.job.attempts, now());
+    const current = one<{ status: string; job_id: string | null }>(`SELECT status, job_id FROM output WHERE id = ? AND workspace_id = ?`, out.id, out.workspace_id);
+    if (!active || c.signal.aborted || !current || current.job_id !== c.job.id) return "inactive";
+    const finalGate = gateFor(proj.id, clip.start_ms, clip.end_ms);
+    if (!finalGate.ok) {
+      const reason = gateReason(finalGate);
+      run(`UPDATE output SET status = 'blocked', note = ?, updated_at = ? WHERE id = ?`, reason, now(), out.id);
+      return reason;
+    }
+    if (current.status !== "queued") return "inactive";
+    const result = { outputId: out.id, preset: out.preset, bytes: statSync(absPath(key)).size };
+    run(`UPDATE output SET status = 'ready', asset_id = ?, note = NULL, updated_at = ? WHERE id = ?`, assetId, now(), out.id);
+    run(`UPDATE job SET status = 'succeeded', output = ?, progress = 1, stage = 'done', lease_until = NULL, finished_at = ? WHERE id = ?`, JSON.stringify(result), now(), c.job.id);
+    return "ready";
+  });
+  if (release !== "ready") {
+    run(`DELETE FROM asset WHERE id = ?`, assetId);
+    if (captionAssetId) run(`DELETE FROM asset WHERE id = ?`, captionAssetId);
+    rmSync(absPath(key), { force: true });
+    if (srtKey) rmSync(absPath(srtKey), { force: true });
+    if (release !== "inactive") throw new Blocked(release);
+    throw new ToolError("This render is no longer active.");
+  }
   return { outputId: out.id, preset: out.preset, bytes: statSync(absPath(key)).size };
 }
 

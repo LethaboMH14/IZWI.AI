@@ -2,18 +2,13 @@
 import { z } from "zod";
 import { body, route } from "@/server/http";
 import { requireCtx, requireRole } from "@/server/guard";
-import { all, newId, now, one, parse, run } from "@/server/db";
+import { all, newId, now, one, run } from "@/server/db";
 import { keyHint, seal } from "@/server/crypto";
-import { checkBaseUrl, testProvider, type ProviderRow } from "@/server/providers";
+import { checkBaseUrl, publicProvider, testProvider, type ProviderRow } from "@/server/providers";
 import { audit } from "@/server/audit";
 import { limit, LIMIT } from "@/server/ratelimit";
 
 export const runtime = "nodejs";
-
-export const publicProvider = (p: ProviderRow) => ({
-  id: p.id, kind: p.kind, label: p.label, baseUrl: p.base_url, model: p.model, keyHint: p.key_hint, roles: parse<string[]>(p.roles, []),
-  lastTestAt: p.last_test_at, lastTestOk: p.last_test_ok === null ? null : p.last_test_ok === 1, lastTestNote: p.last_test_note,
-});
 
 export const GET = route(async () => {
   const ctx = await requireCtx();

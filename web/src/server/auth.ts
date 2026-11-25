@@ -5,13 +5,13 @@ import { organization } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "@better-auth/passkey";
 import { db, one } from "./db";
-import { PUBLIC_URL } from "./env";
+import { STUDIO_URL } from "./env";
 import { audit } from "./audit";
 
 export const auth = betterAuth({
   appName: "IZWI AI",
   database: db,
-  baseURL: process.env.BETTER_AUTH_URL || PUBLIC_URL,
+  baseURL: STUDIO_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   emailAndPassword: { enabled: true, minPasswordLength: 10, maxPasswordLength: 128, autoSignIn: true },
   session: { expiresIn: 60 * 60 * 24 * 14, updateAge: 60 * 60 * 24 },
@@ -38,7 +38,7 @@ export const auth = betterAuth({
   },
   plugins: [
     // Optional passwordless sign-in with the device's fingerprint, face or PIN. rpID must match the site's hostname.
-    passkey({ rpID: new URL(PUBLIC_URL).hostname, rpName: "IZWI AI", origin: PUBLIC_URL }),
+    passkey({ rpID: new URL(STUDIO_URL).hostname, rpName: "IZWI AI", origin: STUDIO_URL }),
     organization({
       allowUserToCreateOrganization: true,
       creatorRole: "owner",

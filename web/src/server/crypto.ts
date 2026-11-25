@@ -12,8 +12,11 @@ export function seal(plain: string): string {
 export function unseal(sealed: string): string {
   const [v, iv, tag, ct] = sealed.split(".");
   if (v !== "v1" || !iv || !tag || !ct) throw new Error("Unknown key format");
-  const d = createDecipheriv("aes-256-gcm", masterKey(), Buffer.from(iv, "base64url"));
-  d.setAuthTag(Buffer.from(tag, "base64url"));
+  const authTag = Buffer.from(tag, "base64url");
+  // Accept only the full 16-byte tag; a shorter tag would weaken GCM authentication.
+  if (authTag.length !== 16) throw new Error("Unknown key format");
+  const d = createDecipheriv("aes-256-gcm", masterKey(), Buffer.from(iv, "base64url"), { authTagLength: 16 });
+  d.setAuthTag(authTag);
   return Buffer.concat([d.update(Buffer.from(ct, "base64url")), d.final()]).toString("utf8");
 }
 

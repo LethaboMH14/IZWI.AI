@@ -4,7 +4,7 @@ import { z } from "zod";
 import { all, newId, now, one, parse, run } from "./db";
 import { hashToken } from "./crypto";
 import { fail } from "./http";
-import { requeueBlocked } from "./jobs";
+import { gateFor } from "./rights";
 import { audit } from "./audit";
 import { appendConsent } from "./ledger";
 import { limit, LIMIT } from "./ratelimit";
@@ -110,8 +110,12 @@ export function consentAction(token: string, input: z.infer<typeof ConsentIn>, i
   run(`UPDATE consent SET status = ?, responded_name = ?, responded_at = ?, user_agent = ?, updated_at = ? WHERE id = ?`, status, input.name, at, userAgent.slice(0, 200), at, c.id);
   const entry = appendConsent({ consentId: c.id, workspaceId: l.workspace_id, projectId: l.project_id, personId: c.person_id, scope: c.scope, decision: status, respondedName: input.name, at });
   if (status === "granted") {
-    run(`UPDATE output SET status = 'queued', note = NULL WHERE project_id = ? AND status = 'blocked'`, l.project_id);
-    requeueBlocked(l.project_id, "render");
+    const blocked = all<{ id: string; job_id: string | null; start_ms: number; end_ms: number }>(`SELECT o.id, o.job_id, c.start_ms, c.end_ms FROM output o JOIN clip c ON c.id = o.clip_id AND c.project_id = o.project_id WHERE o.project_id = ? AND o.status = 'blocked'`, l.project_id);
+    for (const output of blocked) {
+      if (!gateFor(l.project_id, output.start_ms, output.end_ms).ok) continue;
+      run(`UPDATE output SET status = 'queued', note = NULL, updated_at = ? WHERE id = ? AND status = 'blocked'`, at, output.id);
+      if (output.job_id) run(`UPDATE job SET status = 'queued', error = NULL, run_after = ? WHERE id = ? AND project_id = ? AND type = 'render' AND status = 'blocked'`, at, output.job_id, l.project_id);
+    }
   }
   if (status === "revoked") {
     // Finished renders that were never posted are held again; anything already posted stays where it is.
@@ -161,7 +165,7 @@ export function assetAllowedForToken(assetId: string, token: string | null, slug
   if (slug) {
     const l = one<{ clip_id: string; enabled: number }>(`SELECT clip_id, enabled FROM listing WHERE slug = ?`, slug);
     const outputId = parse<{ outputId?: string }>(a.meta, {}).outputId;
-    if (l?.enabled && a.kind === "render" && outputId && one(`SELECT 1 FROM output WHERE id = ? AND clip_id = ?`, outputId, l.clip_id)) return a;
+    if (l?.enabled && a.kind === "render" && outputId && one(`SELECT 1 FROM output WHERE id = ? AND clip_id = ? AND asset_id = ? AND status = 'ready'`, outputId, l.clip_id, a.id)) return a;
   }
   return null;
 }

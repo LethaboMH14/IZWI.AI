@@ -2,7 +2,14 @@
 // Auth tables (user, session, account, verification, organization, member, invitation) are created by better-auth first.
 import { db, now } from "./db";
 
-export const MIGRATIONS: { version: number; name: string; sql: string }[] = [
+type Migration = { version: number; name: string } & ({ sql: string } | { apply: () => void });
+
+const STUDIO_PRICE_MIGRATION = "listing asking price";
+const SECURITY_MIGRATION = "security hardening: rate limits, workspace-scoped idempotency, consent ledger";
+const ADD_ASKING_PRICE = "ALTER TABLE listing ADD COLUMN asking_price_cents INTEGER CHECK (asking_price_cents BETWEEN 1 AND 100000000)";
+const ADD_STORY_SCRIPT = "ALTER TABLE project ADD COLUMN script TEXT NOT NULL DEFAULT ''";
+
+export const MIGRATIONS: Migration[] = [
   {
     version: 1,
     name: "core workspace, media, captions, rights, outputs, providers, audit",
@@ -313,7 +320,7 @@ CREATE INDEX audit_by_ws ON audit_log(workspace_id, created_at DESC);
   },
   {
     version: 2,
-    name: "security hardening: rate limits, workspace-scoped idempotency, consent ledger",
+    name: SECURITY_MIGRATION,
     sql: `
 CREATE TABLE rate_limit (
   key TEXT PRIMARY KEY,
@@ -341,7 +348,28 @@ CREATE TRIGGER consent_ledger_no_update BEFORE UPDATE ON consent_ledger BEGIN SE
 CREATE TRIGGER consent_ledger_no_delete BEFORE DELETE ON consent_ledger BEGIN SELECT RAISE(ABORT, 'consent_ledger is append-only'); END;
 `,
   },
+  {
+    version: 4,
+    name: "reconcile security and studio migration histories",
+    apply: reconcileStudioHistory,
+  },
 ];
+
+function reconcileStudioHistory() {
+  const historical = db.prepare("SELECT name FROM schema_migrations WHERE version = 2").get() as { name: string } | undefined;
+  if (historical?.name === STUDIO_PRICE_MIGRATION) {
+    const security = MIGRATIONS.find((migration) => migration.name === SECURITY_MIGRATION);
+    if (!security || !("sql" in security)) throw new Error("Missing security migration.");
+    db.exec(security.sql);
+  } else if (historical?.name !== SECURITY_MIGRATION) {
+    throw new Error("Unrecognised app migration 2. Restore a known backup before upgrading.");
+  }
+
+  const hasColumn = (table: "listing" | "project", column: string) =>
+    Boolean(db.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?").get(table, column));
+  if (!hasColumn("listing", "asking_price_cents")) db.exec(ADD_ASKING_PRICE);
+  if (!hasColumn("project", "script")) db.exec(ADD_STORY_SCRIPT);
+}
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 
@@ -356,13 +384,15 @@ export function appliedVersion(): number {
 }
 
 export function migrateApp(log: (s: string) => void = console.log) {
-  const current = appliedVersion();
+  ensureTable();
   for (const m of MIGRATIONS) {
-    if (m.version <= current) continue;
-    db.transaction(() => {
-      db.exec(m.sql);
+    const applied = db.transaction(() => {
+      if (m.version <= appliedVersion()) return false;
+      if ("sql" in m) db.exec(m.sql);
+      else m.apply();
       db.prepare(`INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`).run(m.version, m.name, now());
-    })();
-    log(`applied migration ${m.version}: ${m.name}`);
+      return true;
+    }).immediate();
+    if (applied) log(`applied migration ${m.version}: ${m.name}`);
   }
 }

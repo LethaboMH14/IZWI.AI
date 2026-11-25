@@ -20,8 +20,8 @@ Source: the team's hackathon profile (team Sonar, project Izwi.AI, challenge "Cr
 | P2 | "Progress Updates 0" | planned | | Post a progress update after each build wave | team |
 | P3 | "Mentors Feedback 0" | planned | | Ask a mentor to review the studio and Earn flows | team |
 | P4 | "Lean Business Canvas ✅ Filled in" | done | `docs/business/LEAN-CANVAS.md` | Keep in step with the prices in AGENTS.md | team |
-| P5 | "Security (SSDLC) ✅ Filled in" | partial | `SECURITY.md`, `docs/security/THREAT-MODEL.md`, `docs/security/SECURITY-REVIEW-2026-11.md` | Filled in on the portal. Security policy, threat model and review are in the repo; the SSDLC copy is not. Add `docs/business/SSDLC.md` | team |
-| P6 | "What technologies are you using and for what?" (the seven headings are empty on the portal) | planned | | Draft the seven sections from the real stack, then paste them into the portal | Claude |
+| P5 | "Security (SSDLC) ✅ Filled in" | partial | `SECURITY.md`, `docs/security/THREAT-MODEL.md`, `docs/security/SECURITY-REVIEW-2026-11.md`, `docs/business/SSDLC.md` | Repository SSDLC drafted. Exact portal submission and public release evidence are pending. | team |
+| P6 | "What technologies are you using and for what?" (the seven headings are empty on the portal) | partial | `docs/business/SSDLC.md` | Seven answers are drafted from the implemented stack. Team review and portal entry are pending. | team |
 
 ## The six capabilities
 
@@ -55,7 +55,7 @@ Source: the team's hackathon profile (team Sonar, project Izwi.AI, challenge "Cr
 | A5 | "Adaptive Content Creation: AI generates editable content variations ... based on audience insights" | planned | | Needs X8 and X9 | Claude |
 | A6 | "Intelligent Distribution: AI prepares platform-specific content, multilingual descriptions, titles, publishing schedules" | planned | | Titles and descriptions per platform and language; schedules after X9 | Claude |
 | A7 | "selected compatible models may be fine-tuned using licensed, public-domain or explicitly consented datasets ... South African language recognition" | planned | | ASR track (X1), trained on Kaggle only | Claude |
-| A8 | "This information is not automatically used to train shared models" | partial | | True today, because no training code exists. Write `docs/DATA-USE.md` and keep training opt-in | Claude |
+| A8 | "This information is not automatically used to train shared models" | partial | `docs/DATA-USE.md` | Application training is absent. Verify hosted provider processing terms and keep future training opt-in. | Claude |
 | A9 | "Training on private content or voice recordings requires explicit authorisation" | planned | | Add an opt-in consent record before any creator media enters a training set | Claude |
 | A10 | "Creator Personalisation: Izwi AI can retain approved style preferences, reusable templates and performance insights" | partial | `web/src/server/actions.ts` | The glossary learns spellings. Style templates and performance insights are planned | Claude |
 | A11 | "External AI calls, model licences and sensitive actions are subject to provider policies, security controls and user approval" | done | `web/src/server/crypto.ts`, `web/src/server/planner.ts`, `web/src/server/ssrf.ts`, `web/tests/ssrf.test.ts`, `docs/security/SECURITY-REVIEW-2026-11.md` | Keys sealed with AES-256-GCM; plans need approval before they run; outbound provider calls pass an SSRF guard with fixed error messages. Provider privacy classes are planned (Lane C) | Claude |

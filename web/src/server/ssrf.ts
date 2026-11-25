@@ -111,8 +111,16 @@ export function guardedFetch(url: string, init: GuardedInit = {}): Promise<Respo
         const headers = new Headers();
         for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
         const status = res.statusCode ?? 502;
-        const nullBody = status === 204 || status === 304 || (init.method ?? "GET") === "HEAD";
-        resolve(new Response(nullBody ? null : (Readable.toWeb(counted) as ReadableStream), { status, headers }));
+        // Statuses that must not carry a body (Fetch spec "null body status"); building a Response with one throws.
+        const nullBody = status === 101 || status === 103 || status === 204 || status === 205 || status === 304 || (init.method ?? "GET") === "HEAD";
+        try {
+          resolve(new Response(nullBody ? null : (Readable.toWeb(counted) as ReadableStream), { status, headers }));
+        } catch (e) {
+          // An unusual upstream status must reject the call, never throw inside this callback and crash the process.
+          res.destroy();
+          counted.destroy();
+          reject(e);
+        }
       },
     );
     req.on("error", reject);

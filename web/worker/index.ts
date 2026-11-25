@@ -72,9 +72,10 @@ async function main() {
         block(job.id, workerId, msg);
         console.log(`‖ ${job.type} blocked: ${msg}`);
       } else {
-        failJob(job.id, workerId, msg, (e as { retryable?: boolean }).retryable === true);
-        const after = one<{ status: string }>(`SELECT status FROM job WHERE id = ?`, job.id);
-        if (after?.status === "failed") onFailed(job, msg);
+        const applied = failJob(job.id, workerId, msg, (e as { retryable?: boolean }).retryable === true);
+        if (applied && one<{ status: string }>(`SELECT status FROM job WHERE id = ?`, job.id)?.status === "failed") {
+          onFailed(job, msg);
+        }
         console.log(`✗ ${job.type} ${job.id}: ${msg}`);
       }
     } finally {

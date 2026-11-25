@@ -5,6 +5,7 @@ import { z } from "zod";
 import { all, parse } from "./db";
 import { unseal } from "./crypto";
 import { BlockedAddressError, guardedFetch, type GuardedInit } from "./ssrf";
+import { recordTrialTokens, reserveTrialCall, TrialPolicyError, trialEnabled } from "./provider-trial";
 
 export type ProviderKind = "openai_compat" | "madlad_endpoint" | "asr_endpoint";
 export type ProviderRow = {
@@ -13,6 +14,11 @@ export type ProviderRow = {
   last_test_ok: number | null; last_test_note: string | null; created_by: string; created_at: number;
 };
 export type Role = "plan" | "translate" | "clips" | "asr";
+
+export const publicProvider = (p: ProviderRow) => ({
+  id: p.id, kind: p.kind, label: p.label, baseUrl: p.base_url, model: p.model, keyHint: p.key_hint, roles: parse<string[]>(p.roles, []),
+  lastTestAt: p.last_test_at, lastTestOk: p.last_test_ok === null ? null : p.last_test_ok === 1, lastTestNote: p.last_test_note,
+});
 
 export class ProviderError extends Error {
   constructor(message: string, public retryable = false) {
@@ -62,10 +68,12 @@ export function statusError(p: ProviderRow, status: number) {
   return new ProviderError(`${p.label} ${hint}`, status === 429 || status >= 500);
 }
 
-async function call(p: ProviderRow, url: string, init: GuardedInit): Promise<Response> {
+async function call(p: ProviderRow, url: string, init: GuardedInit): Promise<{ response: Response; receipt: ReturnType<typeof reserveTrialCall> }> {
   try {
-    return await guardedFetch(url, init);
+    const receipt = reserveTrialCall(p, url);
+    return { response: await guardedFetch(url, init), receipt };
   } catch (e) {
+    if (e instanceof TrialPolicyError) throw new ProviderError(e.message);
     if (e instanceof BlockedAddressError) throw new ProviderError(`${p.label}: that address is not allowed.`);
     throw new ProviderError(`Could not reach ${p.label}.`, true);
   }
@@ -73,27 +81,32 @@ async function call(p: ProviderRow, url: string, init: GuardedInit): Promise<Res
 
 export async function chatJSON<T>(p: ProviderRow, system: string, user: string, schema: z.ZodType<T>, o: { maxTokens?: number; timeoutMs?: number } = {}) {
   if (!p.model) throw new ProviderError(`${p.label} has no model name. Add one in Run on.`);
+  if (trialEnabled() && Buffer.byteLength(system) + Buffer.byteLength(user) > 12_000) {
+    throw new ProviderError("The hosted trial accepts up to 12 KB of text per request.");
+  }
+  const maxTokens = trialEnabled() ? Math.min(o.maxTokens ?? 1000, 1000) : o.maxTokens ?? 2000;
   const send = (jsonMode: boolean) =>
     call(p, `${p.base_url}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", ...authHeader(p) },
       body: JSON.stringify({
-        model: p.model, temperature: 0.2, max_tokens: o.maxTokens ?? 2000, ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+        model: p.model, temperature: 0.2, max_tokens: maxTokens, ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
       }),
       signal: AbortSignal.timeout(o.timeoutMs ?? 120_000),
     });
-  let res = await send(true);
+  let { response: res, receipt } = await send(true);
   // Some models refuse response_format with a 400. The prompt already asks for JSON, so try once without it.
-  if (res.status === 400) {
+  if (res.status === 400 && !trialEnabled()) {
     await res.body?.cancel();
-    res = await send(false);
+    ({ response: res, receipt } = await send(false));
   }
   if (!res.ok) {
     await res.body?.cancel();
     throw statusError(p, res.status);
   }
   const d = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+  recordTrialTokens(receipt, d.usage?.prompt_tokens, d.usage?.completion_tokens);
   const text = d.choices?.[0]?.message?.content ?? "";
   const a = text.indexOf("{"), b = text.lastIndexOf("}");
   if (a < 0 || b < a) throw new ProviderError("The model did not return JSON.", true);
@@ -109,7 +122,7 @@ export async function chatJSON<T>(p: ProviderRow, system: string, user: string, 
 }
 
 async function madlad(p: ProviderRow, text: string, lang: string) {
-  const res = await call(p, p.base_url, {
+  const { response: res } = await call(p, p.base_url, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeader(p) },
     body: JSON.stringify({ inputs: `<2${lang}> ${text}` }),
@@ -132,7 +145,7 @@ export async function testProvider(p: ProviderRow): Promise<{ ok: boolean; note:
       const t = await madlad(p, "Good morning", "zu");
       return { ok: true, note: `Translated a test phrase (“${t.slice(0, 40)}”).` };
     }
-    const res = await call(p, p.base_url, { method: "GET", headers: authHeader(p), signal: AbortSignal.timeout(20_000) });
+    const { response: res } = await call(p, p.base_url, { method: "GET", headers: authHeader(p), signal: AbortSignal.timeout(20_000) });
     await res.body?.cancel();
     return { ok: res.status < 500, note: `Endpoint answered ${res.status}.` };
   } catch (e) {
@@ -179,7 +192,7 @@ export async function translateLines(p: ProviderRow, lines: { i: number; t: stri
 }
 
 export async function transcribeEndpoint(p: ProviderRow, wav: Buffer) {
-  const res = await call(p, p.base_url, { method: "POST", headers: { "content-type": "audio/wav", ...authHeader(p) }, body: new Uint8Array(wav), signal: AbortSignal.timeout(600_000) });
+  const { response: res } = await call(p, p.base_url, { method: "POST", headers: { "content-type": "audio/wav", ...authHeader(p) }, body: new Uint8Array(wav), signal: AbortSignal.timeout(600_000) });
   if (!res.ok) throw statusError(p, res.status);
   const d = (await res.json()) as { text?: string; chunks?: { timestamp: [number, number]; text: string }[] };
   if (!d.text) throw new ProviderError("The speech endpoint returned no text.", true);
