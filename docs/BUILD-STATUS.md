@@ -1,5 +1,7 @@
 # Build status (18 November 2026)
 
+For current Lane A implementation and gate evidence, see [Lane A build log](LANE-A-BUILD-LOG.md). The entries below describe the 18 November baseline.
+
 The real app's backend is built and verified end to end on a synthetic recording. The screens are **not yet wired** to it: the pages under `web/src/app/app` still show the earlier design prototype with sample data.
 
 ## Run it

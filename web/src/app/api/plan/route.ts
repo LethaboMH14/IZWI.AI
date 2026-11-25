@@ -29,8 +29,8 @@ export const POST = route(async (req) => {
       planner = m.planner;
     }
   } catch (e) {
-    // Only our own fixed provider messages reach the browser; anything else is logged on the server.
-    if (!(e instanceof ProviderError)) console.error("[izwi] planner model", e);
+    // Provider exception text can contain submitted context or credentials.
+    if (!(e instanceof ProviderError)) console.error("[izwi] planner model failed", e instanceof Error ? e.name : "unknown");
     note = `${e instanceof ProviderError ? e.message : "The planning model did not answer."} Built-in rules made this plan.`;
   }
   if (!intents.length) fail(422, "I could not turn that into steps. Name what you want made: clips, captions in a language, a render or a package for your editor.");

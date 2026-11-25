@@ -3,7 +3,7 @@ import { requireCtx, requireRole } from "@/server/guard";
 import { now, one, run } from "@/server/db";
 import { testProvider, type ProviderRow } from "@/server/providers";
 import { audit } from "@/server/audit";
-import { publicProvider } from "../route";
+import { publicProvider } from "@/server/providers";
 import { limit, LIMIT } from "@/server/ratelimit";
 
 export const runtime = "nodejs";

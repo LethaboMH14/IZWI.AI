@@ -1,6 +1,6 @@
 // One wrapper for every API route: same-origin check on writes, typed errors, no stack traces to clients.
 import { ZodError } from "zod";
-import { PUBLIC_URL } from "./env";
+import { PUBLIC_URL, STUDIO_URL } from "./env";
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -31,10 +31,17 @@ export function route<P = Record<string, string>>(handler: (req: Request, params
 // Writes must prove they come from our own pages: a matching Origin, or, when a browser leaves Origin out,
 // Sec-Fetch-Site: same-origin. A request with neither is refused, so a missing header is never a way round the check.
 export function checkOrigin(req: Request) {
+  const requestOrigin = new URL(req.url).origin;
+  const allowed = new Set([new URL(PUBLIC_URL).origin, STUDIO_URL]);
+  if (process.env.IZWI_HOSTED !== "1") allowed.add(requestOrigin);
+  if (process.env.IZWI_HOSTED === "1" && !allowed.has(requestOrigin)) {
+    throw new HttpError(403, "Request host is not configured.");
+  }
   const origin = req.headers.get("origin");
   if (origin) {
-    const allowed = new Set([PUBLIC_URL, new URL(req.url).origin]);
-    if (!allowed.has(origin)) throw new HttpError(403, "Cross-site request refused.");
+    if (!allowed.has(origin) || (process.env.IZWI_HOSTED === "1" && origin !== requestOrigin)) {
+      throw new HttpError(403, "Cross-site request refused.");
+    }
     return;
   }
   if (req.headers.get("sec-fetch-site") === "same-origin") return;
@@ -52,7 +59,7 @@ export function toResponse(e: unknown) {
       { status: 400 },
     );
   }
-  console.error("[izwi] unhandled", e);
+  console.error("[izwi] unhandled API error", e instanceof Error ? e.name : "unknown");
   return Response.json({ error: "Something went wrong on our side. It has been logged." }, { status: 500 });
 }
 

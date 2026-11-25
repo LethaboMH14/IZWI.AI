@@ -2,6 +2,7 @@
 // Claiming is one atomic UPDATE ... RETURNING. Leases expire, so a crashed worker's job is picked up again.
 // Idempotency keys make "run this again" safe: the same key returns the existing job instead of a duplicate.
 import { all, newId, now, one, parse, run, tx } from "./db";
+import { gateFor } from "./rights";
 
 export type JobType = "probe" | "proxy" | "transcribe" | "suggest_clips" | "translate" | "publish" | "render" | "package";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "blocked";
@@ -89,11 +90,23 @@ export function cancel(id: string, workspaceId: string) {
   return run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status IN ('queued','blocked','running')`, now(), id, workspaceId).changes > 0;
 }
 
+function queueRenderOutput(job: JobRow): boolean {
+  const outputId = parse<{ outputId?: string }>(job.input, {}).outputId;
+  if (!outputId) return false;
+  const output = one<{ id: string; project_id: string; start_ms: number; end_ms: number }>(
+    `SELECT o.id, o.project_id, c.start_ms, c.end_ms FROM output o JOIN clip c ON c.id = o.clip_id WHERE o.id = ? AND o.job_id = ? AND o.workspace_id = ? AND o.status IN ('queued','failed','blocked')`, outputId, job.id, job.workspace_id,
+  );
+  if (!output || !gateFor(output.project_id, output.start_ms, output.end_ms).ok) return false;
+  run(`UPDATE output SET status = 'queued', note = NULL, updated_at = ? WHERE id = ?`, now(), output.id);
+  return true;
+}
+
 export function retry(id: string, workspaceId: string) {
-  return run(
-    `UPDATE job SET status = 'queued', run_after = ?, attempts = 0, error = NULL, progress = 0, stage = NULL, finished_at = NULL WHERE id = ? AND workspace_id = ? AND status IN ('failed','cancelled','blocked')`,
-    now(), id, workspaceId,
-  ).changes > 0;
+  return tx(() => {
+    const job = one<JobRow>(`SELECT * FROM job WHERE id = ? AND workspace_id = ? AND status IN ('failed','cancelled','blocked')`, id, workspaceId);
+    if (!job || (job.type === "render" && !queueRenderOutput(job))) return false;
+    return run(`UPDATE job SET status = 'queued', run_after = ?, max_attempts = attempts + 3, error = NULL, progress = 0, stage = NULL, finished_at = NULL, worker_id = NULL, lease_until = NULL WHERE id = ?`, now(), id).changes > 0;
+  });
 }
 
 export function isCancelled(id: string) {
@@ -113,7 +126,15 @@ export function sweep() {
 
 // Blocked jobs (for example renders waiting on consent) re-enter the queue when the blocker clears.
 export function requeueBlocked(projectId: string, type: JobType) {
-  return run(`UPDATE job SET status = 'queued', error = NULL, run_after = ? WHERE project_id = ? AND type = ? AND status = 'blocked'`, now(), projectId, type).changes;
+  return tx(() => {
+    const jobs = all<JobRow>(`SELECT * FROM job WHERE project_id = ? AND type = ? AND status = 'blocked'`, projectId, type);
+    let count = 0;
+    for (const job of jobs) {
+      if (type === "render" && !queueRenderOutput(job)) continue;
+      count += run(`UPDATE job SET status = 'queued', error = NULL, run_after = ? WHERE id = ? AND status = 'blocked'`, now(), job.id).changes;
+    }
+    return count;
+  });
 }
 
 export function projectJobs(projectId: string, limit = 40) {

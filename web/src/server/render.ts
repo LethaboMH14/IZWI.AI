@@ -3,7 +3,7 @@
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { BIN } from "./env";
-import { ffmpeg } from "./media";
+import { ffmpeg, runTool, ToolError } from "./media";
 
 export const PRESETS = {
   vertical: { label: "9:16 vertical", w: 1080, h: 1920, crf: 21, abr: "128k", use: "Reels, Shorts, TikTok" },
@@ -28,6 +28,21 @@ export async function renderClip(o: {
     copyFileSync(path.join(BIN.fonts, "ArchivoBlack-Regular.ttf"), path.join(o.workDir, "fonts", "ArchivoBlack-Regular.ttf"));
     subs = ",subtitles=captions.ass:fontsdir=fonts";
   }
+  // Measure the selected clip first. A single dynamic loudnorm pass can miss the target
+  // substantially; the second pass uses the measured values for this exact interval.
+  let normalization = "loudnorm=I=-14:TP=-1.5:LRA=11";
+  if (o.hasAudio) {
+    const measured = await runTool(BIN.ffmpeg, ["-hide_banner", "-ss", (o.startMs / 1000).toFixed(3), "-t", (dur / 1000).toFixed(3), "-i", o.src, "-vn", "-af", `${normalization}:print_format=json`, "-f", "null", "-"], { signal: o.signal, timeoutMs: Math.max(60_000, Math.min(6 * 3600_000, dur * 20)) });
+    if (measured.code !== 0) throw new ToolError("Could not measure audio loudness.");
+    const match = measured.stderr.match(/\{[^{}]*"input_i"[^{}]*\}/);
+    if (!match) throw new ToolError("Could not read audio loudness measurements.");
+    const m = JSON.parse(match[0]) as Record<string, string>;
+    const fields = ["input_i", "input_tp", "input_lra", "input_thresh", "target_offset"];
+    // Silence has infinite measurements and cannot be normalized to an integrated target.
+    if (fields.every((key) => Number.isFinite(Number(m[key])))) {
+      normalization += `:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true`;
+    }
+  }
   const parts: string[] = [];
   if (o.hasVideo) {
     parts.push(
@@ -36,18 +51,18 @@ export async function renderClip(o: {
       `[b]scale=${P.w}:${P.h}:force_original_aspect_ratio=decrease[fg]`,
       `[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p${subs}[v]`,
     );
-    if (o.hasAudio) parts.push(`[0:a]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[aout]`);
+    if (o.hasAudio) parts.push(`[0:a]${normalization},aresample=48000[aout]`);
   } else {
     parts.push(
       `color=c=0xFAF8F4:s=${P.w}x${P.h}:r=30:d=${(dur / 1000).toFixed(3)}[bg]`,
       `[0:a]asplit=2[aw][ax]`,
       `[aw]showwaves=s=${P.w}x${Math.round(P.h * 0.24)}:mode=cline:colors=0xE9A21B:rate=30,format=rgba[w]`,
       `[bg][w]overlay=0:(H-h)/2,format=yuv420p${subs}[v]`,
-      `[ax]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[aout]`,
+      `[ax]${normalization},aresample=48000[aout]`,
     );
   }
   const args = ["-ss", (o.startMs / 1000).toFixed(3), "-t", (dur / 1000).toFixed(3), "-i", o.src, "-filter_complex", parts.join(";"), "-map", "[v]"];
   if (o.hasAudio) args.push("-map", "[aout]", "-c:a", "aac", "-b:a", P.abr);
-  args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", String(P.crf), "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart", o.out);
+  args.push("-t", (dur / 1000).toFixed(3), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(P.crf), "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart", o.out);
   await ffmpeg(args, { totalMs: dur, onProgress: o.onProgress, signal: o.signal, cwd: o.workDir });
 }

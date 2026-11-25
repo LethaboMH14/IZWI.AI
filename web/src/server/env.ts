@@ -7,6 +7,7 @@ export const STORAGE = path.resolve(process.env.IZWI_STORAGE_DIR || path.join(RO
 export const TOOLS = path.join(ROOT, ".tools");
 export const DB_FILE = process.env.IZWI_DB_FILE || path.join(STORAGE, "izwi.db");
 export const PUBLIC_URL = (process.env.IZWI_PUBLIC_URL || "http://localhost:3187").replace(/\/$/, "");
+export const STUDIO_URL = new URL(process.env.BETTER_AUTH_URL || PUBLIC_URL).origin;
 
 const exe = process.platform === "win32" ? ".exe" : "";
 export const BIN = {

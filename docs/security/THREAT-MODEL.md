@@ -1,55 +1,52 @@
-# Threat model (STRIDE)
+# Threat model: IZWI AI Lane A
 
-IZWI AI as it runs for the Discothon demo: one laptop runs the Next.js app, the job worker, SQLite, ffmpeg and whisper.cpp. Guests reach the consent page through a tunnel. Paths are under `web/src` unless noted.
+**Scope:** Current local demo architecture and reviewed backend code, as recorded in `docs/BUILD-STATUS.md` and `SECURITY-REVIEW-2026-11.md`. This is a design and evidence map, not a penetration test or production assurance. Planned integrations are not treated as deployed systems.
 
-**Labels**
-- **Built:** in code, with a test or a check in [SECURITY-REVIEW-2026-11.md](SECURITY-REVIEW-2026-11.md).
-- **Planned:** not built yet.
+## Assets and security goals
 
-## Assets
-- Creators' source media and renders.
-- Consent records and the consent ledger.
-- Provider API keys (sealed).
-- Sessions and passkeys.
-- Workspace data: transcripts, glossary, enquiries with buyers' contact details.
+- Source media, derived media, transcripts, captions and project metadata: keep private to the creator's workspace and process only for requested tasks.
+- Accounts, sessions, workspace membership and role assignments: prevent impersonation and unauthorized cross-workspace access.
+- Provider keys: keep confidential and usable only by authorized server-side provider calls.
+- Consent, review and licensing-enquiry records: preserve integrity, limit access and honor expiry/revocation.
+- Worker capacity and local files: prevent malformed or excessive work from exhausting the demo host or escaping intended storage.
 
-## Trust boundaries
-| # | Boundary | Who is on the other side |
+## Actors and trust boundaries
+
+| Boundary | Untrusted input / actor | Principal risk |
 |---|---|---|
-| B1 | Browser → app (signed-in studio) | Members of a workspace, and other workspaces' members |
-| B2 | Internet → tunnel → guest routes | Anyone with, or guessing, a consent or review link |
-| B3 | App → AI providers | OpenRouter, Meta, Ollama, or any URL a workspace admin types |
-| B4 | Upload → worker → ffmpeg/whisper | Untrusted media files |
-| B5 | App ↔ worker via SQLite | Two processes sharing one database |
+| Browser to signed-in app | Authenticated member, compromised browser, cross-site request | Unauthorized writes, role abuse, cross-workspace disclosure |
+| Public link to guest route | Anyone who receives or guesses a token | Link misuse, consent spoofing, private media exposure, spam |
+| Upload to worker and media tools | Creator-provided files, filenames and metadata | Parser/resource abuse, unsafe serving, command misuse |
+| App to AI provider | Creator prompt/media context, user-configured endpoint, provider response | Data disclosure, server-side request forgery, malformed proposal, misleading output |
+| App and worker to SQLite/local storage | Concurrent processes and filesystem state | Tenant mix-up, duplicate work, corruption or data loss |
+| Demo host to external network/tunnel | Network users and tunnel operator | Exposure beyond guest routes; configuration drift |
 
-## STRIDE per boundary
-| Boundary | Threat | Control | Status |
-|---|---|---|---|
-| B1 | **S**poofing: stolen session | better-auth sessions, passkeys, rate-limited sign-in (`server/auth.ts`, database store) | Built |
-| B1 | **T**ampering: cross-site writes | Origin / Sec-Fetch-Site check on every write (`server/http.ts`) | Built |
-| B1 | **I**nfo disclosure: another workspace's data | Every query scoped by `workspace_id`; IDs from other workspaces answer 404 (`server/guard.ts`); job idempotency per workspace | Built (function-level tests; HTTP-level two-tenant tests planned) |
-| B1 | **E**levation: member doing owner/admin actions | `requireRole` on provider add/test/delete and audit read | Built |
-| B1 | XSS via uploaded file | Server-chosen type, sandboxed serving, nonce CSP | Built (CSP Report-Only until enforced) |
-| B2 | **S**poofing: someone else answers consent | Random 20+ character tokens, stored hashed; the typed name must match; links expire in 14 days and can be revoked | Built |
-| B2 | **R**epudiation: "I never agreed" | Hash-chained, Ed25519-signed consent ledger; user agent and time stored | Built |
-| B2 | **D**oS: link brute force or spam | Per-IP and per-link rate limits, 64 KB bodies | Built |
-| B2 | Exposure of the studio | Tunnel allowlist: only consent paths, static files and token-gated media; the rest is 404 at the edge (`deploy/tunnel/cloudflared.example.yml`) | Planned (config written, tunnel not set up) |
-| B3 | SSRF to metadata or the LAN | Connect-time address check, no redirects, hosted mode blocks private ranges (`server/ssrf.ts`) | Built |
-| B3 | Key leakage | Keys sealed at rest, unsealed per call, never returned; provider errors are fixed strings | Built |
-| B3 | Provider logs creator content | Privacy classes, redaction before "may log" providers, no cross-class fallback | Planned (Lane C) |
-| B4 | Malformed or huge media pins the worker | Upload cap, magic-byte check, ffprobe timeout, duration limit, process timeouts | Built (ffmpeg ceiling still 6 h) |
-| B4 | Command injection via filenames | Tools run with argument arrays, never a shell (`server/media.ts`) | Built (existing) |
-| B5 | Two workers finish the same job | Finish only with the matching `worker_id` while running | Built |
+## Defensive controls and evidence
 
-## OWASP Top 10 for LLM applications (the studio assistant, Lane C)
-| Risk | Control | Status |
+| Threat | Current defense | Status and remaining limit |
 |---|---|---|
-| LLM01 Prompt injection | Transcript in a delimited untrusted block, canary token, injection classifier badges lines, proposals only, approval required | Planned |
-| LLM02 Sensitive information disclosure | Redaction (phone, SA ID, email, consent names) before "may log" providers; consent records never sent | Planned |
-| LLM06 Excessive agency | Typed, non-destructive tools only; every action goes through `plan_run` approval. The current planner already needs approval (`server/planner.ts`) | Partly built |
-| LLM10 Unbounded consumption | Per-user rate limits, daily token cap, 30 s timeout | Planned. The planner route is rate-limited now |
+| Session spoofing and sign-in abuse | better-auth database-backed sessions, passkeys, database rate limits | Code and selected review evidence exist. Production identity configuration is not claimed. |
+| Cross-site writes | Same-origin `Origin` / `Sec-Fetch-Site` checks on writes, including upload | Verified by selected HTTP checks in the security review. |
+| Cross-workspace reads/writes | Workspace-scoped server queries and role checks; workspace-prefixed job idempotency | Function-level tests exist. HTTP-level two-tenant route tests remain planned. |
+| Uploaded content served as active content | Server-selected extension/MIME, sandboxed media serving, `nosniff`, CORP and nonce CSP | CSP remains Report-Only unless explicitly enforced; enforcement review of signed-in pages is open. |
+| Guessing or reusing public tokens | Random tokens stored hashed; purpose/project checks; expiry and revocation; rate limits | Implemented/reviewed. External tunnel is not configured or tested. |
+| Forged or disputed consent record | Hash-chained, Ed25519-signed ledger with append-only triggers and verification script | Ledger check ran on a database copy with zero entries; this is not identity proof or a legal rights determination. |
+| SSRF through user-configured provider URLs | Connect-time address checks, private-range blocking in hosted mode, no redirects, response cap | Implemented/reviewed. No claim that every deployment/network is hardened. |
+| Provider key exposure | AES-256-GCM sealed at rest; unseal only for calls; fixed/sanitized provider errors | Implemented/reviewed. Secret log redaction and rotation procedure need operational completion. |
+| Malformed/oversized media or worker exhaustion | Upload limits, magic-byte checks, ffprobe and process timeouts, duration limits, capped request bodies | Implemented with limits; ffmpeg ceiling is still six hours and needs tightening. |
+| Prompt injection or unsafe model actions | Model response is schema-validated as bounded intents; reviewed code builds a plan; human approval precedes queueing; no model-written code execution | Current planner supports rule-based planning and optional provider-assisted proposals. This is not a general autonomous agent. Prompt-injection defenses and redaction for providers that may log are not yet implemented. |
+| Provider retention/training beyond creator expectation | Disclosure and provider-by-provider verification required before live use | Not verified. No live provider key or contractual review is evidenced. Do not promise provider-side deletion or no-training without proof. |
+| Tunnel exposure | Example allowlist limits intended public routes | Config only; no tunnel exists or has been tested. Do not treat the studio as safely internet-exposed. |
+| Secret/personal data in logs | Sanitized provider errors | Logs are not comprehensively redacted; this remains open. |
 
-## Known gaps
-- The CSP is Report-Only until it is enforced.
-- Logs don't redact secrets yet.
-- No security CI yet.
+## Model and tool boundary
+
+The model may suggest a limited intent such as transcription, clipping or translation. Server code validates the intent, checks project state and authorization, applies consent and resource gates, and builds the executable plan. A person must approve before work is queued. Provider output cannot grant itself access, change a role, skip consent, publish to a platform or execute arbitrary code. Unsupported intents should fail closed. The current project does not have live social-platform publishing, audience analytics or production commerce integrations.
+
+## Release gates
+
+Before external or production use, close or formally accept these risks: enforce CSP after a signed-in browser review; run route-level workspace isolation and link lifecycle tests; redact secrets and personal data from logs; tighten worker resource limits; document and test retention/deletion and backups; verify provider terms and regional handling; and verify tunnel allowlisting plus sign-in. Independent security certification and production penetration testing are not evidenced.
+
+## Evidence boundary
+
+The November 2026 security review reports local CI passing (5 test files, 58 tests), selected same-origin/body-limit checks, and a ledger verification on a local database copy. It does not establish production deployment, a live external provider, a public tunnel, independent assessment, or human user validation. See `docs/security/SECURITY-REVIEW-2026-11.md` for the detailed results and open items.

@@ -27,5 +27,5 @@ export const GET = route<{ id: string }>(async (req, { id }) => {
   if (!asset) fail(404, "Not found.");
   const file = absPath(asset.storage_key);
   if (!existsSync(file)) fail(404, "The file is missing from storage.");
-  return streamFile(req, file, asset.mime, { download: url.searchParams.has("download") ? asset.filename : undefined, cache: token || slug ? "private, max-age=600" : undefined });
+  return streamFile(req, file, asset.mime, { download: url.searchParams.has("download") ? asset.filename : undefined, cache: token || slug ? "no-store" : undefined });
 });
