@@ -10,6 +10,7 @@ async function main() {
   const { handle, Blocked, onFailed } = await import("../src/server/pipeline");
   const { toolVersions } = await import("../src/server/media");
   const { parse, run, now, one } = await import("../src/server/db");
+  const { scanProjectBatch } = await import("../src/server/injection");
   const { appliedVersion, SCHEMA_VERSION } = await import("../src/server/migrations");
   const { purgeOldAssistantMessages } = await import("../src/server/assistant-store");
 
@@ -66,7 +67,16 @@ async function main() {
     const started = Date.now();
     console.log(`→ ${job.type} ${job.id}`);
     try {
-      const out = await handle({ job, input: parse(job.input, {}), beat, signal: ctrl.signal });
+      const input = parse<Record<string, unknown>>(job.input, {});
+      const out = (job.type as string) === "injection_scan"
+        ? await scanProjectBatch({
+          workspaceId: job.workspace_id,
+          projectId: job.project_id ?? "",
+          trackId: typeof input.trackId === "string" ? input.trackId : "",
+          afterIdx: typeof input.afterIdx === "number" ? input.afterIdx : -1,
+          createdBy: job.created_by,
+        })
+        : await handle({ job, input, beat, signal: ctrl.signal });
       succeed(job.id, workerId, out);
       console.log(`✓ ${job.type} ${job.id} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
     } catch (e) {

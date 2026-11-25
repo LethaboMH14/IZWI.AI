@@ -4,7 +4,7 @@ import path from "node:path";
 import { strToU8, zipSync, type Zippable } from "fflate";
 import { all, newId, now, one, parse, run, tx } from "./db";
 import { BIN, LIMITS, STORAGE } from "./env";
-import { enqueue, type JobRow } from "./jobs";
+import { enqueue, type JobRow, type JobType } from "./jobs";
 import { absPath, ensureDirFor, sha256File, storageKey } from "./storage";
 import { extractSpeechWav, makeProxy, peaks, poster, probe, ToolError, whisper, type Probe } from "./media";
 import { applyGlossary, buildLines, lineFlag, lineText, sliceLines, toASS, toSRT, toVTT, type CapLine, type GlossaryEntry, type Seg, type Word } from "./captions";
@@ -168,6 +168,18 @@ async function transcribeJob(c: JobCtx) {
   if (!one(`SELECT 1 FROM clip WHERE project_id = ? LIMIT 1`, proj.id)) {
     enqueue({ workspaceId: proj.workspace_id, projectId: proj.id, type: "suggest_clips", input: { count: 3 }, idempotencyKey: `suggest:${trackId}`, dependsOn: c.job.id, createdBy: c.job.created_by });
   }
+    if (process.env.IZWI_FLAG_INJECTION === "1") {
+      enqueue({
+        workspaceId: proj.workspace_id,
+        projectId: proj.id,
+        type: "injection_scan" as unknown as JobType,
+        input: { trackId, afterIdx: -1 },
+        idempotencyKey: `injection_scan:${trackId}:start`,
+        dependsOn: c.job.id,
+        createdBy: c.job.created_by,
+        priority: 0,
+      });
+    }
   return { language: t.language, lines: lines.length, glossaryFixes: fixes, seconds: Math.round((now() - started) / 1000), engine: t.engine };
 }
 
