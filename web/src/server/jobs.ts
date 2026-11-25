@@ -12,11 +12,12 @@ export type JobRow = {
   attempts: number; max_attempts: number; idempotency_key: string | null; depends_on: string | null;
   run_after: number; lease_until: number | null; worker_id: string | null; created_by: string | null;
   created_at: number; started_at: number | null; finished_at: number | null;
+  priority: number;
 };
 
 export function enqueue(j: {
   workspaceId: string; projectId: string | null; type: JobType; input?: unknown;
-  idempotencyKey?: string; dependsOn?: string | null; createdBy?: string | null; maxAttempts?: number;
+  idempotencyKey?: string; dependsOn?: string | null; createdBy?: string | null; maxAttempts?: number; priority?: number;
 }): JobRow {
   // Keys are scoped to the workspace: the same key in two workspaces names two different jobs.
   const key = j.idempotencyKey ? `${j.workspaceId}:${j.idempotencyKey}` : null;
@@ -28,10 +29,10 @@ export function enqueue(j: {
     }
     const id = newId("job");
     run(
-      `INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, depends_on, run_after, created_by, created_at, max_attempts)
-       VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, depends_on, run_after, created_by, created_at, max_attempts, priority)
+       VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, j.workspaceId, j.projectId, j.type, JSON.stringify(j.input ?? {}), key,
-      j.dependsOn ?? null, now(), j.createdBy ?? null, now(), j.maxAttempts ?? 3,
+      j.dependsOn ?? null, now(), j.createdBy ?? null, now(), j.maxAttempts ?? 3, j.priority ?? 0,
     );
     return one<JobRow>(`SELECT * FROM job WHERE id = ?`, id)!;
   });
@@ -45,7 +46,7 @@ export function claim(workerId: string, leaseMs: number): JobRow | undefined {
        SELECT j.id FROM job j
        WHERE j.status = 'queued' AND j.run_after <= ?
          AND (j.depends_on IS NULL OR EXISTS (SELECT 1 FROM job d WHERE d.id = j.depends_on AND d.status = 'succeeded'))
-       ORDER BY j.created_at LIMIT 1
+       ORDER BY j.priority DESC, j.created_at LIMIT 1
      )
      RETURNING *`,
     workerId, t + leaseMs, t, t,

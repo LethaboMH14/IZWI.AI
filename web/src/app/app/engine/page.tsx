@@ -166,18 +166,24 @@ function Worker() {
 }
 
 /* ---------- Your own AI keys ---------- */
-type Kind = "openai_compat" | "madlad_endpoint" | "asr_endpoint";
-type Role = "plan" | "translate" | "clips" | "asr";
-type Provider = { id: string; kind: Kind; label: string; baseUrl: string; model: string | null; keyHint: string | null; roles: Role[]; lastTestAt: number | null; lastTestOk: boolean | null; lastTestNote: string | null };
+type Kind = "openai_compat" | "madlad_endpoint" | "asr_endpoint" | "openrouter" | "ollama" | "meta";
+type Role = "plan" | "translate" | "clips" | "asr" | "chat";
+type Provider = { id: string; kind: Kind; label: string; baseUrl: string; model: string | null; keyHint: string | null; roles: Role[]; privacy: "private" | "standard" | "may_log"; lastTestAt: number | null; lastTestOk: boolean | null; lastTestNote: string | null };
 
-const KIND_LABEL: Record<Kind, string> = { openai_compat: "OpenAI-compatible chat", madlad_endpoint: "MADLAD-400 endpoint", asr_endpoint: "Speech endpoint" };
-const ROLE_LABEL: Record<Role, string> = { plan: "Plan", translate: "Translate", clips: "Find clips", asr: "Transcribe" };
+const KIND_LABEL: Record<Kind, string> = { openai_compat: "OpenAI-compatible chat", madlad_endpoint: "MADLAD-400 endpoint", asr_endpoint: "Speech endpoint", openrouter: "OpenRouter", ollama: "Ollama", meta: "Meta API" };
+const ROLE_LABEL: Record<Role, string> = { plan: "Plan", translate: "Translate", clips: "Find clips", asr: "Transcribe", chat: "Studio assistant chat" };
+const PRIVACY_TEXT: Record<Provider["privacy"], string> = {
+  private: "Private: on this machine (owner-configured; IZWI can't verify that it doesn't forward elsewhere)",
+  standard: "Standard: Meta",
+  may_log: "May log: the provider may keep what you send",
+};
 
 type Preset = { id: string; name: string; kind: Kind; label: string; baseUrl: string; modelHint: string; roles: Role[]; keyOptional?: boolean; note?: string };
 const PRESETS: Preset[] = [
   { id: "aiml", name: "AI/ML API", kind: "openai_compat", label: "AI/ML API", baseUrl: "https://api.aimlapi.com/v1", modelHint: "model id from your AI/ML API dashboard", roles: ["plan", "translate"] },
-  { id: "meta", name: "Meta Llama API", kind: "openai_compat", label: "Meta Llama API", baseUrl: "https://api.llama.com/compat/v1", modelHint: "model id from Meta's docs", roles: ["plan", "translate"], note: "Check this address in Meta's docs; sources disagree." },
-  { id: "ollama", name: "Ollama on this computer", kind: "openai_compat", label: "Ollama (this computer)", baseUrl: "http://localhost:11434/v1", modelHint: "a model you have pulled", roles: ["plan", "translate"], keyOptional: true, note: "No key needed. Big local models slow this PC down while they run." },
+  { id: "openrouter", name: "OpenRouter", kind: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", modelHint: "provider/model from OpenRouter", roles: ["plan", "translate", "chat"] },
+  { id: "ollama", name: "Ollama on this computer", kind: "ollama", label: "Ollama (this computer)", baseUrl: "http://127.0.0.1:11434/v1", modelHint: "a model you have pulled", roles: ["plan", "translate", "chat"], keyOptional: true, note: "No key needed. Big local models slow this PC down while they run." },
+  { id: "meta", name: "Meta API", kind: "meta", label: "Meta API", baseUrl: "https://api.meta.ai/v1", modelHint: "model id from Meta's API", roles: ["plan", "translate", "chat"] },
   { id: "madlad", name: "MADLAD-400 endpoint", kind: "madlad_endpoint", label: "MADLAD-400", baseUrl: "", modelHint: "", roles: ["translate"], keyOptional: true, note: "Paste the URL of an endpoint you deployed, for example on Hugging Face or Kaggle." },
   { id: "asr", name: "Speech endpoint", kind: "asr_endpoint", label: "Speech endpoint", baseUrl: "", modelHint: "", roles: ["asr"], keyOptional: true, note: "Paste the URL of a transcription endpoint that accepts a WAV file." },
 ];
@@ -214,6 +220,7 @@ function ProviderCard({ p, onChange }: { p: Provider; onChange: () => void }) {
       </div>
       <dl>
         <div><dt>Kind</dt><dd>{KIND_LABEL[p.kind]}</dd></div>
+        <div><dt>Privacy</dt><dd><span className="pill s-off">{PRIVACY_TEXT[p.privacy]}</span></dd></div>
         <div><dt>Address</dt><dd className="mono">{p.baseUrl}</dd></div>
         {p.model && <div><dt>Model</dt><dd>{p.model}</dd></div>}
         <div><dt>Key</dt><dd className="mono">{p.keyHint ? `ends in ${p.keyHint}` : "No key stored"}</dd></div>
@@ -284,7 +291,7 @@ function AddProvider({ onAdded }: { onAdded: () => void }) {
           </label>
         </div>
         <label className="field"><span>Address (base URL)</span><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required inputMode="url" placeholder={kind === "openai_compat" ? "https://…/v1" : "https://your-endpoint…"} /></label>
-        {kind === "openai_compat" && <label className="field"><span>Model</span><input value={model} onChange={(e) => setModel(e.target.value)} required placeholder={preset?.modelHint || "the model id this provider gives you"} /></label>}
+        {["openai_compat", "openrouter", "ollama", "meta"].includes(kind) && <label className="field"><span>Model</span><input value={model} onChange={(e) => setModel(e.target.value)} required placeholder={preset?.modelHint || "the model id this provider gives you"} /></label>}
         <label className="field"><span>Key {preset?.keyOptional || kind !== "openai_compat" ? "(optional)" : ""}</span><input type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} placeholder="Paste it here once" /><small>Encrypted on this server. Never shown again.</small></label>
         <fieldset className="st-roles">
           <legend>Use it for</legend>

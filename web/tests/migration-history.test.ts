@@ -41,10 +41,28 @@ for (const history of ["clean", "hardening", "studio"] as const) {
         .toEqual([{ name: "consent_ledger" }, { name: "rate_limit" }]);
       expect(db.prepare("SELECT 1 FROM pragma_table_info('listing') WHERE name = 'asking_price_cents'").get()).toBeTruthy();
       expect(db.prepare("SELECT 1 FROM pragma_table_info('project') WHERE name = 'script'").get()).toBeTruthy();
-      expect(db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 4 });
+      expect(db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 5 });
+      for (const table of ["assistant_thread", "assistant_message", "assistant_lease", "assistant_budget", "line_injection_scan"]) {
+        expect(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)).toBeTruthy();
+      }
+      expect(db.prepare("SELECT 1 FROM pragma_table_info('job') WHERE name = 'priority'").get()).toBeTruthy();
+      db.exec(`
+        INSERT OR IGNORE INTO organization (id) VALUES ('provider-ws');
+        INSERT OR IGNORE INTO "user" (id) VALUES ('provider-user');
+        INSERT INTO provider (id, workspace_id, kind, label, base_url, model, roles, created_by, created_at)
+          VALUES ('openrouter-fixture', 'provider-ws', 'openrouter', 'OpenRouter', 'https://openrouter.ai/api/v1', 'demo:free', '["chat"]', 'provider-user', 0);
+      `);
       if (history === "studio") {
         expect(db.prepare("SELECT script FROM project WHERE id = 'project'").get()).toEqual({ script: "My original script" });
         expect(db.prepare("SELECT name FROM schema_migrations WHERE version = 2").get()).toEqual({ name: "listing asking price" });
+        db.exec(`
+          INSERT INTO assistant_thread (id, workspace_id, project_id, created_by, created_at) VALUES ('thread', 'ws', 'project', 'user', 0);
+          INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, created_at)
+            VALUES ('message', 'thread', 'ws', 'project', 'assistant', 'reply', 0);
+          DELETE FROM project WHERE id = 'project';
+        `);
+        expect(db.prepare("SELECT 1 FROM assistant_thread WHERE id = 'thread'").get()).toBeUndefined();
+        expect(db.prepare("SELECT 1 FROM assistant_message WHERE id = 'message'").get()).toBeUndefined();
       }
     } finally {
       db.close();

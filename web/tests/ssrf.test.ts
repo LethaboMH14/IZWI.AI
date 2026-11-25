@@ -28,16 +28,22 @@ describe("isBlockedAddress", () => {
 describe("guardedFetch", () => {
   let server: http.Server;
   let port = 0;
+  const closed = new Map<string, Promise<boolean>>();
   beforeAll(async () => {
     server = http.createServer((req, res) => {
       if (req.url === "/redirect") {
         res.writeHead(302, { location: "http://169.254.169.254/latest/meta-data/" });
         return res.end();
       }
-      if (req.url === "/big") {
+      if (req.url === "/big" || req.url === "/stream") {
+        let resolveClosed!: (v: boolean) => void;
+        closed.set(req.url, new Promise((resolve) => { resolveClosed = resolve; }));
+        const socket = req.socket;
+        socket.once("close", () => resolveClosed(socket.destroyed));
         res.writeHead(200);
-        res.write("x".repeat(64 * 1024));
-        return res.end("x".repeat(64 * 1024));
+        const timer = setInterval(() => res.write(Buffer.alloc(64 * 1024)), 5);
+        res.once("close", () => clearInterval(timer));
+        return;
       }
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ method: req.method }));
@@ -76,9 +82,16 @@ describe("guardedFetch", () => {
     expect(res.status).toBe(302);
   });
 
-  it("stops reading a response over the size cap", async () => {
+  it("closes the upstream socket when the consumer cancels", async () => {
+    const res = await guardedFetch(`http://127.0.0.1:${port}/stream`);
+    await res.body?.cancel();
+    await expect(closed.get("/stream")).resolves.toBe(true);
+  });
+
+  it("closes the upstream socket after a response exceeds the size cap", async () => {
     const res = await guardedFetch(`http://127.0.0.1:${port}/big`, { maxResponseBytes: 32 * 1024 });
     await expect(res.text()).rejects.toThrow();
+    await expect(closed.get("/big")).resolves.toBe(true);
   });
 
   it("refuses non-http schemes", async () => {
