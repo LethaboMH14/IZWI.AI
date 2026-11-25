@@ -19,12 +19,13 @@ vi.mock("../src/server/auth", () => ({ auth: { api: { getSession: async () => ho
 // The route's own download hook is exercised directly (the earlier workaround was removed once route.ts was fixed).
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 
-type MockRequest = { path: string; method: string; headers: Record<string, string | undefined>; raw: string; body: { model?: string; messages?: { role: string; content: unknown }[] } | null; mode: string | null };
+type MockRequest = { path: string; method: string; headers: Record<string, string | undefined>; raw: string; body: { model?: string; messages?: { role: string; content: unknown }[]; stream_options?: { include_usage?: boolean } } | null; mode: string | null };
 type Mock = { url: string; requests: MockRequest[]; state: { sentBytes: number }; reset(): void; close(): Promise<void> };
 
 let db: Db;
 let planner: typeof import("../src/server/planner");
 let route: typeof import("../src/app/api/projects/[id]/assistant/route");
+let voiceRoute: typeof import("../src/app/api/projects/[id]/assistant/transcribe/route");
 let render: typeof import("../src/components/studio/assistant-render");
 let sdk: typeof import("../src/server/sdk-fetch");
 let seal: (s: string) => string;
@@ -37,6 +38,7 @@ beforeAll(async () => {
   db = await openTestDb();
   planner = await import("../src/server/planner");
   route = await import("../src/app/api/projects/[id]/assistant/route");
+  voiceRoute = await import("../src/app/api/projects/[id]/assistant/transcribe/route");
   render = await import("../src/components/studio/assistant-render");
   sdk = await import("../src/server/sdk-fetch");
   seal = (await import("../src/server/crypto")).seal;
@@ -203,6 +205,17 @@ describe("canary: the per-request secret never leaves", () => {
     expect(dump()).not.toContain(canary);
   });
 
+  it("a JSON unicode-escaped canary in a decoded proposal argument is stopped before persistence", async () => {
+    const fx = fixture({ model: "evil_tool_unicode:free" });
+    const r = await send(fx);
+    const canary = canaryIn(mockA);
+    expect(r.error?.code).toBe("canary");
+    expect(r.body).not.toContain(canary);
+    expect(dump()).not.toContain(canary);
+    expect(count(`SELECT COUNT(*) n FROM plan_run WHERE project_id = ?`, fx.project)).toBe(0);
+    expect(count(`SELECT COUNT(*) n FROM assistant_message WHERE project_id = ?`, fx.project)).toBe(0);
+  });
+
   it("each request gets a fresh canary", async () => {
     const a = fixture({ model: "evil:free" }), b = fixture({ model: "evil:free" });
     await send(a); const c1 = canaryIn(mockA);
@@ -273,6 +286,14 @@ describe("approval: proposals are inert until a person approves, and only their 
     const id = planner.savePlan(fx.ctx, fx.project, "p", "assistant:t/m", [{ kind: "job", verb: "Hear", what: "Hear", tool: "IZWI", runs: "This device", runnable: true, assistant: true, stepId: "j0", dependsOn: [] }]);
     expect(() => planner.approvePlan(fx.ctx, id)).toThrow(expect.objectContaining({ status: 409 }));
     expect(db.one<{ status: string }>(`SELECT status FROM plan_run WHERE id = ?`, id)?.status).toBe("proposed");
+  });
+
+  it("marks an approved assistant Hear job so the worker can refuse a transcript replacement", () => {
+    const fx = fixture();
+    const id = planner.savePlan(fx.ctx, fx.project, "hear", "assistant:test/model", [{ kind: "job", verb: "Hear", what: "Hear", tool: "IZWI", runs: "This device", runnable: true, assistant: true, stepId: "j0", dependsOn: [] }]);
+    const approved = planner.approvePlan(fx.ctx, id)!;
+    const job = db.one<{ input: string }>(`SELECT input FROM job WHERE id = ?`, approved.jobs[0])!;
+    expect(JSON.parse(job.input)).toMatchObject({ assistant: true });
   });
 });
 
@@ -455,8 +476,43 @@ describe("limits", () => {
   }, 60_000);
 });
 
+describe("voice admission", () => {
+  it("limits voice requests to six per user and workspace per minute", async () => {
+    const fx = fixture(); signIn(fx);
+    const call = () => voiceRoute.POST(new Request(`http://localhost/api/projects/${fx.project}/assistant/transcribe`, { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json" }, body: "{}" }), { params: Promise.resolve({ id: fx.project }) });
+    for (let i = 0; i < 6; i++) expect((await call()).status).toBe(415);
+    expect((await call()).status).toBe(429);
+  });
+
+  it("admits at most one open voice job per user and cancels a queued job on client abort", async () => {
+    const { enqueueVoice } = await import("../src/server/jobs");
+    const fx = fixture(); signIn(fx);
+    const pending = enqueueVoice({ workspaceId: fx.ws, projectId: fx.project, createdBy: fx.user, idempotencyKey: "pending", input: {} })!;
+    const blockedForm = new FormData(); blockedForm.append("audio", new Blob(["audio"], { type: "audio/wav" }), "voice.wav");
+    const blocked = await voiceRoute.POST(new Request(`http://localhost/api/projects/${fx.project}/assistant/transcribe`, { method: "POST", headers: { origin: "http://localhost" }, body: blockedForm }), { params: Promise.resolve({ id: fx.project }) });
+    expect(blocked.status).toBe(429);
+    const { cancelQueued } = await import("../src/server/jobs"); cancelQueued(pending.id, fx.ws);
+
+    const controller = new AbortController();
+    const form = new FormData(); form.append("audio", new Blob(["audio"], { type: "audio/wav" }), "voice.wav");
+    const response = voiceRoute.POST(new Request(`http://localhost/api/projects/${fx.project}/assistant/transcribe`, { method: "POST", headers: { origin: "http://localhost" }, body: form, signal: controller.signal }), { params: Promise.resolve({ id: fx.project }) });
+    let job: { id: string } | undefined;
+    for (let i = 0; i < 100 && !job; i++) { job = db.one(`SELECT id FROM job WHERE created_by = ? AND type = 'voice_transcribe' AND status = 'queued'`, fx.user); if (!job) await new Promise((r) => setTimeout(r, 10)); }
+    expect(job).toBeTruthy(); controller.abort();
+    expect((await response).status).toBe(499);
+    expect(db.one<{ status: string }>(`SELECT status FROM job WHERE id = ?`, job!.id)?.status).toBe("cancelled");
+  }, 30_000);
+});
+
 // ---------- budget ----------
 describe("budget", () => {
+  it("meters actual UTF-8 request bytes and aborts a body above the reserved allowance", async () => {
+    const violation = vi.fn();
+    const fetch = route.meteredFetch(() => ({ requestBytes: 5 } as never), async () => new Response("unexpected"), violation);
+    await expect(fetch("http://127.0.0.1/v1/chat/completions", { method: "POST", body: "ééé" })).rejects.toThrow("reserved byte allowance");
+    expect(violation).toHaveBeenCalledOnce();
+  });
+
   it("an exhausted daily budget refuses before any outbound call", async () => {
     process.env.IZWI_ASSISTANT_DAILY_TOKENS = "50";
     const fx = fixture();
@@ -468,7 +524,7 @@ describe("budget", () => {
   });
 
   it("a priced model with no price entry is refused before any outbound call", async () => {
-    const fx = fixture({ model: "some-paid-model" });
+    const fx = fixture({ kind: "openai_compat", model: "some-paid-model" });
     const r = await send(fx);
     expect(r.error?.code).toBe("budget");
     expect(mockA.requests).toHaveLength(0);
@@ -484,10 +540,22 @@ describe("budget", () => {
     expect(db.one<{ r: number }>(`SELECT tokens_reserved r FROM assistant_budget WHERE workspace_id = ?`, bad.ws)!.r).toBe(0);
   });
 
+  it("requests compatible-provider usage and charges the full reservation when usage is absent", async () => {
+    const fx = fixture({ model: "no_usage:free" });
+    const r = await send(fx);
+    expect(r.error).toBeUndefined();
+    expect(chatCalls(mockA)[0].body?.stream_options).toMatchObject({ include_usage: true });
+    const budget = db.one<{ tokens_reserved: number; tokens_used: number }>(`SELECT tokens_reserved, tokens_used FROM assistant_budget WHERE workspace_id = ?`, fx.ws)!;
+    expect(budget.tokens_reserved).toBe(0);
+    expect(budget.tokens_used).toBeGreaterThan(800);
+    expect(logs.at(-1)).toContain('"tokensIn":null');
+    expect(logs.at(-1)).toContain('"tokensOut":null');
+  });
+
   it("the budget is per workspace: another workspace's spend does not block this one", async () => {
     const a = fixture(); const b = fixture();
     await send(a);
-    process.env.IZWI_ASSISTANT_DAILY_TOKENS = String(db.one<{ u: number }>(`SELECT tokens_used u FROM assistant_budget WHERE workspace_id = ?`, a.ws)!.u + 5000);
+    process.env.IZWI_ASSISTANT_DAILY_TOKENS = String(db.one<{ u: number }>(`SELECT tokens_used u FROM assistant_budget WHERE workspace_id = ?`, a.ws)!.u + 50_000);
     expect((await send(b)).error).toBeUndefined();
   });
 });
@@ -567,7 +635,7 @@ describe("transport: the model call cannot be used to fetch URLs", () => {
     const src = readFileSync(path.join(root, "src", "app", "api", "projects", "[id]", "assistant", "route.ts"), "utf8");
     // The hook must refuse any non-empty download list (an empty list is what ai@7 passes on every text turn).
     expect(src).toMatch(/experimental_download:\s*async \(requested: unknown\[\]\) => \{\s*if \(requested\.length > 0\) throw new Error\("URL downloads are disabled\."\);\s*return \[\];/);
-    expect(src).toContain("fetch: sdkFetch");
+    expect(src).toMatch(/fetch:\s*meteredFetch\([^;]*sdkFetch/);
   });
 
   it("sdkFetch refuses cloud-metadata addresses always, and loopback when hosted", async () => {

@@ -44,6 +44,7 @@ export const LIMIT = {
   uploadCreate: { max: 30, windowMs: 3600_000 },
   assistant: { max: 10, windowMs: 60_000 },
   assistantDay: { max: 100, windowMs: 24 * 3600_000 },
+  voice: { max: 6, windowMs: 60_000 },
 } as const;
 
 export const limit = (key: string, l: { max: number; windowMs: number }) => rateLimit(key, l.max, l.windowMs);

@@ -49,6 +49,29 @@ export function canaryFilter(canary: string, secrets: string[] = []) {
   };
 }
 
+export function meteredFetch(current: () => BudgetReceipt | null, fetcher: typeof fetch = sdkFetch, onViolation: () => void = () => {}): typeof fetch {
+  return async (input, init) => {
+    const request = input instanceof Request ? input : null;
+    const body = init?.body !== undefined ? init.body : request?.body ? await request.clone().arrayBuffer() : null;
+    let bytes = 0;
+    if (typeof body === "string") bytes = Buffer.byteLength(body, "utf8");
+    else if (body instanceof ArrayBuffer) bytes = body.byteLength;
+    else if (body instanceof Uint8Array) bytes = body.byteLength;
+    else if (typeof Blob !== "undefined" && body instanceof Blob) bytes = body.size;
+    else if (body !== null && body !== undefined) { onViolation(); throw new BudgetError("The outbound request body cannot be metered safely."); }
+    const receipt = current();
+    if (!receipt || bytes > receipt.requestBytes) { onViolation(); throw new BudgetError("The serialized model request exceeded its reserved byte allowance."); }
+    return fetcher(input, init);
+  };
+}
+
+function containsSecret(value: unknown, secrets: string[]): boolean {
+  if (typeof value === "string") return secrets.some((secret) => secret.length > 0 && value.includes(secret));
+  if (Array.isArray(value)) return value.some((item) => containsSecret(item, secrets));
+  if (value && typeof value === "object") return Object.values(value).some((item) => containsSecret(item, secrets));
+  return false;
+}
+
 export const POST = route<{ id: string }>(async (req, { id }) => {
   const raw = await readCapped(req, 16 * 1024);
   let payload: unknown;
@@ -101,14 +124,17 @@ function startTurn(
   redacted += userText.count;
   const messages = [...conversation, { role: "user" as const, content: userText.text }];
   const proposals: Parameters<typeof persistProposals>[2] = [];
-  const tools = assistantTools(ctx, id, proposals, context.sourceHasTranscript);
+  const decodedToolInputs: unknown[] = [];
+  const tools = assistantTools(ctx, id, proposals, context.sourceHasTranscript, decodedToolInputs);
   const key = provider.key_sealed ? unseal(provider.key_sealed) : "";
   const headers: Record<string, string> = provider.kind === "openrouter" ? { "HTTP-Referer": PUBLIC_URL, "X-Title": "IZWI AI" } : {};
-  const compatible = createOpenAICompatible({ baseURL: provider.base_url, name: `izwi-${provider.kind}`, apiKey: key || undefined, headers, fetch: sdkFetch });
+  const receipts = new Map<number, BudgetReceipt>();
+  let activeReceipt: BudgetReceipt | null = null;
+  let budgetViolation = false;
+  const compatible = createOpenAICompatible({ baseURL: provider.base_url, name: `izwi-${provider.kind}`, apiKey: key || undefined, headers, fetch: meteredFetch(() => activeReceipt, sdkFetch, () => { budgetViolation = true; }), includeUsage: true });
   if (!provider.model) throw new HttpError(409, "Choose a model for this provider first.");
   const model = compatible.chatModel(provider.model);
-  const receipts = new Map<number, BudgetReceipt>();
-  let attempts = 0, tokensIn = 0, tokensOut = 0, outcome = "error";
+  let attempts = 0, tokensIn: number | null = 0, tokensOut: number | null = 0, outcome = "error";
   const modelAbort = new AbortController();
   const disconnect = () => modelAbort.abort();
   req.signal.addEventListener("abort", disconnect, { once: true });
@@ -135,14 +161,28 @@ function startTurn(
             const t = value as unknown as { description?: string; inputSchema?: z.ZodTypeAny };
             return { name, description: t.description, schema: t.inputSchema ? z.toJSONSchema(t.inputSchema) : null };
           });
-          const bytes = Buffer.byteLength(JSON.stringify({ model: provider.model, system: context.system, messages: stepMessages, tools: toolSchemas, maxOutputTokens: 800 }));
-          try { receipts.set(attempts, reserveAttempt({ workspaceId: ctx.workspaceId, userId: ctx.userId, providerId: provider.id, model: provider.model!, serializedRequestBytes: bytes, maxOutputTokens: 800 })); }
+          // R10'': reserve one input token per allowed UTF-8 body byte; meteredFetch checks the SDK's actual serialized body before network I/O.
+          const bytes = Buffer.byteLength(JSON.stringify({ model: provider.model, system: context.system, messages: stepMessages, tools: toolSchemas, maxOutputTokens: 800 })) + 2048;
+          try {
+            const receipt = reserveAttempt({ workspaceId: ctx.workspaceId, userId: ctx.userId, providerId: provider.id, model: provider.model!, provider, serializedRequestBytes: bytes, maxOutputTokens: 800 });
+            receipts.set(attempts, receipt);
+            activeReceipt = receipt;
+          }
           catch (e) { throw new BudgetError(e instanceof Error ? e.message : "Assistant budget unavailable."); }
           return {};
         },
         onStepEnd: ({ usage }) => {
-          tokensIn += usage.inputTokens ?? 0; tokensOut += usage.outputTokens ?? 0;
-          const receipt = receipts.get(attempts); if (receipt) settleAttempt(receipt, { input: usage.inputTokens ?? receipt.inputTokens, output: usage.outputTokens ?? 0 });
+          const receipt = receipts.get(attempts);
+          const hasCompleteUsage = Number.isSafeInteger(usage.inputTokens) && Number.isSafeInteger(usage.outputTokens);
+          if (hasCompleteUsage && receipt) {
+            if (tokensIn !== null) tokensIn += usage.inputTokens!;
+            if (tokensOut !== null) tokensOut += usage.outputTokens!;
+            settleAttempt(receipt, { input: usage.inputTokens!, output: usage.outputTokens! });
+          } else {
+            tokensIn = null; tokensOut = null;
+            if (receipt) settleAttempt(receipt, null);
+          }
+          if (activeReceipt === receipt) activeReceipt = null;
         },
       });
       for await (const part of result.fullStream) {
@@ -155,6 +195,7 @@ function startTurn(
       const rest = filter.flush(); if (rest) writer.write({ type: "text-delta", id: textId, delta: rest } as never);
       writer.write({ type: "text-end", id: textId } as never);
       const finalText = await result.text;
+      if (containsSecret(finalText, [context.canary, key]) || containsSecret(proposals, [context.canary, key]) || containsSecret(decodedToolInputs, [context.canary, key])) throw new Error("CANARY");
       let saved: Proposal[] = [];
       tx(() => {
         saved = persistProposals(ctx, id, proposals, provider);
@@ -164,7 +205,7 @@ function startTurn(
       outcome = "ok";
     } catch (e) {
       const canary = e instanceof Error && e.message === "CANARY";
-      const budget = e instanceof BudgetError;
+      const budget = budgetViolation || e instanceof BudgetError;
       const code = canary ? "canary" : budget ? "budget" : req.signal.aborted ? "timeout" : "provider";
       outcome = code === "timeout" ? "aborted" : code === "provider" ? "error" : code;
       writer.write({ type: "data-error", data: { code, message: canary ? "The response was stopped by a safety check." : budget ? "The workspace assistant budget is unavailable." : "The assistant could not finish this response." } } as never);

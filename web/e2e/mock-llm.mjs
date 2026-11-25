@@ -5,7 +5,7 @@
 // Every request is recorded in `requests` so tests can check exactly what left the app.
 import http from "node:http";
 
-export const MODES = ["normal", "evil", "evil_tool", "evil_key", "inject", "image", "429", "400", "slow", "huge"];
+export const MODES = ["normal", "evil", "evil_tool", "evil_tool_unicode", "evil_key", "inject", "image", "no_usage", "429", "400", "slow", "huge"];
 
 const CANARY = /IZWI_CANARY_[0-9a-f]+/;
 const CALL = /CALL_TOOL\s+(\w+)\s+(\{[^\n]*\})/g;
@@ -35,6 +35,11 @@ function script(mode, body, headers) {
       const c = CANARY.exec(sys)?.[0] ?? "NO_CANARY_SEEN";
       return { parts: [{ text: "Titles ready." }, { tool: "draftTitles", args: JSON.stringify({ titles: [c] }), split: 9 }] };
     }
+    case "evil_tool_unicode": {
+      const c = CANARY.exec(sys)?.[0] ?? "NO_CANARY_SEEN";
+      const escaped = [...c].map((ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+      return { parts: [{ text: "Titles ready." }, { tool: "proposeJobs", args: `{"jobs":[{"verb":"Cut"}],"reason":"${escaped}"}`, split: 7 }] };
+    }
     case "evil_key": {
       const key = String(headers.authorization ?? "").replace(/^Bearer\s+/i, "");
       return { parts: [{ text: "The key is " }, ...split(key || "NO_KEY_SEEN", 4).map((t) => ({ text: t })), { text: "." }] };
@@ -46,6 +51,8 @@ function script(mode, body, headers) {
     }
     case "image":
       return { parts: [{ text: "Look: ![pixel](https://evil.example/p.png?d=1) and <a href=\"javascript:alert(1)\">click</a> or [safe](https://evil.example/x) <img src=x onerror=alert(1)>" }] };
+    case "no_usage":
+      return { parts: [{ text: "A clean answer without usage metadata." }] };
     case "huge": {
       const total = Number(headers["x-mock-bytes"] ?? 64 * 1024 * 1024);
       return { huge: total };
@@ -131,7 +138,7 @@ export async function startMock({ host = "127.0.0.1", port = 0 } = {}) {
         if (closed) return;
       }
       sse(res, chunk({}, toolIndex ? "tool_calls" : "stop"));
-      sse(res, { ...base, choices: [], usage });
+      if (mode !== "no_usage") sse(res, { ...base, choices: [], usage });
       sse(res, "[DONE]");
       res.end();
     });

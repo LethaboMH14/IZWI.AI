@@ -8,6 +8,9 @@ import type { Ctx } from "./guard";
 import type { Privacy, ProviderRow } from "./providers";
 import { privacyOf } from "./providers";
 import { StepSchema } from "./planner";
+import { savePlan } from "./planner";
+import { previewGlossaryChanges } from "./actions";
+import { ConsentScopeSchema } from "./consent-scope";
 
 const INJECTION_SCORE = 0.7;
 const hashText = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -87,10 +90,11 @@ export function buildAssistantContext(ctx: Ctx, projectId: string, privacy: Priv
 
 export type Proposal = { planId: string; title: string; reason: string; source?: { lineId: string; index: number; atMs: number }; preview: { label: string; before?: string; after?: string }[]; scope?: string; kind: "action" | "jobs" };
 
-export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; preview: Proposal["preview"]; scope?: string }>, hasTranscript: boolean) {
+export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; preview: Proposal["preview"]; scope?: string }>, hasTranscript: boolean, decodedInputs: unknown[] = []) {
   const action = (actionName: string, schema: z.ZodTypeAny, title: (v: Record<string, unknown>) => string) => tool({
     description: "Create a proposal for the person to review. This tool never changes project data.", inputSchema: schema as never,
     execute: async (input: Record<string, unknown>) => {
+      decodedInputs.push(input);
       let lines: { id: string; textHash: string }[] = [];
       let consent: { personId: string; id: string | null; updatedAt: number | null; ledgerSeq: number | null } | null = null;
       let scopeText: string | undefined;
@@ -101,10 +105,9 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
         consent = { personId, id: current?.id ?? null, updatedAt: current?.updated_at ?? null, ledgerSeq: current?.seq ?? null };
       }
       if (actionName === "addGlossaryTerm" && typeof input.heard === "string" && input.heard) {
-        const heard = input.heard;
-        const affected = all<{ id: string; text: string; project_id: string }>(`SELECT l.id, l.text, t.project_id FROM caption_line l JOIN caption_track t ON t.id = l.track_id JOIN project p ON p.id = t.project_id WHERE t.workspace_id = ? AND t.kind = 'source' AND l.status = 'draft' AND l.text LIKE ? ESCAPE '!'`, ctx.workspaceId, `%${heard.replace(/[!%_]/g, (c) => `!${c}`)}%`);
-        lines = affected.map((line) => ({ id: line.id, textHash: hashText(line.text) }));
-        scopeText = `Teaches this spelling to the whole workspace; changes ${affected.length} draft lines in ${new Set(affected.map((line) => line.project_id)).size} projects now`;
+        const affected = previewGlossaryChanges(ctx.workspaceId, { term: String(input.term), heard: input.heard });
+        lines = affected.map(({ id, textHash }) => ({ id, textHash }));
+        scopeText = `Teaches this spelling to the whole workspace; changes ${affected.length} draft lines in ${new Set(affected.map((line) => line.projectId)).size} projects now`;
       } else if (actionName === "addGlossaryTerm") {
         scopeText = "Teaches this spelling to the whole workspace; changes 0 draft lines in 0 projects now";
       }
@@ -119,6 +122,7 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
   const makeAction = (actionName: string, schema: z.ZodTypeAny, title: (v: Record<string, unknown>) => string) => tool({
     description: "Propose this change for approval. It will not run now.", inputSchema: schema as never,
     execute: async (input: Record<string, unknown>) => {
+      decodedInputs.push(input);
       const id = String(input.clipId ?? ""); const c = currentClip(id);
       if (!c) throw new HttpError(404, "Clip not found.");
       if (actionName === "trimClip") {
@@ -135,11 +139,12 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
     keepClip: makeAction("keepClip", z.object({ clipId }), (v) => `Keep clip ${v.clipId}`),
     dropClip: makeAction("dropClip", z.object({ clipId }), (v) => `Drop clip ${v.clipId}`),
     trimClip: makeAction("trimClip", z.object({ clipId, startMs: z.number().int().nonnegative(), endMs: z.number().int().positive() }), (v) => `Trim clip ${v.clipId}`),
-    requestConsent: action("requestConsent", z.object({ personId: z.string(), scope: z.enum(["appearance", "voice", "likeness"]) }), (v) => `Request ${v.scope} consent`),
+    requestConsent: action("requestConsent", z.object({ personId: z.string().min(1).max(120), scope: ConsentScopeSchema }).strict(), (v) => `Request ${v.scope} consent`),
     addGlossaryTerm: action("addGlossaryTerm", z.object({ term: z.string().min(1).max(60), heard: z.string().max(60).optional() }), (v) => `Add glossary term ${v.term}`),
-    draftTitles: tool({ description: "Suggest text titles only; do not propose edits.", inputSchema: z.object({ titles: z.array(z.string().max(120)).max(8) }), execute: async ({ titles }) => ({ titles }) }),
-    draftCaptionPost: tool({ description: "Draft caption and post text only; do not publish.", inputSchema: z.object({ caption: z.string().max(1500), post: z.string().max(1500) }), execute: async ({ caption, post }) => ({ caption, post }) }),
-    proposeJobs: tool({ description: "Propose one ordered group of dependent jobs. Never execute them.", inputSchema: z.object({ jobs: z.array(z.object({ verb: z.enum(["Hear", "Cut", "Translate", "Publish", "Record"]), language: z.string().max(5).optional(), count: z.number().int().min(1).max(10).optional() })).min(1).max(5), reason: z.string().max(300) }), execute: async ({ jobs, reason }) => {
+    draftTitles: tool({ description: "Suggest text titles only; do not propose edits.", inputSchema: z.object({ titles: z.array(z.string().max(120)).max(8) }).strict(), execute: async ({ titles }) => { decodedInputs.push({ titles }); return { titles }; } }),
+    draftCaptionPost: tool({ description: "Draft caption and post text only; do not publish.", inputSchema: z.object({ caption: z.string().max(1500), post: z.string().max(1500) }).strict(), execute: async ({ caption, post }) => { decodedInputs.push({ caption, post }); return { caption, post }; } }),
+    proposeJobs: tool({ description: "Propose one ordered group of dependent jobs. Never execute them.", inputSchema: z.object({ jobs: z.array(z.object({ verb: z.enum(["Hear", "Cut", "Translate", "Publish", "Record"]), language: z.string().max(5).optional(), count: z.number().int().min(1).max(10).optional() }).strict()).min(1).max(5), reason: z.string().max(300) }).strict(), execute: async ({ jobs, reason }) => {
+      decodedInputs.push({ jobs, reason });
       if (jobs.some((j) => j.verb === "Hear") && hasTranscript) throw new HttpError(409, "A transcript already exists.");
       const steps = jobs.map((j, i) => ({ kind: "job", ...j, what: j.verb, tool: "IZWI", runs: "This device", runnable: true, assistant: true, stepId: `j${i}`, dependsOn: i ? [`j${i - 1}`] : [] }));
       steps.forEach((s) => StepSchema.parse(s));
@@ -150,7 +155,7 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
   return tools;
 }
 
-export function saveAssistantTurn(args: { threadId: string; projectId: string; workspaceId: string; provider: ProviderRow; text: string; assistantText: string; redacted: number; proposals: Proposal[]; requestId: string; tokensIn: number; tokensOut: number }) {
+export function saveAssistantTurn(args: { threadId: string; projectId: string; workspaceId: string; provider: ProviderRow; text: string; assistantText: string; redacted: number; proposals: Proposal[]; requestId: string; tokensIn: number | null; tokensOut: number | null }) {
   const t = now();
   run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, ?, ?, ?, '[]', 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.text, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, args.requestId, args.tokensIn, args.tokensOut, t);
   run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.assistantText, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, JSON.stringify(args.proposals), args.requestId, args.tokensIn, args.tokensOut, t + 1);
@@ -159,9 +164,8 @@ export function saveAssistantTurn(args: { threadId: string; projectId: string; w
 export function persistProposals(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; preview: Proposal["preview"]; scope?: string }>, provider: ProviderRow) {
   const result: Proposal[] = [];
   for (const p of proposals) {
-    const id = newId("pln");
     const steps = p.steps.map((s) => StepSchema.parse(s));
-    run(`INSERT INTO plan_run (id, workspace_id, project_id, prompt, planner, steps, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, 'proposed', ?, ?)`, id, ctx.workspaceId, projectId, p.reason.slice(0, 300), `assistant:${provider.id}/${provider.model}`, JSON.stringify(steps), ctx.userId, now());
+    const id = savePlan(ctx, projectId, p.reason.slice(0, 300), `assistant:${provider.id}/${provider.model}`, steps);
     result.push({ planId: id, title: p.title, reason: p.reason, preview: p.preview, ...(p.scope ? { scope: p.scope } : {}), kind: p.steps.some((s) => (s as { kind?: string }).kind === "job") ? "jobs" : "action" });
   }
   return result;

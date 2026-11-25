@@ -6,7 +6,7 @@ import { loadLocalEnv } from "../src/server/env";
 loadLocalEnv();
 
 async function main() {
-  const { claim, heartbeat, succeed, failJob, block, sweep, isCancelled } = await import("../src/server/jobs");
+  const { claim, heartbeat, succeed, failJob, block, sweep, isCancelled, acquireWhisperLease, renewWhisperLease, releaseWhisperLease, deferWhisperJob } = await import("../src/server/jobs");
   const { handle, Blocked, onFailed } = await import("../src/server/pipeline");
   const { toolVersions } = await import("../src/server/media");
   const { parse, run, now, one } = await import("../src/server/db");
@@ -53,6 +53,11 @@ async function main() {
       await new Promise((r) => setTimeout(r, 1000));
       continue;
     }
+    const usesWhisper = job.type === "transcribe" || (job.type as string) === "voice_transcribe";
+    if (usesWhisper && !acquireWhisperLease(job.id)) {
+      deferWhisperJob(job.id, workerId);
+      continue;
+    }
     const ctrl = new AbortController();
     current = { id: job.id, ctrl };
     let last = 0;
@@ -64,6 +69,7 @@ async function main() {
       if (isCancelled(job.id)) ctrl.abort();
     };
     const keepAlive = setInterval(() => beat(), 10_000);
+    const whisperKeepAlive = usesWhisper ? setInterval(() => { if (!renewWhisperLease(job.id)) ctrl.abort(); }, 30_000) : null;
     const started = Date.now();
     console.log(`→ ${job.type} ${job.id}`);
     try {
@@ -95,6 +101,8 @@ async function main() {
       }
     } finally {
       clearInterval(keepAlive);
+      if (whisperKeepAlive) clearInterval(whisperKeepAlive);
+      if (usesWhisper) releaseWhisperLease(job.id);
       current = null;
     }
   }

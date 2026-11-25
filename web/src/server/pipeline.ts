@@ -147,6 +147,9 @@ async function transcribeJob(c: JobCtx) {
   c.beat(0.95, "Writing the transcript");
   const trackId = newId("trk");
   tx(() => {
+    if (c.input.assistant === true && one(`SELECT 1 FROM caption_track WHERE project_id = ? AND workspace_id = ? AND kind = 'source'`, proj.id, proj.workspace_id)) {
+      fail("This assistant Hear is stale because a transcript already exists.");
+    }
     run(`DELETE FROM caption_track WHERE project_id = ? AND kind = 'source'`, proj.id);
     run(
       `INSERT INTO caption_track (id, workspace_id, project_id, language, kind, status, engine, created_at, updated_at) VALUES (?, ?, ?, ?, 'source', 'draft', ?, ?, ?)`,

@@ -439,6 +439,11 @@ ALTER TABLE job ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX job_queue_priority ON job(status, priority DESC, created_at);
 `,
   },
+  {
+    version: 6,
+    name: "single cross-process whisper lease",
+    sql: `CREATE TABLE whisper_lease (id INTEGER PRIMARY KEY CHECK (id = 1), job_id TEXT NOT NULL, expires_at INTEGER NOT NULL);`,
+  },
 ];
 
 function reconcileStudioHistory() {

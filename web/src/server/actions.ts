@@ -14,6 +14,7 @@ import { providerFor } from "./providers";
 import { LANGUAGES, langName } from "../lib/languages";
 import { applyGlossary, lineText, type GlossaryEntry, type Word } from "./captions";
 import { purgeOldAssistantMessages } from "./assistant-store";
+import { createHash } from "node:crypto";
 
 export const KINDS = ["podcast", "video", "lesson", "music", "film", "animation", "client"] as const;
 
@@ -151,6 +152,19 @@ export function approveAll(ctx: Ctx, trackId: string, by: string) {
 
 export const GlossaryIn = z.object({ term: z.string().trim().min(1).max(60), heard: z.string().trim().max(60).optional() });
 
+export function previewGlossaryChanges(workspaceId: string, entry: z.infer<typeof GlossaryIn>) {
+  if (!entry.heard) return [] as { id: string; projectId: string; textHash: string; text: string; words: string }[];
+  const rows = all<{ id: string; text: string; words: string | null; start_ms: number; end_ms: number; project_id: string }>(
+    `SELECT l.id, l.text, l.words, l.start_ms, l.end_ms, t.project_id FROM caption_line l JOIN caption_track t ON t.id = l.track_id WHERE t.workspace_id = ? AND t.kind = 'source' AND l.status = 'draft' AND l.text LIKE ? ESCAPE '!'`,
+    workspaceId, `%${entry.heard.replace(/[!%_]/g, (c) => `!${c}`)}%`,
+  );
+  return rows.flatMap((row) => {
+    const seg = { startMs: row.start_ms, endMs: row.end_ms, text: row.text.replace(/\n/g, " "), words: parse<Word[]>(row.words, []) };
+    const { segs, fixes } = applyGlossary([seg], [{ term: entry.term, heard: [entry.heard!] }]);
+    return fixes ? [{ id: row.id, projectId: row.project_id, textHash: createHash("sha256").update(row.text).digest("hex"), text: lineText(segs[0].words), words: JSON.stringify(segs[0].words) }] : [];
+  });
+}
+
 export function learnGlossary(ctx: Ctx, entry: z.infer<typeof GlossaryIn>) {
   const row = one<{ glossary: string }>(`SELECT glossary FROM workspace_pref WHERE workspace_id = ?`, ctx.workspaceId);
   const g = parse<GlossaryEntry[]>(row?.glossary, []);
@@ -161,23 +175,9 @@ export function learnGlossary(ctx: Ctx, entry: z.infer<typeof GlossaryIn>) {
   if (g.length > 300) fail(400, "The glossary is full.");
   run(`UPDATE workspace_pref SET glossary = ?, updated_at = ? WHERE workspace_id = ?`, JSON.stringify(g), now(), ctx.workspaceId);
   // Fix the same mishearing everywhere it already appears in this workspace's draft source lines.
-  let fixed = 0;
-  if (entry.heard) {
-    const rows = all<{ id: string; text: string; words: string | null; start_ms: number; end_ms: number }>(
-      `SELECT l.id, l.text, l.words, l.start_ms, l.end_ms FROM caption_line l JOIN caption_track t ON t.id = l.track_id WHERE t.workspace_id = ? AND t.kind = 'source' AND l.status = 'draft' AND l.text LIKE ? ESCAPE '!'`,
-      // A typed % or _ is matched literally, not as a wildcard.
-      ctx.workspaceId, `%${entry.heard.replace(/[!%_]/g, (c) => `!${c}`)}%`,
-    );
-    // Fix the words with their timing (same routine as new transcripts), then rebuild the line text from them.
-    tx(() => rows.forEach((r) => {
-      const seg = { startMs: r.start_ms, endMs: r.end_ms, text: r.text.replace(/\n/g, " "), words: parse<Word[]>(r.words, []) };
-      const { segs, fixes } = applyGlossary([seg], [{ term: entry.term, heard: [entry.heard!] }]);
-      if (!fixes) return;
-      run(`UPDATE caption_line SET text = ?, words = ?, edited = 1 WHERE id = ?`, lineText(segs[0].words), JSON.stringify(segs[0].words), r.id);
-      fixed++;
-    }));
-  }
-  return { glossary: g, fixed };
+  const changes = previewGlossaryChanges(ctx.workspaceId, entry);
+  tx(() => changes.forEach((change) => run(`UPDATE caption_line SET text = ?, words = ?, edited = 1 WHERE id = ?`, change.text, change.words, change.id)));
+  return { glossary: g, fixed: changes.length };
 }
 
 export const PersonIn = z.object({ name: z.string().trim().min(1).max(80), role: z.string().trim().min(1).max(60), wholeRecording: z.boolean().default(true), ranges: z.array(z.object({ startMs: z.number().int().min(0), endMs: z.number().int().min(1) })).max(50).default([]) });
@@ -215,11 +215,15 @@ export function requestConsent(ctx: Ctx, projectId: string, personId: string, sc
   const p = projectOf(ctx, projectId);
   const person = one<{ id: string; name: string }>(`SELECT id, name FROM person WHERE id = ? AND project_id = ?`, personId, p.id) ?? fail(404, "Not found.");
   const consentId = newId("cns");
-  run(
-    `INSERT INTO consent (id, workspace_id, project_id, person_id, scope, status, statement, requested_by, requested_at, updated_at) VALUES (?, ?, ?, ?, ?, 'requested', ?, ?, ?, ?)`,
-    consentId, ctx.workspaceId, p.id, person.id, scope, consentStatement(person.name, p.title, scope), ctx.userId, now(), now(),
-  );
-  const link = makeLink(ctx, p.id, "consent", consentId, `Consent: ${person.name}`, LIMITS.linkDays);
+  const link = tx(() => {
+    const pending = all<{ id: string }>(`SELECT id FROM consent WHERE workspace_id = ? AND project_id = ? AND person_id = ? AND status = 'requested'`, ctx.workspaceId, p.id, person.id);
+    for (const prior of pending) run(`UPDATE share_link SET revoked_at = ? WHERE workspace_id = ? AND purpose = 'consent' AND target_id = ? AND revoked_at IS NULL`, now(), ctx.workspaceId, prior.id);
+    run(
+      `INSERT INTO consent (id, workspace_id, project_id, person_id, scope, status, statement, requested_by, requested_at, updated_at) VALUES (?, ?, ?, ?, ?, 'requested', ?, ?, ?, ?)`,
+      consentId, ctx.workspaceId, p.id, person.id, scope, consentStatement(person.name, p.title, scope), ctx.userId, now(), now(),
+    );
+    return makeLink(ctx, p.id, "consent", consentId, `Consent: ${person.name}`, LIMITS.linkDays);
+  });
   if (options.audit !== false) audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "consent.requested", target: consentId });
   return { url: link.url, message: `Hi ${person.name}, please confirm you're happy for me to use your part of “${p.title}”. It takes a minute: ${link.url}` };
 }

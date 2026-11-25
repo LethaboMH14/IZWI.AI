@@ -1,9 +1,11 @@
 import { newId, now, one, run } from "./db";
+import { privacyOf, type ProviderRow } from "./providers";
 
 // Rates are integer cents per million tokens. Add only reviewed, versioned price sources here.
 export const PRICE_PER_MTOK: Record<string, { in: number; out: number }> = {};
 
-export function priceFor(model: string): { in: number; out: number } | null {
+export function priceFor(model: string, provider?: Pick<ProviderRow, "kind" | "base_url">): { in: number; out: number } | null {
+  if (provider && privacyOf(provider) === "private") return { in: 0, out: 0 };
   if (model.endsWith(":free")) return { in: 0, out: 0 };
   return PRICE_PER_MTOK[model] ?? null;
 }
@@ -11,7 +13,7 @@ export function priceFor(model: string): { in: number; out: number } | null {
 export type Usage = { input: number; output: number };
 export type BudgetReceipt = {
   id: string; workspaceId: string; day: string; reservedTokens: number; reservedCents: number;
-  inputTokens: number; maxOutputTokens: number; price: { in: number; out: number };
+  inputTokens: number; requestBytes: number; maxOutputTokens: number; price: { in: number; out: number };
   settled: boolean;
 };
 
@@ -23,13 +25,16 @@ const centsFor = (input: number, output: number, price: { in: number; out: numbe
 
 export function reserveAttempt(args: {
   workspaceId: string; userId: string; providerId: string; model: string;
+  provider?: Pick<ProviderRow, "kind" | "base_url">;
   serializedRequestBytes: number; maxOutputTokens: number;
 }): BudgetReceipt {
   if (!Number.isSafeInteger(args.serializedRequestBytes) || args.serializedRequestBytes < 0 ||
       !Number.isSafeInteger(args.maxOutputTokens) || args.maxOutputTokens < 0) throw new BudgetError("Invalid assistant budget estimate.");
-  const price = priceFor(args.model);
+  const price = priceFor(args.model, args.provider);
   if (!price) throw new BudgetError("This model has no approved price entry.");
-  const inputTokens = Math.ceil(args.serializedRequestBytes / 3);
+  // R10'': for a byte-level BPE, no token can cover fewer than one UTF-8 byte,
+  // so the request body's UTF-8 byte count is a conservative input-token upper bound.
+  const inputTokens = args.serializedRequestBytes;
   const tokens = inputTokens + args.maxOutputTokens;
   const cents = centsFor(inputTokens, args.maxOutputTokens, price);
   const tokenCap = Number(process.env.IZWI_ASSISTANT_DAILY_TOKENS ?? 200_000);
@@ -49,7 +54,7 @@ export function reserveAttempt(args: {
   );
   if (!inserted) throw new BudgetError("The workspace daily assistant budget is exhausted.");
   return { id: newId("asst_res"), workspaceId: args.workspaceId, day, reservedTokens: tokens,
-    reservedCents: cents, inputTokens, maxOutputTokens: args.maxOutputTokens, price, settled: false };
+    reservedCents: cents, inputTokens, requestBytes: args.serializedRequestBytes, maxOutputTokens: args.maxOutputTokens, price, settled: false };
 }
 
 export function settleAttempt(receipt: BudgetReceipt, usage: Usage | null): void {

@@ -41,7 +41,8 @@ for (const history of ["clean", "hardening", "studio"] as const) {
         .toEqual([{ name: "consent_ledger" }, { name: "rate_limit" }]);
       expect(db.prepare("SELECT 1 FROM pragma_table_info('listing') WHERE name = 'asking_price_cents'").get()).toBeTruthy();
       expect(db.prepare("SELECT 1 FROM pragma_table_info('project') WHERE name = 'script'").get()).toBeTruthy();
-      expect(db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 5 });
+      expect(db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 6 });
+      expect(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'whisper_lease'").get()).toBeTruthy();
       for (const table of ["assistant_thread", "assistant_message", "assistant_lease", "assistant_budget", "line_injection_scan"]) {
         expect(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)).toBeTruthy();
       }
