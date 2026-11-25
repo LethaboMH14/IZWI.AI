@@ -7,6 +7,7 @@ import { clock, JOB_LABEL, media } from "@/lib/format";
 import { Wave } from "@/components/Wave";
 import { ReviewRoom } from "@/components/ReviewRoom";
 import { StoryBoard } from "@/components/StoryBoard";
+import { Uploader } from "@/components/Uploader";
 import type { ProjectState, TabProps } from "./types";
 
 type Clip = ProjectState["clips"][number];
@@ -30,20 +31,29 @@ function lineAt(lines: Line[], t: number) {
 }
 const secs = (ms: number) => `${Math.round(ms / 1000)} s`;
 
-export function CreateTab({ state, refresh }: TabProps) {
-  const [sub, setSub] = useState<Sub>("edit");
+export function CreateTab({ state, refresh, target }: TabProps) {
+  const [sub, setSub] = useState<Sub>(!state.source || target === "storyboard" ? "story" : "edit");
   return (
     <div className="cr">
       <div className="seg subseg" role="tablist" aria-label="Create">
         {SUBS.map((s) => <button key={s.id} role="tab" aria-selected={sub === s.id} className={sub === s.id ? "on" : ""} onClick={() => setSub(s.id)}>{s.label}</button>)}
       </div>
       <div className="subview" key={sub}>
-        {sub === "edit" && <EditView state={state} refresh={refresh} />}
-        {sub === "review" && <ReviewView state={state} refresh={refresh} />}
-        {sub === "story" && <StoryBoard />}
+        {sub === "edit" && (state.source ? <EditView state={state} refresh={refresh} /> : <AddRecording projectId={state.project.id} refresh={refresh} />)}
+        {sub === "review" && (state.source ? <ReviewView state={state} refresh={refresh} /> : <p>Upload a recording to open the review room.</p>)}
+        {sub === "story" && <StoryBoard projectId={state.project.id} script={state.project.script} refresh={refresh} />}
       </div>
     </div>
   );
+}
+
+function AddRecording({ projectId, refresh }: { projectId: string; refresh: () => Promise<void> }) {
+  const [file, setFile] = useState<File | null>(null);
+  return <div id="add-recording" tabIndex={-1} className="st-card">
+    <h2>Add a recording</h2>
+    {file ? <Uploader projectId={projectId} file={file} showNext onDone={() => void refresh()} />
+      : <label className="field"><span>Choose video or audio</span><input type="file" accept="video/*,audio/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>}
+  </div>;
 }
 
 /* ---------------------------------------------------------------- review room */
@@ -297,7 +307,7 @@ function EditView({ state, refresh }: { state: ProjectState; refresh: () => Prom
         </div>
         {shown.length === 0 && <p className="cr-empty">{lines.length ? "No clips yet. Find clips, or cut your own from a selection." : "Clips appear after the recording has been listened to."}</p>}
         <ul className="cr-cliplist">
-          {shown.map((c) => <li key={c.id}><ClipCard clip={c} d={edit(c)} active={c.id === active} busy={working === `status-${c.id}` || working === `title-${c.id}`} onSelect={() => { setActive(c.id); seek(c.startMs); }} onPlay={() => playClip(c)} onStatus={(s) => void setStatus(c, s)} onRename={(title) => void rename(c, title)} /></li>)}
+          {shown.map((c) => <li key={c.id} id={c.id} tabIndex={-1}><ClipCard clip={c} d={edit(c)} active={c.id === active} busy={working === `status-${c.id}` || working === `title-${c.id}`} onSelect={() => { setActive(c.id); seek(c.startMs); }} onPlay={() => playClip(c)} onStatus={(s) => void setStatus(c, s)} onRename={(title) => void rename(c, title)} /></li>)}
         </ul>
         {dropped.length > 0 && (
           <details className="cr-dropped">

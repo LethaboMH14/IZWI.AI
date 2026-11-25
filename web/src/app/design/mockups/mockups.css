@@ -75,14 +75,20 @@
 .sr2-crown { position: absolute; inset: 9%; width: 82%; height: 82%; }
 .sr2-stations li { position: absolute; left: var(--x); top: var(--y); transform: translate(-50%, -50%); }
 .sr2-stations .sr-label { position: static; }
+.sr2-stations .sr2-status { display: none; }
 
 @media (max-width: 760px) {
   .sr.is-2d { display: block; padding-bottom: 7.5rem; }
   .sr .nav nav, .sr .nav-cta .link { display: none; }
   .sr-copy, .sr.is-2d .sr-copy { padding-top: 5.6rem; max-width: none; }
   .sr h1 { font-size: clamp(2.6rem, 11vw, 3.4rem); }
-  .sr2, .sr.is-2d .sr2 { width: min(100%, 360px); margin: 1rem auto 0; }
-  .sr2-stations .sr-label { height: 32px; font-size: 0.8rem; padding: 0 0.65rem 0 0.55rem; }
+  .sr2, .sr.is-2d .sr2 { width: auto; aspect-ratio: auto; margin: .75rem var(--pad) 0; padding-top: 124px; }
+  .sr2-crown { inset: 0 auto auto 50%; width: 156px; height: 146px; transform: translateX(-50%); }
+  .sr2-stations { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; padding: 0; }
+  .sr2-stations li { position: static; transform: none; }
+  .sr2-stations li:first-child { grid-column: span 2; }
+  .sr2-stations .sr-label { display: grid; grid-template-columns: auto 1fr; justify-items: start; gap: .2rem .45rem; width: 100%; height: auto; min-height: 52px; line-height: 1.12; border-radius: 12px; padding: .58rem; white-space: normal; text-align: left; }
+  .sr2-stations .sr2-status { display: block; grid-column: 2; }
   .sr.is-2d .sr-card { margin: 0.6rem var(--pad) 0; width: auto; }
   .sr-dock { left: var(--pad); right: var(--pad); bottom: 0.9rem; flex-wrap: wrap; justify-content: center; gap: 0.5rem 0.8rem; }
   .sr-hint { width: 100%; text-align: center; order: 3; }

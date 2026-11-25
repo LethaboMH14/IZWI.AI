@@ -125,7 +125,7 @@ export function consentAction(token: string, input: z.infer<typeof ConsentIn>, i
 
 export function listingData(slug: string) {
   if (!/^[a-z0-9_-]{3,80}$/.test(slug)) fail(404, "Not found.");
-  const l = one<{ id: string; workspace_id: string; clip_id: string; title: string; terms: string; enabled: number }>(`SELECT * FROM listing WHERE slug = ?`, slug);
+  const l = one<{ id: string; workspace_id: string; clip_id: string; title: string; terms: string; asking_price_cents: number | null; enabled: number }>(`SELECT * FROM listing WHERE slug = ?`, slug);
   if (!l || !l.enabled) fail(404, "This clip is not listed.");
   const render = one<{ id: string; duration_ms: number | null; width: number | null; height: number | null }>(
     `SELECT a.id, a.duration_ms, a.width, a.height FROM output o JOIN asset a ON a.id = o.asset_id WHERE o.clip_id = ? AND o.status = 'ready' ORDER BY o.created_at DESC LIMIT 1`, l.clip_id,
@@ -133,7 +133,7 @@ export function listingData(slug: string) {
   const clip = one<{ start_ms: number; end_ms: number }>(`SELECT start_ms, end_ms FROM clip WHERE id = ?`, l.clip_id);
   const ws = one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, l.workspace_id);
   const langs = all<{ language: string }>(`SELECT DISTINCT o.language FROM output o WHERE o.clip_id = ? AND o.status = 'ready' AND o.language IS NOT NULL`, l.clip_id).map((x) => langName(x.language));
-  return { title: l.title, terms: l.terms, by: ws?.name ?? "A creator", render: render ?? null, posterId: null, durationMs: render?.duration_ms ?? (clip ? clip.end_ms - clip.start_ms : null), languages: langs };
+  return { title: l.title, terms: l.terms, askingPriceCents: l.asking_price_cents, by: ws?.name ?? "A creator", render: render ?? null, posterId: null, durationMs: render?.duration_ms ?? (clip ? clip.end_ms - clip.start_ms : null), languages: langs };
 }
 
 export const EnquiryIn = z.object({

@@ -4,10 +4,11 @@ import { ApiError, api } from "@/lib/api";
 import { clock, media } from "@/lib/format";
 import { Mark } from "@/components/Mark";
 import "@/app/guest.css";
+import { rand } from "@/lib/format";
 import "./listing.css";
 
 export type ListingView = {
-  title: string; terms: string; by: string;
+  title: string; terms: string; askingPriceCents: number | null; by: string;
   render: { id: string; duration_ms: number | null; width: number | null; height: number | null } | null;
   languages: string[]; posterId: string | null; durationMs: number | null;
 };
@@ -63,6 +64,7 @@ export function ListingClient({ slug, data }: { slug: string; data: ListingView 
         <dl>
           <div><dt>Duration</dt><dd>{data.durationMs != null ? clock(data.durationMs) : "Not available"}</dd></div>
           <div><dt>Caption languages</dt><dd>{data.languages.length ? data.languages.join(", ") : "Not specified"}</dd></div>
+          <div><dt>Asking price</dt><dd>{data.askingPriceCents == null ? "By enquiry" : rand(data.askingPriceCents)}</dd></div>
           <div><dt>Permitted use and term</dt><dd>{data.terms.trim() || "Not specified. Ask the creator for details."}</dd></div>
         </dl>
       </section>

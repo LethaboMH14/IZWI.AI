@@ -8,7 +8,7 @@ import { HttpError } from "./http";
 import { appliedVersion, SCHEMA_VERSION } from "./migrations";
 
 export type Ctx = { userId: string; userName: string; email: string; workspaceId: string; role: string };
-export type ProjectRow = { id: string; workspace_id: string; title: string; kind: string; spoken_language: string; created_by: string; created_at: number; updated_at: number };
+export type ProjectRow = { id: string; workspace_id: string; title: string; kind: string; spoken_language: string; script: string; created_by: string; created_at: number; updated_at: number };
 
 let schemaChecked = false;
 function assertSchema() {

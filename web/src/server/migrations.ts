@@ -311,6 +311,16 @@ CREATE TABLE audit_log (
 CREATE INDEX audit_by_ws ON audit_log(workspace_id, created_at DESC);
 `,
   },
+  {
+    version: 2,
+    name: "listing asking price",
+    sql: "ALTER TABLE listing ADD COLUMN asking_price_cents INTEGER CHECK (asking_price_cents BETWEEN 1 AND 100000000)",
+  },
+  {
+    version: 3,
+    name: "project storyboard",
+    sql: "ALTER TABLE project ADD COLUMN script TEXT NOT NULL DEFAULT ''",
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

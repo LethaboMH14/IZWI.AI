@@ -125,7 +125,7 @@ export function LocaliseTab({ state, refresh }: TabProps) {
           {state.tracks.map((t) => {
             const pct = t.lines ? Math.round((t.approved / t.lines) * 100) : 0;
             return (
-              <li key={t.id} className="st-item" style={{ ["--sc" as string]: t.status === "approved" ? "var(--moss)" : "var(--gold)" }}>
+              <li key={t.id} id={t.id} tabIndex={-1} className="st-item" style={{ ["--sc" as string]: t.status === "approved" ? "var(--moss)" : "var(--gold)" }}>
                 <div className="st-head">
                   <b>{langName(t.language)}</b>
                   <span className="st-row"><span className="st-meta">{t.kind === "source" ? "Source transcript" : "Translation"}</span><Pill status={t.status} /></span>

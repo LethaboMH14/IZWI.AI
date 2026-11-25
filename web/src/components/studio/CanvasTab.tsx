@@ -4,16 +4,24 @@ import { useEffect, useState } from "react";
 import { ArrowUp, Check, Cpu, LockSimple, Sparkle, Warning, X } from "@phosphor-icons/react";
 import { api, ApiError } from "@/lib/api";
 import { langName } from "@/lib/languages";
-import { StoryMap } from "@/components/StoryMap";
-import type { TabId, TabProps } from "./types";
+import { storyScenes } from "@/lib/story-scenes";
+import { ProjectMap } from "./ProjectMap";
+import type { EditTarget, PanelTarget, TabId, TabProps } from "./types";
 
 type Step = { verb: string; what: string; tool: string; runs: string; gate?: string; runnable: boolean; why?: string; language?: string; count?: number };
 type Plan = { id: string; planner: string; steps: Step[]; note: string | null };
+type Revision = { index: number; original: string; text: string };
 type Chip = { key: string; text: string; tone: "done" | "draft" | "blocked"; to: TabId };
 
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
-export function CanvasTab({ state, refresh, go }: TabProps) {
+export function CanvasTab({ state, refresh, go, tab, onEdit, children }: TabProps & {
+  tab: TabId; onEdit: (card: EditTarget) => void; children: React.ReactNode;
+}) {
+  const [reply, setReply] = useState<string | null>(null);
+  const [revision, setRevision] = useState<Revision | null>(null);
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
+  const [context, setContext] = useState<{ label: string; target?: PanelTarget; rights?: boolean } | null>(null);
   const [text, setText] = useState("");
   const [plan, setPlan] = useState<Plan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -29,16 +37,47 @@ export function CanvasTab({ state, refresh, go }: TabProps) {
   }, []);
 
   const hasTranscript = state.lines.length > 0;
-  const ask = async (prompt: string) => {
+  const ask = async (prompt: string, scope = context) => {
     const p = prompt.trim();
-    if (p.length < 3 || busy) return;
-    setBusy(true); setErr(null); setPlan(null); setQueued(null);
+    if (p.length < 3 || busy || approving || plan) return;
+    setBusy(true); setErr(null); setQueued(null); setReply(null); setRevision(null);
+    setLastPrompt(p);
+    setContext(scope);
     try {
-      setPlan(await api<Plan>("/api/plan", { body: { projectId: state.project.id, prompt: p } }));
+      const result = await api<Plan | { answer: string; revision?: Revision }>("/api/plan", {
+        body: { projectId: state.project.id, prompt: p, target: scope?.target, rights: scope?.rights },
+      });
+      if ("answer" in result) {
+        setReply(result.answer);
+        setRevision(result.revision ?? null);
+      }
+      else setPlan(result);
     } catch (e) {
       setErr((e as ApiError).message);
     } finally {
       setBusy(false);
+    }
+  };
+  const applyRevision = async () => {
+    if (!revision || approving) return;
+    const before = state.project.script;
+    const scene = storyScenes(before)[revision.index];
+    setErr(null);
+    if (!scene || scene.text !== revision.original) {
+      setErr("That scene has changed. Request a new suggestion from the map.");
+      return;
+    }
+    setApproving(true);
+    try {
+      const script = before.slice(0, scene.start) + revision.text + before.slice(scene.end);
+      await api(`/api/projects/${state.project.id}`, { method: "PATCH", body: { script, previousScript: before } });
+      await refresh();
+      setReply("Scene revision saved.");
+      setRevision(null);
+    } catch (e) {
+      setErr((e as ApiError).message);
+    } finally {
+      setApproving(false);
     }
   };
   const decide = async (action: "approve" | "dismiss") => {
@@ -89,9 +128,16 @@ export function CanvasTab({ state, refresh, go }: TabProps) {
   const mode = model === undefined ? null : model ? `Planning with ${model}` : "Rule-based planning";
   const can = plan ? plan.steps.filter((s) => s.runnable).length : 0;
   const total = state.outputs.length;
+  const history = state.plans.filter((entry) => entry.id !== plan?.id);
+  const onAsk = (prompt: string, target?: PanelTarget, label?: string, rights?: boolean) =>
+    void ask(prompt, label ? { target, label, rights } : null);
   return (
-    <section className="canvas">
-      <div className="canvas-stage">
+    <section className="studio-editor" aria-label="Project editor">
+      <div className="editor-workspace">
+        {(plan || reply || queued) && <p className="editor-activity" role="status">
+          {reply ?? queued ?? `${context?.label ?? "Project"} · ${plan?.steps.map((step) => step.what).join(" · ")}. Review in the prompt panel.`}
+        </p>}
+        {tab === "canvas" && <div className="canvas-stage">
         <header>
           <h2>{total ? <>{ready} of {plural(total, "output")} ready.</> : <>Nothing rendered yet.</>}</h2>
           <div className="canvas-jump" aria-label="What is waiting">
@@ -99,14 +145,24 @@ export function CanvasTab({ state, refresh, go }: TabProps) {
             {chips.length === 0 && <span className="fine">Nothing is waiting on you.</span>}
           </div>
         </header>
-        <StoryMap live={{ title: state.project.title, durationMs: state.source?.durationMs ?? null, clips: state.clips, outputs: state.outputs, tracks: state.tracks }} onOpen={go} />
-        {queued && <p className="studio-note ok" role="status"><Check weight="bold" /> {queued}</p>}
+      </div>}
+      {(tab === "canvas" || tab === "protect") && <ProjectMap key={tab} state={state} rights={tab === "protect"} busy={busy || approving || !!plan} onAsk={onAsk} onEdit={onEdit} />}
+      {children}
       </div>
+      <aside className="editor-prompt" aria-label="Project prompts">
+        <h2><Sparkle weight="fill" /> Prompt</h2>
+        {context && <p className="prompt-context"><b>{context.label}</b> <button type="button" className="link" onClick={() => setContext(null)} disabled={busy || !!plan}>Clear selection</button></p>}
+        {lastPrompt && <p className="editor-message"><b>You</b>{lastPrompt}</p>}
+        {(reply || queued) && <p className="editor-message" role="status"><b>IZWI</b>{reply ?? queued}</p>}
+        {revision && <div className="st-row">
+          <button type="button" className="btn btn-sm" disabled={approving} onClick={() => void applyRevision()}>Apply scene revision</button>
+          <button type="button" className="btn btn-quiet btn-sm" disabled={approving} onClick={() => { setRevision(null); setReply("Scene revision dismissed."); }}>Dismiss</button>
+        </div>}
 
       {plan && (
         <div className="plan" role="region" aria-label="Proposed plan" onKeyDown={(e) => { if (e.key === "Escape") void decide("dismiss"); }}>
           <header>
-            <h3>Here is what I would do</h3>
+            <h3>Proposed changes</h3>
             <span className="mono">Planned by {plan.planner}</span>
             <button aria-label="Dismiss plan" onClick={() => void decide("dismiss")} disabled={approving}><X /></button>
           </header>
@@ -134,19 +190,27 @@ export function CanvasTab({ state, refresh, go }: TabProps) {
       )}
 
       <form className={"promptbar" + (busy ? " busy" : "")} onSubmit={(e) => { e.preventDefault(); void ask(text); }}>
-        {!plan && (
+        {!plan && !context && (
           <div className="ideas">
-            {ideas.map((i) => <button type="button" key={i} onClick={() => { setText(i); void ask(i); }}>{i}</button>)}
+            {ideas.map((i) => <button type="button" key={i} onClick={() => { setText(i); void ask(i, null); }}>{i}</button>)}
           </div>
         )}
         {err && <p className="miss" role="alert">{err}</p>}
         <p className="plan-mode" id="plan-mode">{mode ? `${mode} · ` : ""}You review before anything runs</p>
         <div className="promptrow">
           <Sparkle weight="fill" />
-          <input value={text} onChange={(e) => setText(e.target.value)} maxLength={600} placeholder="Describe the clips or captions you want" aria-label="Describe the clips or captions you want" aria-describedby="plan-mode" />
-          <button className="send" aria-label="Plan it" disabled={text.trim().length < 3 || busy}><ArrowUp weight="bold" /></button>
+          <input value={text} onChange={(e) => setText(e.target.value)} maxLength={600} placeholder="What should IZWI do?" aria-label="What should IZWI do?" aria-describedby="plan-mode" />
+          <button className="send" aria-label="Plan it" disabled={text.trim().length < 3 || busy || approving || !!plan}><ArrowUp weight="bold" /></button>
         </div>
       </form>
+      {history.length > 0 && <details className="editor-history">
+        <summary>Recent project prompts</summary>
+        <ul>{history.map((entry) => <li key={entry.id}><b>{entry.prompt}</b><small>{entry.status} · {entry.planner}</small>
+          {entry.status === "proposed" && Array.isArray(entry.steps) && <button type="button" className="link" disabled={busy || !!plan}
+            onClick={() => { setContext(null); setLastPrompt(entry.prompt); setReply(null); setRevision(null); setQueued(null); setPlan({ ...entry, steps: entry.steps as Step[], note: null }); }}>Review proposal</button>}
+        </li>)}</ul>
+      </details>}
+      </aside>
     </section>
   );
 }

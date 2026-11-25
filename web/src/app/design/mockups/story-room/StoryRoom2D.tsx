@@ -35,7 +35,7 @@ export function StoryRoom2D({ selected, onSelect }: { selected: number; onSelect
             <li key={p.id} style={{ ["--x" as string]: `${r2(50 + Math.sin(a) * 41)}%`, ["--y" as string]: `${r2(50 - Math.cos(a) * 41)}%`, ["--pc" as string]: p.color }}>
               <button type="button" className={"sr-label" + (i === selected ? " on" : "") + (p.planned ? " planned" : "")} aria-pressed={i === selected} onClick={() => onSelect(i)}>
                 <i />
-                {p.name}
+                <b>{p.name}</b><small className="sr2-status">{p.chip}</small>
               </button>
             </li>
           );

@@ -1,5 +1,6 @@
 "use client";
 // Earn: licensing enquiries. No money moves through IZWI yet.
+import { rand } from "@/lib/format";
 import { useState } from "react";
 import type { TabProps } from "./types";
 import { Err, Pill, ShareLink, dateOf, useAct } from "./parts";
@@ -17,6 +18,7 @@ function ListingCard({ l, clipTitle, refresh }: { l: Listing; clipTitle: string 
   return (
     <li className="st-item" style={{ ["--sc" as string]: l.enabled ? "var(--moss)" : "var(--line)" }}>
       <div className="st-head"><b>{l.title}</b><span className={`pill ${l.enabled ? "s-done" : "s-off"}`}>{l.enabled ? "Open to enquiries" : "Switched off"}</span></div>
+      <p>Asking price: {l.askingPriceCents == null ? "By enquiry" : rand(l.askingPriceCents)}</p>
       <p>Clip: {clipTitle}. {l.terms ? `Terms: ${l.terms}` : "No terms written."}</p>
       <div className="st-row">
         <a className="link" href={l.url} target="_blank" rel="noreferrer">{l.url}</a>
@@ -54,10 +56,11 @@ function ListForm({ clip, projectId, refresh }: { clip: TabProps["state"]["clips
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(clip.title);
   const [terms, setTerms] = useState("");
+  const [price, setPrice] = useState("");
   const [made, setMade] = useState<{ url: string } | null>(null);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const r = await act<{ url: string }>("list", "POST", `/api/projects/${projectId}/listings`, { clipId: clip.id, title: title.trim(), terms: terms.trim() });
+    const r = await act<{ url: string }>("list", "POST", `/api/projects/${projectId}/listings`, { clipId: clip.id, title: title.trim(), terms: terms.trim(), askingPriceCents: price ? Math.round(Number(price) * 100) : null });
     if (r?.url) { setMade({ url: r.url }); setOpen(false); }
   };
   return (
@@ -66,6 +69,7 @@ function ListForm({ clip, projectId, refresh }: { clip: TabProps["state"]["clips
       {open && (
         <form onSubmit={submit} className="st-card soft">
           <label className="field"><span>Title buyers see</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required style={{ height: 48, fontSize: "1rem" }} /></label>
+          <label className="field"><span>Asking price in rand (optional)</span><input type="number" inputMode="decimal" min=".01" max="1000000" step=".01" value={price} onChange={(e) => setPrice(e.target.value)} /></label>
           <label className="field"><span>Terms</span><textarea value={terms} onChange={(e) => setTerms(e.target.value)} maxLength={1000} rows={3} placeholder="For example: broadcast use, 12 months, price on request." /></label>
           <div className="st-row">
             <button type="submit" className="btn" disabled={busy === "list" || !title.trim()}>Create listing</button>

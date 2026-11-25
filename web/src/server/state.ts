@@ -58,15 +58,15 @@ export function projectState(ctx: Ctx, projectId: string) {
   const comments = all<{ id: string; author: string; at_ms: number | null; body: string; kind: string; link_id: string | null; created_at: number; resolved_at: number | null }>(
     `SELECT id, author, at_ms, body, kind, link_id, created_at, resolved_at FROM comment WHERE project_id = ? ORDER BY COALESCE(at_ms, 0), created_at`, p.id,
   );
-  const listings = all<{ id: string; clip_id: string; slug: string; title: string; terms: string; enabled: number; created_at: number }>(`SELECT * FROM listing WHERE project_id = ? ORDER BY created_at DESC`, p.id).map((l) => ({
-    id: l.id, clipId: l.clip_id, slug: l.slug, url: `${PUBLIC_URL}/l/${l.slug}`, title: l.title, terms: l.terms, enabled: !!l.enabled,
+  const listings = all<{ id: string; clip_id: string; slug: string; title: string; terms: string; asking_price_cents: number | null; enabled: number; created_at: number }>(`SELECT * FROM listing WHERE project_id = ? ORDER BY created_at DESC`, p.id).map((l) => ({
+    id: l.id, clipId: l.clip_id, slug: l.slug, url: `${PUBLIC_URL}/l/${l.slug}`, title: l.title, terms: l.terms, askingPriceCents: l.asking_price_cents, enabled: !!l.enabled,
     enquiries: all(`SELECT id, name, contact, organisation, intended_use, status, created_at FROM enquiry WHERE listing_id = ? ORDER BY created_at DESC`, l.id),
   }));
   const declaration = one<{ statement: string; created_at: number }>(`SELECT statement, created_at FROM declaration WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`, p.id) ?? null;
   const plans = all<{ id: string; prompt: string; planner: string; steps: string; status: string; created_at: number }>(`SELECT * FROM plan_run WHERE project_id = ? ORDER BY created_at DESC LIMIT 5`, p.id).map((x) => ({ ...x, steps: parse(x.steps, []) }));
 
   return {
-    project: { id: p.id, title: p.title, kind: p.kind, spokenLanguage: p.spoken_language, createdAt: p.created_at, updatedAt: p.updated_at },
+    project: { id: p.id, title: p.title, kind: p.kind, spokenLanguage: p.spoken_language, script: p.script, createdAt: p.created_at, updatedAt: p.updated_at },
     source: pub(source) ?? null, proxy: pub(pick("proxy")) ?? null, poster: pub(pick("poster")) ?? null, peaks,
     packages: assets.filter((a) => a.kind === "package").reverse().map(pub),
     tracks, lines, clips, people, outputs, links, comments, listings, declaration, plans,

@@ -29,3 +29,4 @@ export const JOB_LABEL: Record<string, string> = {
 };
 
 export const media = (assetId: string, extra = "") => `/api/media/${assetId}${extra}`;
+export const rand = (cents: number) => new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(cents / 100);

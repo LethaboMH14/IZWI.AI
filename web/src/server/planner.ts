@@ -9,7 +9,7 @@ import type { Ctx } from "./guard";
 
 export type Verb = "Hear" | "Cut" | "Translate" | "Dub" | "Storyboard" | "Animate" | "Publish" | "Record";
 export type Intent = { verb: Verb; language?: string; count?: number };
-export type Step = Intent & { what: string; tool: string; runs: string; gate?: string; runnable: boolean; why?: string };
+export type Step = Intent & { what: string; tool: string; runs: string; gate?: string; runnable: boolean; why?: string; clipId?: string };
 
 const STEMS: Record<string, string> = {
   zulu: "zu", xhosa: "xh", sotho: "st", sesotho: "st", tswana: "tn", setswana: "tn", afrikaans: "af", pedi: "nso", sepedi: "nso",
@@ -126,7 +126,10 @@ export function approvePlan(ctx: Ctx, planId: string) {
       jobs.push(last);
     } else if (s.verb === "Publish") {
       const src = one<{ language: string }>(`SELECT language FROM caption_track WHERE project_id = ? AND kind = 'source'`, plan.project_id);
-      for (const c of all<{ id: string }>(`SELECT id FROM clip WHERE project_id = ? AND status = 'kept'`, plan.project_id)) {
+      const kept = s.clipId
+        ? all<{ id: string }>(`SELECT id FROM clip WHERE project_id = ? AND id = ? AND status = 'kept'`, plan.project_id, s.clipId)
+        : all<{ id: string }>(`SELECT id FROM clip WHERE project_id = ? AND status = 'kept'`, plan.project_id);
+      for (const c of kept) {
         const outId = newId("out");
         run(`INSERT INTO output (id, workspace_id, project_id, clip_id, preset, language, burn, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, 'vertical', ?, 1, 'queued', ?, ?, ?)`, outId, ctx.workspaceId, plan.project_id, c.id, src?.language ?? null, ctx.userId, now(), now());
         const j = enqueue({ ...base, type: "render", input: { outputId: outId }, idempotencyKey: `${key}:${c.id}`, dependsOn: hear });

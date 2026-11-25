@@ -1,6 +1,6 @@
 "use client";
 // New story from the home screen: say what it is, drop the file, and it goes straight to upload.
-// The story is created when a file is chosen (title defaults to the file name), so there are no empty stories.
+// Start with a recording or open a blank storyboard.
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Plus, UploadSimple } from "@phosphor-icons/react";
@@ -50,6 +50,23 @@ export function NewStory({ empty = false }: { empty?: boolean }) {
     }
   }
 
+  async function startStoryboard() {
+    if (guard.current || projectId) return;
+    guard.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ id: string }>("/api/projects", {
+        method: "POST", key: key.current, body: { title: title.trim() || "Untitled story", kind, spokenLanguage: "auto" },
+      });
+      router.push(`/app/p/${result.id}#create`);
+    } catch (problem) {
+      setError(problem instanceof ApiError ? problem.message : "Could not start the storyboard.");
+      guard.current = false;
+      setBusy(false);
+    }
+  }
+
   if (!open) {
     return (
       <button type="button" className="newstory" onClick={() => setOpen(true)}>
@@ -93,6 +110,7 @@ export function NewStory({ empty = false }: { empty?: boolean }) {
             <small>MP4, MOV, MP3 or WAV. If the signal drops, the upload resumes.</small>
           </div>
           <input ref={input} type="file" accept="video/*,audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void take(f); }} />
+          <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => void startStoryboard()}>Start with a script <ArrowRight /></button>
           {error && <p className="form-err" role="alert">{error}</p>}
           <NextSteps />
           {!empty && <button type="button" className="link" onClick={() => { setOpen(false); setError(""); }}>Not now</button>}

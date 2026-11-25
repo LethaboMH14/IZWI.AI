@@ -28,7 +28,8 @@ export default function StoryRoomMockup() {
       : conn?.saveData ? "data"
       : null;
     // decided after mount (the server always renders the flat room); deferred one frame
-    const raf = requestAnimationFrame(() => { setWhy(reason); setThree(reason === null); });
+    const station = PILLARS.findIndex((pillar) => pillar.id === q.get("station"));
+    const raf = requestAnimationFrame(() => { setWhy(reason); setThree(reason === null); if (station >= 0) setI(station); });
     return () => cancelAnimationFrame(raf);
   }, []);
 
@@ -47,14 +48,13 @@ export default function StoryRoomMockup() {
       <header className="nav">
         <Mark />
         <nav aria-label="Main">
-          <a href="#">Who it is for</a>
-          <a href="#">How it connects</a>
-          <a href="#">Pricing</a>
-          <a href="#">Trust</a>
+          <Link href="/#makers">Who it is for</Link>
+          <Link href="/#map">How it connects</Link>
+          <Link href="/#price">Pricing</Link>
         </nav>
         <div className="nav-cta">
-          <Link href="#" className="link">Sign in</Link>
-          <Link href="#" className="btn">Try IZWI AI <ArrowRight weight="bold" /></Link>
+          <Link href="/sign-in" className="link">Sign in</Link>
+          <Link href="/sign-in?new=1" className="btn">Try IZWI AI <ArrowRight weight="bold" /></Link>
         </div>
       </header>
 
@@ -65,7 +65,7 @@ export default function StoryRoomMockup() {
         <h1>Turn one story into <em>many.</em></h1>
         <p className="sr-lede">Walk around the room. The voice in the middle is one episode. Each station is something IZWI does with it.</p>
         <div className="sr-cta">
-          <Link href="#" className="btn btn-lg">Try IZWI AI <ArrowRight weight="bold" /></Link>
+          <Link href="/app" className="btn btn-lg">Open your workspace <ArrowRight weight="bold" /></Link>
           <span className="sr-ep mono">{EPISODE.show} · {EPISODE.title} · {clock(EPISODE.durationMs)}</span>
         </div>
       </section>
@@ -83,7 +83,7 @@ export default function StoryRoomMockup() {
         <div className="sr-card-foot">
           <button type="button" className="sr-step" onClick={() => go(-1)} aria-label="Previous station"><ArrowLeft weight="bold" /></button>
           <button type="button" className="sr-step" onClick={() => go(1)} aria-label="Next station"><ArrowRight weight="bold" /></button>
-          <Link href="#" className="link">{p.planned ? "See what's planned" : `Open ${p.name}`} <ArrowRight /></Link>
+          {p.id === "protect" && <Link href="/design/mockups/rights-map" className="link">See the sample rights map <ArrowRight /></Link>}
         </div>
       </aside>
 

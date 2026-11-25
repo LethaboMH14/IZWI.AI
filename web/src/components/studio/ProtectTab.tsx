@@ -40,7 +40,7 @@ function PersonCard({ person, projectId, act, busy }: { person: TabProps["state"
     if (r?.url) setShare({ url: r.url, message: r.message });
   };
   return (
-    <li className="st-item" style={{ ["--sc" as string]: status === "granted" ? "var(--moss)" : status === "not asked" ? "var(--line)" : "var(--clay)" }}>
+    <li className="st-item" id={`person-${person.id}`} tabIndex={-1} style={{ ["--sc" as string]: status === "granted" ? "var(--moss)" : status === "not asked" ? "var(--line)" : "var(--clay)" }}>
       <div className="st-head">
         <b>{person.name}</b>
         <Pill status={status} />

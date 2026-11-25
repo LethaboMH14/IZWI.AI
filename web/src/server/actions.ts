@@ -17,6 +17,7 @@ import { applyGlossary, lineText, type GlossaryEntry, type Word } from "./captio
 export const KINDS = ["podcast", "video", "lesson", "music", "film", "animation", "client"] as const;
 
 export const ProjectIn = z.object({ title: z.string().trim().min(1).max(120), kind: z.enum(KINDS), spokenLanguage: z.string().max(5).default("auto") });
+export const ProjectPatch = ProjectIn.partial().extend({ script: z.string().trim().max(12_000).optional(), previousScript: z.string().max(12_000).optional() });
 
 export function createProject(ctx: Ctx, input: z.infer<typeof ProjectIn>) {
   const id = newId("prj");
@@ -25,9 +26,14 @@ export function createProject(ctx: Ctx, input: z.infer<typeof ProjectIn>) {
   return { id };
 }
 
-export function updateProject(ctx: Ctx, id: string, patch: Partial<z.infer<typeof ProjectIn>>) {
+export function updateProject(ctx: Ctx, id: string, patch: z.infer<typeof ProjectPatch>) {
   const p = projectOf(ctx, id);
-  run(`UPDATE project SET title = ?, kind = ?, spoken_language = ?, updated_at = ? WHERE id = ?`, patch.title ?? p.title, patch.kind ?? p.kind, patch.spokenLanguage ?? p.spoken_language, now(), p.id);
+  const previous = patch.script === undefined ? null : patch.previousScript ?? p.script;
+  const updated = run(`UPDATE project SET title = COALESCE(?, title), kind = COALESCE(?, kind),
+    spoken_language = COALESCE(?, spoken_language), script = COALESCE(?, script), updated_at = ?
+    WHERE id = ? AND (? IS NULL OR script = ?)`, patch.title ?? null, patch.kind ?? null, patch.spokenLanguage ?? null,
+    patch.script ?? null, now(), p.id, previous, previous);
+  if (!updated.changes) fail(409, "The script changed in another session. Reload the saved version before editing again.");
 }
 
 export function deleteProject(ctx: Ctx, id: string) {
@@ -276,7 +282,10 @@ export function markPosted(ctx: Ctx, outputId: string, input: z.infer<typeof Pos
   audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "output.posted", target: o.id, meta: input });
 }
 
-export const ListingIn = z.object({ clipId: z.string(), title: z.string().trim().min(1).max(120), terms: z.string().trim().max(1000).default("") });
+export const ListingIn = z.object({
+  clipId: z.string(), title: z.string().trim().min(1).max(120), terms: z.string().trim().max(1000).default(""),
+  askingPriceCents: z.number().int().positive().max(100_000_000).nullable().optional(),
+});
 
 export function createListing(ctx: Ctx, projectId: string, input: z.infer<typeof ListingIn>) {
   const p = projectOf(ctx, projectId);
@@ -284,7 +293,7 @@ export function createListing(ctx: Ctx, projectId: string, input: z.infer<typeof
   if (!one(`SELECT 1 FROM output WHERE clip_id = ? AND status = 'ready'`, clip.id)) fail(409, "Render this clip first, so buyers see the finished piece.");
   const slug = `${input.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "clip"}-${newToken().replace(/[^a-z0-9]/gi, "").slice(0, 6).toLowerCase()}`;
   const id = newId("lst");
-  run(`INSERT INTO listing (id, workspace_id, project_id, clip_id, slug, title, terms, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`, id, ctx.workspaceId, p.id, clip.id, slug, input.title, input.terms, now(), now());
+  run(`INSERT INTO listing (id, workspace_id, project_id, clip_id, slug, title, terms, asking_price_cents, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`, id, ctx.workspaceId, p.id, clip.id, slug, input.title, input.terms, input.askingPriceCents ?? null, now(), now());
   audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "listing.created", target: id });
   return { id, url: `${PUBLIC_URL}/l/${slug}` };
 }

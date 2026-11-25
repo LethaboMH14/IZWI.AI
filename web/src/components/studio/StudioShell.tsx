@@ -2,13 +2,14 @@
 // The studio frame: title and source facts, the five stages with a status computed from real data,
 // the live job list, and the six tabs. Everything here reads ProjectState; nothing is invented.
 import Link from "next/link";
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { ArrowClockwise, CaretDown, CircleNotch, UploadSimple, Warning, X } from "@phosphor-icons/react";
 import { api, ApiError } from "@/lib/api";
 import { bytes, clock, JOB_LABEL } from "@/lib/format";
 import { langName } from "@/lib/languages";
 import { useLive } from "@/lib/useLive";
-import type { ProjectState, TabId, TabProps } from "./types";
+import type { EditTarget, ProjectState, TabId, TabProps } from "./types";
+import { ProjectLobby, STATIONS } from "./ProjectLobby";
 import { CanvasTab } from "./CanvasTab";
 import { CreateTab } from "./CreateTab";
 import { LocaliseTab } from "./LocaliseTab";
@@ -16,17 +17,16 @@ import { ProtectTab } from "./ProtectTab";
 import { PublishTab } from "./PublishTab";
 import { EarnTab } from "./EarnTab";
 import "@/app/studio.css";
+import "@/app/studio-room.css";
 
 type Job = ProjectState["jobs"][number];
 type Status = "done" | "draft" | "blocked" | "off" | "planned";
 
-const TABS: TabId[] = ["canvas", "create", "localise", "protect", "publish", "earn"];
-const STAGES: { id: Exclude<TabId, "canvas">; label: string }[] = [
-  { id: "create", label: "Create" }, { id: "localise", label: "Localise" }, { id: "protect", label: "Protect" }, { id: "publish", label: "Publish" }, { id: "earn", label: "Earn" },
-];
+const TABS: TabId[] = ["room", "canvas", ...STATIONS.map((station) => station.id)];
+type Stage = typeof STATIONS[number]["id"];
 const KINDS = ["podcast", "video", "lesson", "music", "film", "animation", "client"];
-const BODY: Record<TabId, (p: TabProps) => React.ReactNode> = {
-  canvas: (p) => <CanvasTab {...p} />, create: (p) => <CreateTab {...p} />, localise: (p) => <LocaliseTab {...p} />,
+const BODY: Record<Stage, (p: TabProps) => React.ReactNode> = {
+  create: (p) => <CreateTab {...p} />, localise: (p) => <LocaliseTab {...p} />,
   protect: (p) => <ProtectTab {...p} />, publish: (p) => <PublishTab {...p} />, earn: (p) => <EarnTab {...p} />,
 };
 
@@ -46,7 +46,7 @@ function visibleJobs(jobs: Job[]) {
   });
 }
 
-function stageStatus(s: ProjectState): Record<Exclude<TabId, "canvas">, { status: Status; hint: string }> {
+function stageStatus(s: ProjectState): Record<Stage, { status: Status; hint: string }> {
   const kept = s.clips.filter((c) => c.status === "kept").length;
   const live = s.clips.filter((c) => c.status !== "dropped");
   const translations = s.tracks.filter((t) => t.kind !== "source");
@@ -90,11 +90,24 @@ export function StudioShell({ id, initial }: { id: string; initial: ProjectState
   const { data, error, refresh } = useLive<ProjectState>(`/api/projects/${id}`, { initial, busy: (s) => s.jobs.some(active) });
   const state = data ?? initial;
   const hash = useSyncExternalStore(subscribe, hashNow, hashServer);
-  const tab: TabId = (TABS as string[]).includes(hash) ? (hash as TabId) : "canvas";
+  const tab: TabId = (TABS as string[]).includes(hash) ? (hash as TabId) : "room";
+  const [target, setTarget] = useState<EditTarget | null>(null);
   const go = useCallback((t: TabId) => {
+    setTarget(null);
     window.location.hash = t;
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   }, []);
+  const edit = (card: EditTarget) => {
+    go(card.tab);
+    setTarget(card);
+  };
+  useEffect(() => {
+    if (!target?.focusId || tab !== target.tab) return;
+    const el = document.getElementById(target.focusId);
+    el?.focus({ preventScroll: true });
+    el?.scrollIntoView({ block: "nearest" });
+  }, [target, tab]);
+
   const refreshed = useCallback(async () => { await refresh(); }, [refresh]);
 
   const [title, setTitle] = useState<string | null>(null);
@@ -128,7 +141,7 @@ export function StudioShell({ id, initial }: { id: string; initial: ProjectState
   const running = jobs.filter(active).length;
   const src = state.source;
   const prep = !state.proxy ? state.jobs.find((j) => (j.type === "probe" || j.type === "proxy") && active(j)) : undefined;
-  const props: TabProps = { state, refresh: refreshed, go };
+  const props: TabProps = { state, refresh: refreshed, go, target: target?.tab === tab ? target.focusId : undefined };
 
   return (
     <div className="studio">
@@ -149,19 +162,21 @@ export function StudioShell({ id, initial }: { id: string; initial: ProjectState
             </p>
           ) : <p className="studio-facts mono"><span>No recording yet</span></p>}
         </div>
-          <input className="studio-title" value={title ?? state.project.title} maxLength={120} aria-label="Story title"
+          {tab !== "room" && <input className="studio-title" value={title ?? state.project.title} maxLength={120} aria-label="Story title"
             onChange={(e) => setTitle(e.target.value)} onBlur={() => void saveTitle()}
-            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setTitle(null); e.currentTarget.blur(); } }} />
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setTitle(null); e.currentTarget.blur(); } }} />}
         </div>
         <span className={"studio-live" + (running ? " on" : "")} role="status">{running ? <><CircleNotch className="spin" /> {plural(running, "job")} running</> : "Up to date"}</span>
       </header>
       {saveErr && <p className="studio-note bad" role="alert"><Warning weight="fill" /> {saveErr}</p>}
       {error && <p className="studio-note bad" role="alert"><Warning weight="fill" /> Could not refresh just now: {error.message}</p>}
 
+      {tab === "room" ? <ProjectLobby state={state} stages={stages} go={go} /> : <>
       <nav className="stagenav" aria-label="Stages">
+        <button className="sn-map" onClick={() => go("room")}>Story Room</button>
         <button className={"sn-map" + (tab === "canvas" ? " on" : "")} onClick={() => go("canvas")} aria-current={tab === "canvas" ? "page" : undefined}>Canvas</button>
         <ol>
-          {STAGES.map((s) => {
+          {STATIONS.map((s) => {
             const st = stages[s.id];
             return (
               <li key={s.id} className={`s-${st.status}` + (tab === s.id ? " on" : "")}>
@@ -206,8 +221,9 @@ export function StudioShell({ id, initial }: { id: string; initial: ProjectState
 
       {prep && <p className="studio-note"><CircleNotch className="spin" /> Getting the recording ready: {prep.stage ?? JOB_LABEL[prep.type]}. The player and waveform appear when this finishes.</p>}
 
-      <div className="stagebody" key={tab}>
-        {src ? BODY[tab](props) : (
+      <CanvasTab {...props} tab={tab} onEdit={edit}>
+      <div className="stagebody" key={`${tab}:${props.target ?? ""}`}>
+        {tab === "canvas" ? null : src || tab === "create" ? BODY[tab](props) : (
           <div className="studio-empty">
             <UploadSimple />
             <h2>Upload a recording to begin.</h2>
@@ -216,6 +232,8 @@ export function StudioShell({ id, initial }: { id: string; initial: ProjectState
           </div>
         )}
       </div>
+      </CanvasTab>
+      </>}
     </div>
   );
 }

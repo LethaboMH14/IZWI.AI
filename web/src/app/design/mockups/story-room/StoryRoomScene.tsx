@@ -12,7 +12,7 @@ const IVORY = 0xfaf8f4;
 const PAPER = 0xffffff;
 const INK = 0x2b2620;
 
-type Props = { selected: number; onSelect: (i: number) => void; onFail: () => void; shift?: number };
+type Props = { selected: number; onSelect: (i: number) => void; onFail: () => void; shift?: number; showLabels?: boolean; waveform?: number[] };
 
 function roundedRect(w: number, h: number, r: number) {
   const s = new THREE.Shape();
@@ -101,12 +101,13 @@ function emblem(id: string, color: string): THREE.Group {
   return g;
 }
 
-export function StoryRoomScene({ selected, onSelect, onFail, shift = 0 }: Props) {
+export function StoryRoomScene({ selected, onSelect, onFail, shift = 0, showLabels = true, waveform }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const labels = useRef<(HTMLButtonElement | null)[]>([]);
   const sel = useRef(selected);
   const selectRef = useRef(onSelect);
-  useEffect(() => { sel.current = selected; selectRef.current = onSelect; });
+  const peakRef = useRef(waveform);
+  useEffect(() => { sel.current = selected; selectRef.current = onSelect; peakRef.current = waveform; });
 
   useEffect(() => {
     const el = host.current!;
@@ -118,9 +119,9 @@ export function StoryRoomScene({ selected, onSelect, onFail, shift = 0 }: Props)
       onFail();
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, showLabels ? 2 : 1.25));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     el.appendChild(renderer.domElement);
@@ -136,7 +137,7 @@ export function StoryRoomScene({ selected, onSelect, onFail, shift = 0 }: Props)
     const key = new THREE.DirectionalLight(0xfff1dc, 2.1);
     key.position.set(-5, 9, 6);
     key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.mapSize.set(showLabels ? 2048 : 1024, showLabels ? 2048 : 1024);
     key.shadow.camera.left = -8; key.shadow.camera.right = 8; key.shadow.camera.top = 8; key.shadow.camera.bottom = -8;
     key.shadow.radius = 6;
     key.shadow.bias = -0.0004;
@@ -176,11 +177,15 @@ export function StoryRoomScene({ selected, onSelect, onFail, shift = 0 }: Props)
 
     // the voice crown: the episode's waveform as bars standing in a circle
     const N = 144;
-    const peaks = samplePeaks(N);
+    const sample = samplePeaks(N);
+    const peak = (i: number) => {
+      const values = peakRef.current;
+      return values ? values[Math.floor(i / N * values.length)] ?? 0 : sample[i];
+    };
     const bars = new THREE.InstancedMesh(new THREE.BoxGeometry(0.055, 1, 0.055).translate(0, 0.5, 0), mat(PAPER, 0.45), N);
     bars.castShadow = true;
     const cA = new THREE.Color(0x8a5a0b), cB = new THREE.Color(0xf4c55a), tmp = new THREE.Color();
-    for (let i = 0; i < N; i++) bars.setColorAt(i, tmp.copy(cA).lerp(cB, peaks[i]));
+    for (let i = 0; i < N; i++) bars.setColorAt(i, tmp.copy(cA).lerp(cB, peak(i)));
     room.add(bars);
     const inner = new THREE.InstancedMesh(new THREE.BoxGeometry(0.04, 1, 0.04).translate(0, 0.5, 0), mat(0xe9a21b, 0.45), 72);
     room.add(inner);
@@ -294,10 +299,15 @@ export function StoryRoomScene({ selected, onSelect, onFail, shift = 0 }: Props)
     el.addEventListener("wheel", wheel, { passive: false });
 
     const v = new THREE.Vector3();
+    const scale = new THREE.Vector3();
     const t0 = performance.now();
     let raf = 0, last = t0;
     const tick = () => {
       const now = performance.now();
+      if (!showLabels && (document.hidden || now - last < 30)) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const t = (now - t0) / 1000;
@@ -308,15 +318,15 @@ export function StoryRoomScene({ selected, onSelect, onFail, shift = 0 }: Props)
       const live = reduce ? 0 : t;
       for (let i = 0; i < N; i++) {
         const a = (i / N) * Math.PI * 2;
-        const h = 0.18 + peaks[i] * 1.35 * (0.82 + 0.18 * Math.sin(live * 2.2 + i * 0.37));
-        m4.makeRotationY(a).scale(new THREE.Vector3(1, h, 1)).setPosition(Math.sin(a) * 1.12, 0.18, Math.cos(a) * 1.12);
+        const h = 0.18 + peak(i) * 1.35 * (0.82 + 0.18 * Math.sin(live * 2.2 + i * 0.37));
+        m4.makeRotationY(a).scale(scale.set(1, h, 1)).setPosition(Math.sin(a) * 1.12, 0.18, Math.cos(a) * 1.12);
         bars.setMatrixAt(i, m4);
       }
       bars.instanceMatrix.needsUpdate = true;
       for (let i = 0; i < 72; i++) {
         const a = (i / 72) * Math.PI * 2 + 0.02;
-        const h = 0.12 + peaks[(i * 2 + 40) % N] * 0.55 * (0.8 + 0.2 * Math.sin(live * 3.1 + i));
-        m4.makeRotationY(a).scale(new THREE.Vector3(1, h, 1)).setPosition(Math.sin(a) * 0.68, 0.18, Math.cos(a) * 0.68);
+        const h = 0.12 + peak((i * 2 + 40) % N) * 0.55 * (0.8 + 0.2 * Math.sin(live * 3.1 + i));
+        m4.makeRotationY(a).scale(scale.set(1, h, 1)).setPosition(Math.sin(a) * 0.68, 0.18, Math.cos(a) * 0.68);
         inner.setMatrixAt(i, m4);
       }
       inner.instanceMatrix.needsUpdate = true;
@@ -371,7 +381,7 @@ export function StoryRoomScene({ selected, onSelect, onFail, shift = 0 }: Props)
   return (
     <div className="sr-stage">
       <div ref={host} className="sr-canvas" aria-hidden="true" />
-      <div className="sr-labels">
+      {showLabels && <div className="sr-labels">
         {PILLARS.map((p, i) => (
           <button
             key={p.id}
@@ -387,7 +397,7 @@ export function StoryRoomScene({ selected, onSelect, onFail, shift = 0 }: Props)
             {p.planned && <small>planned</small>}
           </button>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

@@ -58,7 +58,7 @@ export default function Landing() {
           <p className="lede">Bring a podcast, a film, a lesson or a song. Leave with clips, captions in the languages your audience speaks, and a record of who agreed to what.</p>
           <div className="hero-actions">
             <Link href="/sign-in?new=1" className="btn btn-lg">Try IZWI AI <ArrowRight weight="bold" /></Link>
-            <Link href="/app/episode-04" className="link">Open the sample episode <ArrowUpRight /></Link>
+            <Link href="/design/mockups/story-room" className="link">Explore the sample Story Room <ArrowUpRight /></Link>
           </div>
         </div>
         <div className="hero-frame">
@@ -122,7 +122,7 @@ export default function Landing() {
           <div className="stagecopy" key={stage}>
             <h3>{stageCopy[stage].h}</h3>
             <p>{stageCopy[stage].p}</p>
-            <Link href={`/app/episode-04#${stage.toLowerCase()}`} className="link">See the {stage} screen <ArrowUpRight /></Link>
+            <Link href={`/design/mockups/story-room?station=${stage.toLowerCase()}`} className="link">See the {stage} station <ArrowUpRight /></Link>
           </div>
           <StoryMap />
         </div>

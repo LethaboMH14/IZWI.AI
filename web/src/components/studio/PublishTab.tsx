@@ -77,7 +77,7 @@ function OutputRow({ o, state, refresh }: { o: Output } & Pick<TabProps, "state"
     if (r) setOpen(false);
   };
   return (
-    <li className="st-item" style={{ ["--sc" as string]: o.status === "ready" ? "var(--moss)" : o.status === "queued" ? "var(--gold)" : "var(--clay)" }}>
+    <li className="st-item" id={`output-${o.id}`} tabIndex={-1} style={{ ["--sc" as string]: o.status === "ready" ? "var(--moss)" : o.status === "queued" ? "var(--gold)" : "var(--clay)" }}>
       <div className="st-head">
         <b>{clip?.title ?? "Clip"}</b>
         <Pill status={o.status} />
