@@ -53,5 +53,5 @@ for (const history of ["clean", "hardening", "studio"] as const) {
       vi.unstubAllEnvs();
       rmSync(folder, { recursive: true, force: true });
     }
-  });
+  }, 30_000); // Full schema build, three times over; slow laptops exceed the 5 s default.
 }
