@@ -87,7 +87,7 @@ function stageStatus(s: ProjectState): Record<Exclude<TabId, "canvas">, { status
 }
 
 export function StudioShell({ id, initial }: { id: string; initial: ProjectState }) {
-  const { data, error, refresh } = useLive<ProjectState>(`/api/projects/${id}`, { initial, busy: (s) => s.jobs.some(active) });
+  const { data, error, refresh } = useLive<ProjectState>(`/api/projects/${id}`, { initial, busy: (s) => s.jobs.some(active) || s.people.some((p) => p.consent?.status === "pending" || p.consent?.status === "requested") });
   const state = data ?? initial;
   const hash = useSyncExternalStore(subscribe, hashNow, hashServer);
   const tab: TabId = (TABS as string[]).includes(hash) ? (hash as TabId) : "canvas";
