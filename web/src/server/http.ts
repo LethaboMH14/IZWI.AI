@@ -28,15 +28,24 @@ export function route<P = Record<string, string>>(handler: (req: Request, params
   };
 }
 
-function checkOrigin(req: Request) {
+// Writes must prove they come from our own pages: a matching Origin, or, when a browser leaves Origin out,
+// Sec-Fetch-Site: same-origin. A request with neither is refused, so a missing header is never a way round the check.
+export function checkOrigin(req: Request) {
   const origin = req.headers.get("origin");
-  if (!origin) return; // Non-browser clients still need a valid session or token.
-  const allowed = new Set([PUBLIC_URL, new URL(req.url).origin]);
-  if (!allowed.has(origin)) throw new HttpError(403, "Cross-site request refused.");
+  if (origin) {
+    const allowed = new Set([PUBLIC_URL, new URL(req.url).origin]);
+    if (!allowed.has(origin)) throw new HttpError(403, "Cross-site request refused.");
+    return;
+  }
+  if (req.headers.get("sec-fetch-site") === "same-origin") return;
+  throw new HttpError(403, "Cross-site request refused.");
 }
 
 export function toResponse(e: unknown) {
-  if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
+  if (e instanceof HttpError) {
+    const retry = (e as HttpError & { retryAfterSec?: number }).retryAfterSec;
+    return Response.json({ error: e.message }, { status: e.status, headers: retry ? { "Retry-After": String(retry) } : undefined });
+  }
   if (e instanceof ZodError) {
     return Response.json(
       { error: "Some fields are not valid.", issues: e.issues.map((i) => ({ path: i.path.join("."), message: i.message })) },
@@ -47,10 +56,34 @@ export function toResponse(e: unknown) {
   return Response.json({ error: "Something went wrong on our side. It has been logged." }, { status: 500 });
 }
 
-export async function body<T>(req: Request, schema: { parse(v: unknown): T }): Promise<T> {
+export const MAX_JSON_BYTES = 64 * 1024;
+
+// Reads at most `max` bytes, whatever Content-Length claims, so a large or endless body cannot fill memory.
+export async function readCapped(req: Request, max: number): Promise<string> {
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > max) throw new HttpError(413, "This request is too large.");
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      throw new HttpError(413, "This request is too large.");
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
+
+export async function body<T>(req: Request, schema: { parse(v: unknown): T }, maxBytes = MAX_JSON_BYTES): Promise<T> {
+  const text = await readCapped(req, maxBytes);
   let raw: unknown;
   try {
-    raw = await req.json();
+    raw = JSON.parse(text);
   } catch {
     throw new HttpError(400, "Send a JSON body.");
   }

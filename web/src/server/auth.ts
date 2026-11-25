@@ -17,6 +17,8 @@ export const auth = betterAuth({
   session: { expiresIn: 60 * 60 * 24 * 14, updateAge: 60 * 60 * 24 },
   rateLimit: {
     enabled: true,
+    // In the database, not in memory: limits survive restarts and hold across processes. npm run db:migrate creates the table.
+    storage: "database",
     window: 60,
     max: 120,
     customRules: { "/sign-in/email": { window: 60, max: 8 }, "/sign-up/email": { window: 300, max: 6 } },

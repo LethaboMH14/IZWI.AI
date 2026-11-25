@@ -62,17 +62,17 @@ async function main() {
     console.log(`→ ${job.type} ${job.id}`);
     try {
       const out = await handle({ job, input: parse(job.input, {}), beat, signal: ctrl.signal });
-      if (!isCancelled(job.id)) succeed(job.id, out);
+      succeed(job.id, workerId, out);
       console.log(`✓ ${job.type} ${job.id} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
     } catch (e) {
       const msg = (e as Error).message || "Unknown error";
       if (isCancelled(job.id)) console.log(`× ${job.type} cancelled`);
-      else if (stopping) failJob(job.id, "The worker stopped during this step. It will run again.", true);
+      else if (stopping) failJob(job.id, workerId, "The worker stopped during this step. It will run again.", true);
       else if (e instanceof Blocked) {
-        block(job.id, msg);
+        block(job.id, workerId, msg);
         console.log(`‖ ${job.type} blocked: ${msg}`);
       } else {
-        failJob(job.id, msg, (e as { retryable?: boolean }).retryable === true);
+        failJob(job.id, workerId, msg, (e as { retryable?: boolean }).retryable === true);
         const after = one<{ status: string }>(`SELECT status FROM job WHERE id = ?`, job.id);
         if (after?.status === "failed") onFailed(job, msg);
         console.log(`✗ ${job.type} ${job.id}: ${msg}`);

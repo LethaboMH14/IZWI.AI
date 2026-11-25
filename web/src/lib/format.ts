@@ -25,7 +25,7 @@ export function ago(t: number | null | undefined) {
 
 export const JOB_LABEL: Record<string, string> = {
   probe: "Reading the file", proxy: "Making a light preview", transcribe: "Listening", suggest_clips: "Finding clips",
-  translate: "Translating", render: "Rendering", package: "Building the package",
+  translate: "Translating", publish: "Queuing renders", render: "Rendering", package: "Building the package",
 };
 
 export const media = (assetId: string, extra = "") => `/api/media/${assetId}${extra}`;

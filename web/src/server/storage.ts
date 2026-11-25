@@ -5,6 +5,7 @@ import { createReadStream, mkdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { STORAGE } from "./env";
+import { servedType, STORED_FILE_HEADERS } from "./filetype";
 
 export function storageKey(workspaceId: string, projectId: string, name: string) {
   return `${workspaceId}/${projectId}/${name}`;
@@ -38,13 +39,14 @@ const safeName = (n: string) => n.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "
 
 export function streamFile(req: Request, file: string, mime: string, opts: { download?: string; cache?: string } = {}): Response {
   const size = statSync(file).size;
+  const served = servedType(mime);
   const headers = new Headers({
-    "Content-Type": mime,
+    ...STORED_FILE_HEADERS,
+    "Content-Type": served.mime,
     "Accept-Ranges": "bytes",
     "Cache-Control": opts.cache ?? "private, max-age=3600",
-    "X-Content-Type-Options": "nosniff",
   });
-  if (opts.download) headers.set("Content-Disposition", `attachment; filename="${safeName(opts.download)}"`);
+  if (opts.download || !served.inline) headers.set("Content-Disposition", `attachment; filename="${safeName(opts.download ?? path.basename(file))}"`);
   const range = req.headers.get("range");
   if (range) {
     const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
@@ -55,7 +57,7 @@ export function streamFile(req: Request, file: string, mime: string, opts: { dow
       end = size - 1;
     }
     if (!m || Number.isNaN(start) || start > end || start >= size) {
-      return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } });
+      return new Response(null, { status: 416, headers: { ...STORED_FILE_HEADERS, "Content-Range": `bytes */${size}` } });
     }
     end = Math.min(end, size - 1);
     headers.set("Content-Range", `bytes ${start}-${end}/${size}`);

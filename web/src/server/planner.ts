@@ -1,8 +1,9 @@
 // Prompt → plan → approve → jobs. A model (when connected) only proposes intents; code decides the tool,
 // where it runs, what gates apply and whether it can run now. Nothing runs until a person approves.
 import { z } from "zod";
-import { all, newId, now, one, run } from "./db";
+import { newId, now, one, run, tx } from "./db";
 import { enqueue } from "./jobs";
+import { HttpError } from "./http";
 import { chatJSON, providerFor } from "./providers";
 import { LANGUAGES, langName } from "../lib/languages";
 import type { Ctx } from "./guard";
@@ -64,6 +65,7 @@ export function projectPlanState(workspaceId: string, projectId: string): State 
 
 export function describe(intents: Intent[], s: State): Step[] {
   const hearing = intents.some((i) => i.verb === "Hear") || s.hasTranscript;
+  const cutting = intents.some((i) => i.verb === "Cut") && s.hasSource && hearing;
   const seen = new Set<string>();
   return intents.filter((i) => {
     const k = `${i.verb}:${i.language ?? ""}`;
@@ -88,7 +90,14 @@ export function describe(intents: Intent[], s: State): Step[] {
       case "Animate":
         return { ...i, what: "Generate moving frames per scene", tool: "Wan 2.1 / LTX-Video (planned)", runs: "GPU service", runnable: false, why: "Planned: no GPU video service is connected." };
       case "Publish":
-        return { ...i, what: s.kept ? `Render ${s.kept} kept clip${s.kept === 1 ? "" : "s"} as 9:16 with burned-in captions` : "Render kept clips", tool: "FFmpeg", runs: "This device", gate: "Held until your declaration and everyone's consent are recorded", runnable: s.kept > 0, why: s.kept ? undefined : "Keep at least one clip first." };
+        return {
+          ...i,
+          what: cutting
+            ? `Render the clips this plan suggests${s.kept ? ` and your ${s.kept} kept clip${s.kept === 1 ? "" : "s"}` : ""} as 9:16 with burned-in captions`
+            : s.kept ? `Render ${s.kept} kept clip${s.kept === 1 ? "" : "s"} as 9:16 with burned-in captions` : "Render kept clips",
+          tool: "FFmpeg", runs: "This device", gate: "Held until your declaration and everyone's consent are recorded",
+          runnable: cutting || s.kept > 0, why: cutting || s.kept ? undefined : "Keep at least one clip first, or add clips to the request.",
+        };
       case "Record":
         return { ...i, what: "Build the hand-off package: captions, EDL and OTIO timelines, renders, record sheet", tool: "IZWI package", runs: "This device", runnable: s.hasSource };
     }
@@ -101,44 +110,46 @@ export function savePlan(ctx: Ctx, projectId: string, prompt: string, planner: s
   return id;
 }
 
+// Jobs must be enqueued in dependency order, whatever order a model listed the steps in.
+const ORDER: Verb[] = ["Hear", "Cut", "Translate", "Dub", "Storyboard", "Animate", "Publish", "Record"];
+
+// One transaction: either every job of the plan is queued and the plan is marked approved, or nothing is.
+// Publish does not read clips now. It queues a fan-out step that runs after Cut and renders the clips that exist then.
 export function approvePlan(ctx: Ctx, planId: string) {
-  const plan = one<{ id: string; project_id: string; steps: string; status: string }>(`SELECT * FROM plan_run WHERE id = ? AND workspace_id = ?`, planId, ctx.workspaceId);
-  if (!plan) return null;
-  if (plan.status !== "proposed") return { already: true, jobs: [] as string[] };
-  const steps = JSON.parse(plan.steps) as Step[];
-  const jobs: string[] = [];
-  let hear: string | null = null;
-  let last: string | null = null;
-  const base = { workspaceId: ctx.workspaceId, projectId: plan.project_id, createdBy: ctx.userId };
-  steps.forEach((s, i) => {
-    if (!s.runnable) return;
-    const key = `plan:${plan.id}:${i}`;
-    if (s.verb === "Hear") {
-      const src = one<{ id: string }>(`SELECT id FROM asset WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, plan.project_id)!;
-      hear = enqueue({ ...base, type: "transcribe", input: { assetId: src.id }, idempotencyKey: key }).id;
-      last = hear;
-      jobs.push(hear);
-    } else if (s.verb === "Cut") {
-      last = enqueue({ ...base, type: "suggest_clips", input: { count: s.count ?? 3 }, idempotencyKey: key, dependsOn: hear }).id;
-      jobs.push(last);
-    } else if (s.verb === "Translate") {
-      last = enqueue({ ...base, type: "translate", input: { language: s.language }, idempotencyKey: key, dependsOn: hear }).id;
-      jobs.push(last);
-    } else if (s.verb === "Publish") {
-      const src = one<{ language: string }>(`SELECT language FROM caption_track WHERE project_id = ? AND kind = 'source'`, plan.project_id);
-      for (const c of all<{ id: string }>(`SELECT id FROM clip WHERE project_id = ? AND status = 'kept'`, plan.project_id)) {
-        const outId = newId("out");
-        run(`INSERT INTO output (id, workspace_id, project_id, clip_id, preset, language, burn, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, 'vertical', ?, 1, 'queued', ?, ?, ?)`, outId, ctx.workspaceId, plan.project_id, c.id, src?.language ?? null, ctx.userId, now(), now());
-        const j = enqueue({ ...base, type: "render", input: { outputId: outId }, idempotencyKey: `${key}:${c.id}`, dependsOn: hear });
-        run(`UPDATE output SET job_id = ? WHERE id = ?`, j.id, outId);
-        last = j.id;
-        jobs.push(j.id);
+  return tx(() => {
+    const plan = one<{ id: string; project_id: string; steps: string; status: string }>(`SELECT * FROM plan_run WHERE id = ? AND workspace_id = ?`, planId, ctx.workspaceId);
+    if (!plan) return null;
+    if (plan.status !== "proposed") return { already: true, jobs: [] as string[] };
+    const steps = (JSON.parse(plan.steps) as Step[]).map((s, i) => ({ s, i })).sort((a, b) => ORDER.indexOf(a.s.verb) - ORDER.indexOf(b.s.verb));
+    const jobs: string[] = [];
+    let hear: string | null = null;
+    let cut: string | null = null;
+    let last: string | null = null;
+    const base = { workspaceId: ctx.workspaceId, projectId: plan.project_id, createdBy: ctx.userId };
+    for (const { s, i } of steps) {
+      if (!s.runnable) continue;
+      const key = `plan:${plan.id}:${i}`;
+      if (s.verb === "Hear") {
+        const src = one<{ id: string }>(`SELECT id FROM asset WHERE project_id = ? AND workspace_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, plan.project_id, ctx.workspaceId);
+        if (!src) throw new HttpError(409, "Upload a recording first, then approve the plan again.");
+        hear = last = enqueue({ ...base, type: "transcribe", input: { assetId: src.id }, idempotencyKey: key }).id;
+        jobs.push(hear);
+      } else if (s.verb === "Cut") {
+        cut = last = enqueue({ ...base, type: "suggest_clips", input: { count: s.count ?? 3 }, idempotencyKey: key, dependsOn: hear }).id;
+        jobs.push(cut);
+      } else if (s.verb === "Translate") {
+        last = enqueue({ ...base, type: "translate", input: { language: s.language }, idempotencyKey: key, dependsOn: hear }).id;
+        jobs.push(last);
+      } else if (s.verb === "Publish") {
+        last = enqueue({ ...base, type: "publish", input: { cutJobId: cut }, idempotencyKey: key, dependsOn: cut ?? hear }).id;
+        jobs.push(last);
+      } else if (s.verb === "Record") {
+        last = enqueue({ ...base, type: "package", input: {}, idempotencyKey: key, dependsOn: last }).id;
+        jobs.push(last);
       }
-    } else if (s.verb === "Record") {
-      last = enqueue({ ...base, type: "package", input: {}, idempotencyKey: key, dependsOn: last }).id;
-      jobs.push(last);
     }
+    const changed = run(`UPDATE plan_run SET status = 'approved', approved_by = ?, approved_at = ? WHERE id = ? AND status = 'proposed'`, ctx.userId, now(), plan.id).changes;
+    if (!changed) throw new HttpError(409, "This plan was approved or dismissed a moment ago.");
+    return { already: false, jobs };
   });
-  run(`UPDATE plan_run SET status = 'approved', approved_by = ?, approved_at = ? WHERE id = ?`, ctx.userId, now(), plan.id);
-  return { already: false, jobs };
 }

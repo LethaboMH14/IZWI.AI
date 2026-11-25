@@ -3,9 +3,11 @@
 import { z } from "zod";
 import { all, newId, now, one, parse, run } from "./db";
 import { hashToken } from "./crypto";
-import { HttpError, fail } from "./http";
+import { fail } from "./http";
 import { requeueBlocked } from "./jobs";
 import { audit } from "./audit";
+import { appendConsent } from "./ledger";
+import { limit, LIMIT } from "./ratelimit";
 import { refreshTrack } from "./actions";
 import { langName } from "../lib/languages";
 
@@ -20,14 +22,6 @@ export function linkFor(token: string, purpose: "review" | "consent"): Link {
   return l;
 }
 
-const hits = new Map<string, { n: number; at: number }>();
-export function rateLimit(key: string, max: number, windowMs: number) {
-  const t = now();
-  const h = hits.get(key);
-  if (!h || t - h.at > windowMs) hits.set(key, { n: 1, at: t });
-  else if (++h.n > max) throw new HttpError(429, "Too many requests. Wait a minute and try again.");
-  if (hits.size > 5000) for (const [k, v] of hits) if (t - v.at > windowMs) hits.delete(k);
-}
 
 function mediaFor(projectId: string) {
   const proxy = one<{ id: string; mime: string; duration_ms: number | null }>(`SELECT id, mime, duration_ms FROM asset WHERE project_id = ? AND kind = 'proxy' ORDER BY created_at DESC LIMIT 1`, projectId);
@@ -63,7 +57,7 @@ export const ReviewIn = z.discriminatedUnion("action", [
 ]);
 
 export function reviewAction(token: string, input: z.infer<typeof ReviewIn>, ip: string) {
-  rateLimit(`review:${ip}`, 120, 60_000);
+  limit(`review:${ip}`, LIMIT.publicWrite);
   const l = linkFor(token, "review");
   const by = `${input.author} (review link)`;
   if (input.action === "comment") {
@@ -76,6 +70,7 @@ export function reviewAction(token: string, input: z.infer<typeof ReviewIn>, ip:
     const n = run(`UPDATE caption_line SET status = ?, approved_by = ?, approved_at = ? WHERE id = ? AND track_id = ?`, input.approve ? "approved" : "draft", input.approve ? by : null, input.approve ? now() : null, input.lineId, l.target_id).changes;
     if (!n) fail(404, "Line not found.");
     refreshTrack(l.target_id);
+    audit({ workspaceId: l.workspace_id, actor: "guest", action: input.approve ? "review.line_approved" : "review.line_reopened", target: input.lineId, meta: { author: input.author, link: l.id } });
     return { ok: true };
   }
   run(`INSERT INTO comment (id, workspace_id, project_id, link_id, author, at_ms, body, kind, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)`, newId("cmt"), l.workspace_id, l.project_id, l.id, by, input.note || (input.decision === "approve" ? "Approved." : "Changes requested."), input.decision === "approve" ? "approve" : "changes", now());
@@ -102,15 +97,18 @@ export function consentData(token: string) {
 export const ConsentIn = z.object({ decision: z.enum(["grant", "decline", "revoke"]), name: z.string().trim().min(1).max(80) });
 
 export function consentAction(token: string, input: z.infer<typeof ConsentIn>, ip: string, userAgent: string) {
-  rateLimit(`consent:${ip}`, 30, 60_000);
+  limit(`consent:${ip}`, LIMIT.publicWrite);
   const l = linkFor(token, "consent");
-  const c = one<{ id: string; person_id: string; status: string }>(`SELECT id, person_id, status FROM consent WHERE id = ?`, l.target_id) ?? fail(404, "This request was removed.");
+  limit(`consent-link:${l.id}`, LIMIT.consentPerLink);
+  const c = one<{ id: string; person_id: string; status: string; scope: string }>(`SELECT id, person_id, status, scope FROM consent WHERE id = ? AND workspace_id = ?`, l.target_id, l.workspace_id) ?? fail(404, "This request was removed.");
   const person = one<{ name: string }>(`SELECT name FROM person WHERE id = ?`, c.person_id)!;
   const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\s]/gu, "").replace(/\s+/g, " ").trim();
   if (norm(input.name) !== norm(person.name)) fail(400, `Type your name exactly as the creator wrote it: ${person.name}`);
   if (input.decision === "revoke" && c.status !== "granted") fail(409, "There is no yes to withdraw.");
   const status = input.decision === "grant" ? "granted" : input.decision === "decline" ? "declined" : "revoked";
-  run(`UPDATE consent SET status = ?, responded_name = ?, responded_at = ?, user_agent = ?, updated_at = ? WHERE id = ?`, status, input.name, now(), userAgent.slice(0, 200), now(), c.id);
+  const at = now();
+  run(`UPDATE consent SET status = ?, responded_name = ?, responded_at = ?, user_agent = ?, updated_at = ? WHERE id = ?`, status, input.name, at, userAgent.slice(0, 200), at, c.id);
+  const entry = appendConsent({ consentId: c.id, workspaceId: l.workspace_id, projectId: l.project_id, personId: c.person_id, scope: c.scope, decision: status, respondedName: input.name, at });
   if (status === "granted") {
     run(`UPDATE output SET status = 'queued', note = NULL WHERE project_id = ? AND status = 'blocked'`, l.project_id);
     requeueBlocked(l.project_id, "render");
@@ -119,7 +117,7 @@ export function consentAction(token: string, input: z.infer<typeof ConsentIn>, i
     // Finished renders that were never posted are held again; anything already posted stays where it is.
     run(`UPDATE output SET status = 'blocked', note = ? WHERE project_id = ? AND status IN ('ready','queued') AND posted_at IS NULL`, `${person.name} withdrew consent. Remove their part or ask again.`, l.project_id);
   }
-  audit({ workspaceId: l.workspace_id, actor: "guest", action: `consent.${status}`, target: c.id, meta: { name: input.name } });
+  audit({ workspaceId: l.workspace_id, actor: "guest", action: `consent.${status}`, target: c.id, meta: { name: input.name, ledgerSeq: entry.seq } });
   return { status };
 }
 
@@ -142,7 +140,7 @@ export const EnquiryIn = z.object({
 });
 
 export function enquire(slug: string, input: z.infer<typeof EnquiryIn>, ip: string) {
-  rateLimit(`enquiry:${ip}`, 5, 10 * 60_000);
+  limit(`enquiry:${ip}:${slug}`, LIMIT.enquiry);
   const l = one<{ id: string; workspace_id: string; enabled: number }>(`SELECT id, workspace_id, enabled FROM listing WHERE slug = ?`, slug);
   if (!l || !l.enabled) fail(404, "This clip is not listed.");
   run(`INSERT INTO enquiry (id, workspace_id, listing_id, name, contact, organisation, intended_use, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, newId("enq"), l.workspace_id, l.id, input.name, input.contact, input.organisation || null, input.use, now());
@@ -156,8 +154,9 @@ export function assetAllowedForToken(assetId: string, token: string | null, slug
   if (!a) return null;
   if (token) {
     const h = hashToken(token);
-    const l = one<{ project_id: string; expires_at: number; revoked_at: number | null }>(`SELECT project_id, expires_at, revoked_at FROM share_link WHERE token_hash = ?`, h);
-    if (l && !l.revoked_at && l.expires_at > now() && l.project_id === a.project_id && ["proxy", "poster"].includes(a.kind)) return a;
+    // Review and consent links both show the light preview and cover of their own project, nothing else.
+    const l = one<{ project_id: string; purpose: string; expires_at: number; revoked_at: number | null }>(`SELECT project_id, purpose, expires_at, revoked_at FROM share_link WHERE token_hash = ?`, h);
+    if (l && (l.purpose === "review" || l.purpose === "consent") && !l.revoked_at && l.expires_at > now() && l.project_id === a.project_id && ["proxy", "poster"].includes(a.kind)) return a;
   }
   if (slug) {
     const l = one<{ clip_id: string; enabled: number }>(`SELECT clip_id, enabled FROM listing WHERE slug = ?`, slug);

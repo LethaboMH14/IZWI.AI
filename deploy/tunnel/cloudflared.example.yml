@@ -1,0 +1,40 @@
+# Named Cloudflare tunnel for the demo (plan v3 §1.11). ASSUMPTION: the team has not yet chosen between a named
+# Cloudflare tunnel and Tailscale Funnel; this follows the plan's recommendation. Copy to ~/.cloudflared/config.yml,
+# replace the two placeholders, then run: cloudflared tunnel run izwi-demo
+#
+# Only the guest consent flow is reachable through the tunnel. Every other path answers 404 at Cloudflare's edge and
+# never reaches the laptop. Rules are checked top to bottom; `path` is a regular expression on the request path.
+#
+# Set these in web/.env.local on the demo laptop so links, cookies and passkeys use the tunnel hostname:
+#   IZWI_PUBLIC_URL=https://<tunnel-hostname>
+#   BETTER_AUTH_URL=https://<tunnel-hostname>
+#   IZWI_TRUST_PROXY=1        # rate limits use the visitor's address from the tunnel, not the tunnel's own
+#
+# OPEN QUESTION (plan v3 §5b vs §1.11): §5b has the laptop sign in on the tunnel hostname so passkeys match, but this
+# allowlist does not expose the studio (/app, /api/projects ...). Either the laptop signs in by password on localhost
+# (no passkey in the demo), or the studio paths are added here behind Cloudflare Access. Decide before Thu 18:00.
+
+tunnel: <tunnel-uuid>
+credentials-file: C:\Users\<you>\.cloudflared\<tunnel-uuid>.json
+
+ingress:
+  # Guest consent page and its API (token checked by the app).
+  - hostname: <tunnel-hostname>
+    path: ^/c/[A-Za-z0-9_-]{20,64}$
+    service: http://localhost:3187
+  - hostname: <tunnel-hostname>
+    path: ^/api/public/consent/[A-Za-z0-9_-]{20,64}$
+    service: http://localhost:3187
+  # Preview video and cover for that page; the app only serves them with a valid, unexpired consent or review token.
+  - hostname: <tunnel-hostname>
+    path: ^/api/media/[a-z]+_[A-Za-z0-9]+$
+    service: http://localhost:3187
+  # The page's own scripts, styles and fonts.
+  - hostname: <tunnel-hostname>
+    path: ^/_next/static/
+    service: http://localhost:3187
+  - hostname: <tunnel-hostname>
+    path: ^/favicon\.ico$
+    service: http://localhost:3187
+  # Everything else, including /app, /api/projects, /api/providers and /api/auth, is refused here.
+  - service: http_status:404

@@ -19,7 +19,8 @@ export const BIN = {
 };
 
 export const LIMITS = {
-  uploadBytes: Number(process.env.IZWI_MAX_UPLOAD_BYTES || 4 * 1024 ** 3),
+  // 2 GiB by default (was 4 GiB). Raise it per deployment with IZWI_MAX_UPLOAD_BYTES.
+  uploadBytes: Number(process.env.IZWI_MAX_UPLOAD_BYTES || 2 * 1024 ** 3),
   sourceSeconds: Number(process.env.IZWI_MAX_SOURCE_SECONDS || 3 * 3600),
   linkDays: 14,
   // IZWI default reading speed for caption checks. Adjustable per workspace later; not a cited standard.

@@ -311,6 +311,36 @@ CREATE TABLE audit_log (
 CREATE INDEX audit_by_ws ON audit_log(workspace_id, created_at DESC);
 `,
   },
+  {
+    version: 2,
+    name: "security hardening: rate limits, workspace-scoped idempotency, consent ledger",
+    sql: `
+CREATE TABLE rate_limit (
+  key TEXT PRIMARY KEY,
+  window_start INTEGER NOT NULL,
+  count INTEGER NOT NULL
+);
+
+-- Idempotency keys are now stored with the workspace in front, so one tenant's key can never return another's job.
+UPDATE job SET idempotency_key = workspace_id || ':' || idempotency_key
+  WHERE idempotency_key IS NOT NULL AND substr(idempotency_key, 1, length(workspace_id) + 1) != workspace_id || ':';
+
+-- Append-only, hash-chained record of every consent answer. Each row is signed with Ed25519.
+CREATE TABLE consent_ledger (
+  seq INTEGER PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  consent_id TEXT NOT NULL,
+  record TEXT NOT NULL CHECK (json_valid(record)),
+  prev_hash TEXT NOT NULL,
+  hash TEXT NOT NULL UNIQUE,
+  sig TEXT NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX consent_ledger_by_consent ON consent_ledger(consent_id, seq);
+CREATE TRIGGER consent_ledger_no_update BEFORE UPDATE ON consent_ledger BEGIN SELECT RAISE(ABORT, 'consent_ledger is append-only'); END;
+CREATE TRIGGER consent_ledger_no_delete BEFORE DELETE ON consent_ledger BEGIN SELECT RAISE(ABORT, 'consent_ledger is append-only'); END;
+`,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
