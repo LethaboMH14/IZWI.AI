@@ -183,8 +183,9 @@ export function approvePlan(ctx: Ctx, planId: string) {
         continue;
       }
       if (s.verb === "Hear" && !state.hasSource) throw new HttpError(409, "Upload a recording first, then approve the plan again.");
+      // Refuse (not skip) an assistant Hear once a transcript exists, so the creator learns the proposal went stale.
+      if (s.assistant && s.verb === "Hear" && one(`SELECT 1 FROM caption_track WHERE project_id = ? AND workspace_id = ? AND kind = 'source'`, plan.project_id, ctx.workspaceId)) throw new HttpError(409, "This changed since the assistant suggested it");
       if (!runnable(s)) continue;
-      if (s.assistant && s.verb === "Hear" && one(`SELECT 1 FROM caption_track WHERE project_id = ? AND kind = 'source'`, plan.project_id)) throw new HttpError(409, "This changed since the assistant suggested it");
       const key = `plan:${plan.id}:${i}`;
       if (s.verb === "Hear") {
         const src = one<{ id: string }>(`SELECT id FROM asset WHERE project_id = ? AND workspace_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, plan.project_id, ctx.workspaceId);

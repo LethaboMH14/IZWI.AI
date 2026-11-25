@@ -108,7 +108,7 @@ function startTurn(
   if (!provider.model) throw new HttpError(409, "Choose a model for this provider first.");
   const model = compatible.chatModel(provider.model);
   const receipts = new Map<number, BudgetReceipt>();
-  let attempts = 0, tokensIn = 0, tokensOut = 0, outcome = "provider";
+  let attempts = 0, tokensIn = 0, tokensOut = 0, outcome = "error";
   const modelAbort = new AbortController();
   const disconnect = () => modelAbort.abort();
   req.signal.addEventListener("abort", disconnect, { once: true });
@@ -123,7 +123,12 @@ function startTurn(
       // Installed AI SDK contract: streamText(options: StreamTextOptions<TOOLS,...>): StreamTextResult<TOOLS,...>; result.fullStream: AsyncIterableStream<TextStreamPart<TOOLS>>.
       // UI adapter contract: createUIMessageStream({ execute({ writer }) }) returns a ReadableStream<InferUIMessageChunk<UI_MESSAGE>>.
       const result = streamText({ model, system: context.system, messages, tools, maxRetries: 0, maxOutputTokens: 800, abortSignal: modelAbort.signal, timeout: 30_000,
-        experimental_download: async () => { throw new Error("URL downloads are disabled."); },
+        // ai@7 calls this on every turn, with an empty list when nothing needs downloading.
+        // Refuse any real URL; let an empty list through, or no text turn could ever run.
+        experimental_download: async (requested: unknown[]) => {
+          if (requested.length > 0) throw new Error("URL downloads are disabled.");
+          return [];
+        },
         prepareStep: async ({ messages: stepMessages }) => {
           attempts++;
           const toolSchemas = Object.entries(tools).map(([name, value]) => {
@@ -156,12 +161,12 @@ function startTurn(
         saveAssistantTurn({ threadId, projectId: id, workspaceId: ctx.workspaceId, provider, text: input.text, assistantText: finalText, redacted, proposals: saved, requestId, tokensIn, tokensOut });
       });
       writer.write({ type: "data-proposals", data: { proposals: saved } } as never);
-      outcome = "complete";
+      outcome = "ok";
     } catch (e) {
       const canary = e instanceof Error && e.message === "CANARY";
       const budget = e instanceof BudgetError;
       const code = canary ? "canary" : budget ? "budget" : req.signal.aborted ? "timeout" : "provider";
-      outcome = code;
+      outcome = code === "timeout" ? "aborted" : code === "provider" ? "error" : code;
       writer.write({ type: "data-error", data: { code, message: canary ? "The response was stopped by a safety check." : budget ? "The workspace assistant budget is unavailable." : "The assistant could not finish this response." } } as never);
     } finally {
       for (const receipt of receipts.values()) if (!receipt.settled) { try { settleAttempt(receipt, null); } catch {} }

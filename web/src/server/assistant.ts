@@ -48,7 +48,8 @@ export function redactForMayLog(text: string, names: string[]) {
   }
   for (const name of [...new Set(names)].filter((n) => n.trim().length > 1).sort((a, b) => b.length - a.length)) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    replace(new RegExp(`\\b${escaped}\\b`, "gi"), "person");
+    // Unicode-aware boundaries: \b is ASCII-only, so "Zoë" or "Thabo-Ndlovu" variants would slip through.
+    replace(new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "giu"), "person");
   }
   return { text: out, count };
 }
