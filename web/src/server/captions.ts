@@ -38,6 +38,15 @@ export function applyGlossary(segs: Seg[], glossary: GlossaryEntry[]): { segs: S
 
 // Where to break a caption into two rows: among breaks that keep both rows within maxChars, the one closest
 // to the middle, preferring a break after a comma. Falls back to the middle-most break if none fits.
+// South African language names that speech models split or misspell ("ISI Zulu", "Se Sotho").
+// Whisper is often confident about these, so word confidence alone does not catch them.
+const SA_SPLIT = /\b(isi|si|se|tshi|xi)\s+(zulu|xhosa|ndebele|swati|sotho|tswana|pedi|venda|tsonga)\b/i;
+export function lineFlag(text: string, words: { p?: number }[]): string | null {
+  if (SA_SPLIT.test(text.replace(/\n/g, " "))) return "Check spelling: a South African language name looks split.";
+  if (words.some((w) => (w.p ?? 1) < 0.4)) return "Low confidence: listen and check.";
+  return null;
+}
+
 export function breakIndex(words: { w: string }[], maxChars: number): number {
   const text = words.map((w) => w.w).join(" ");
   if (text.length <= maxChars || words.length < 2) return -1;

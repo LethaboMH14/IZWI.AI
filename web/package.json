@@ -50,5 +50,9 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.2.0": true,
+    "esbuild@0.28.2": true
   }
 }

@@ -7,7 +7,7 @@ import { BIN, LIMITS, STORAGE } from "./env";
 import { enqueue, type JobRow } from "./jobs";
 import { absPath, ensureDirFor, sha256File, storageKey } from "./storage";
 import { extractSpeechWav, makeProxy, peaks, poster, probe, ToolError, whisper, type Probe } from "./media";
-import { applyGlossary, buildLines, lineText, sliceLines, toASS, toSRT, toVTT, type CapLine, type GlossaryEntry, type Seg, type Word } from "./captions";
+import { applyGlossary, buildLines, lineFlag, lineText, sliceLines, toASS, toSRT, toVTT, type CapLine, type GlossaryEntry, type Seg, type Word } from "./captions";
 import { clipDefaults, suggestClips } from "./clips";
 import { toEDL, toOTIO } from "./interop";
 import { gateFor, gateReason } from "./rights";
@@ -138,7 +138,7 @@ async function transcribeJob(c: JobCtx) {
       run(
         `INSERT INTO caption_line (id, track_id, idx, start_ms, end_ms, text, words, flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         newId("ln"), trackId, i, l.startMs, l.endMs, l.text, JSON.stringify(l.words),
-        l.words.some((w) => (w.p ?? 1) < 0.4) ? "Low confidence: listen and check." : null,
+        lineFlag(l.text, l.words),
       ),
     );
   });
