@@ -14,6 +14,7 @@ import { gateFor, gateReason } from "./rights";
 import { providerFor, translateLines, type ProviderRow } from "./providers";
 import { isPreset, PRESETS, renderClip } from "./render";
 import { LANGUAGES, langName } from "../lib/languages";
+import { transcribeVoiceJob } from "./voice";
 
 export class Blocked extends Error {}
 export type JobCtx = { job: JobRow; input: Record<string, unknown>; beat: (p?: number, stage?: string) => void; signal: AbortSignal };
@@ -47,10 +48,11 @@ async function addAsset(a: { ws: string; projectId: string; kind: string; key: s
 const tmpDir = (jobId: string) => path.join(STORAGE, "tmp", jobId);
 
 export async function handle(c: JobCtx): Promise<unknown> {
-  switch (c.job.type) {
+  switch (c.job.type as string) {
     case "probe": return probeJob(c);
     case "proxy": return proxyJob(c);
     case "transcribe": return transcribeJob(c);
+    case "voice_transcribe": return transcribeVoiceJob(c);
     case "suggest_clips": return suggestJob(c);
     case "translate": return translateJob(c);
     case "publish": return publishJob(c);

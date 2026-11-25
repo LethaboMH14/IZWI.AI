@@ -11,6 +11,7 @@ async function main() {
   const { toolVersions } = await import("../src/server/media");
   const { parse, run, now, one } = await import("../src/server/db");
   const { appliedVersion, SCHEMA_VERSION } = await import("../src/server/migrations");
+  const { purgeOldAssistantMessages } = await import("../src/server/assistant-store");
 
   if (appliedVersion() < SCHEMA_VERSION) {
     console.error("The database needs migrating. Run: npm run db:migrate");
@@ -29,6 +30,10 @@ async function main() {
     );
   beatWorker();
   const beatTimer = setInterval(beatWorker, 5000);
+  try { purgeOldAssistantMessages(); } catch (e) { console.error("assistant retention purge failed", e instanceof Error ? e.name : "unknown"); }
+  const retentionTimer = setInterval(() => {
+    try { purgeOldAssistantMessages(); } catch (e) { console.error("assistant retention purge failed", e instanceof Error ? e.name : "unknown"); }
+  }, 60 * 60_000);
 
   const stop = () => {
     if (stopping) return;
@@ -84,6 +89,7 @@ async function main() {
     }
   }
   clearInterval(beatTimer);
+  clearInterval(retentionTimer);
   run(`DELETE FROM worker_beat WHERE worker_id = ?`, workerId);
   process.exit(0);
 }

@@ -13,6 +13,7 @@ import { isPreset } from "./render";
 import { providerFor } from "./providers";
 import { LANGUAGES, langName } from "../lib/languages";
 import { applyGlossary, lineText, type GlossaryEntry, type Word } from "./captions";
+import { purgeOldAssistantMessages } from "./assistant-store";
 
 export const KINDS = ["podcast", "video", "lesson", "music", "film", "animation", "client"] as const;
 
@@ -34,6 +35,7 @@ export function updateProject(ctx: Ctx, id: string, patch: Partial<z.infer<typeo
 export function deleteProject(ctx: Ctx, id: string) {
   requireRole(ctx, ["owner", "admin"]);
   const p = projectOf(ctx, id);
+  purgeOldAssistantMessages();
   run(`DELETE FROM project WHERE id = ?`, p.id);
   removeProjectFiles(ctx.workspaceId, p.id);
   audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "project.deleted", target: p.id, meta: { title: p.title } });
@@ -88,8 +90,8 @@ export function createClip(ctx: Ctx, projectId: string, c: { title: string; star
   return { id };
 }
 
-export function updateClip(ctx: Ctx, id: string, patch: z.infer<typeof ClipIn>) {
-  const c = one<{ id: string; project_id: string; title: string; start_ms: number; end_ms: number; status: string }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ?`, id, ctx.workspaceId) ?? fail(404, "Not found.");
+export function updateClip(ctx: Ctx, id: string, patch: z.infer<typeof ClipIn>, expectedProjectId?: string) {
+  const c = one<{ id: string; project_id: string; title: string; start_ms: number; end_ms: number; status: string }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ? AND (? IS NULL OR project_id = ?)`, id, ctx.workspaceId, expectedProjectId ?? null, expectedProjectId ?? null) ?? fail(404, "Not found.");
   const start = patch.startMs ?? c.start_ms, end = patch.endMs ?? c.end_ms;
   if (end - start < 1000) fail(400, "A clip must be at least one second long.");
   const src = one<{ duration_ms: number | null }>(`SELECT duration_ms FROM asset WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, c.project_id);
@@ -209,7 +211,7 @@ function makeLink(ctx: Ctx, projectId: string, purpose: "review" | "consent", ta
   return { id, url: `${PUBLIC_URL}/${purpose === "review" ? "r" : "c"}/${token}` };
 }
 
-export function requestConsent(ctx: Ctx, projectId: string, personId: string, scope: "appearance" | "voice" | "likeness") {
+export function requestConsent(ctx: Ctx, projectId: string, personId: string, scope: "appearance" | "voice" | "likeness", options: { audit?: boolean } = {}) {
   const p = projectOf(ctx, projectId);
   const person = one<{ id: string; name: string }>(`SELECT id, name FROM person WHERE id = ? AND project_id = ?`, personId, p.id) ?? fail(404, "Not found.");
   const consentId = newId("cns");
@@ -218,7 +220,7 @@ export function requestConsent(ctx: Ctx, projectId: string, personId: string, sc
     consentId, ctx.workspaceId, p.id, person.id, scope, consentStatement(person.name, p.title, scope), ctx.userId, now(), now(),
   );
   const link = makeLink(ctx, p.id, "consent", consentId, `Consent: ${person.name}`, LIMITS.linkDays);
-  audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "consent.requested", target: consentId });
+  if (options.audit !== false) audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "consent.requested", target: consentId });
   return { url: link.url, message: `Hi ${person.name}, please confirm you're happy for me to use your part of “${p.title}”. It takes a minute: ${link.url}` };
 }
 

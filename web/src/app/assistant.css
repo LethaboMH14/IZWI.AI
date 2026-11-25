@@ -1,0 +1,59 @@
+/* The Studio assistant panel. Tokens come from globals.css; light theme only. */
+.as-open { margin-left: auto; }
+.as-scrim { position: fixed; inset: 0; background: rgba(33, 30, 26, 0.35); z-index: 60; }
+.as-panel { position: fixed; z-index: 61; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; background: var(--ivory); color: var(--ink); border-left: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden; animation: as-in 0.3s var(--ease); }
+.as-panel[hidden] { display: none; }
+.as-panel header { display: flex; align-items: center; justify-content: space-between; }
+.as-panel h2 { font-family: var(--display); font-size: 1.35rem; margin: 0; }
+.as-close, .as-mic { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--sand); color: var(--ink); }
+.as-mic.on { background: var(--clay); color: var(--paper); }
+.as-panel button:focus-visible, .as-panel select:focus-visible, .as-panel textarea:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.as-panel .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.as-pick { display: grid; gap: 0.4rem; }
+.as-pick label { font-weight: 600; font-size: 0.85rem; }
+.as-pick select, .as-compose textarea { min-height: 44px; padding: 0.55rem 0.8rem; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--paper); color: var(--ink); font: inherit; }
+.as-badge { margin: 0; padding: 0.4rem 0.7rem; border-radius: var(--r-s); font-size: 0.8rem; background: var(--tint); color: var(--ink); }
+.as-badge[data-class="private"] { background: var(--moss-tint); }
+.as-badge[data-class="may_log"] { background: var(--clay-tint); }
+.as-confirm { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0.7rem; border: 1px solid var(--amber); border-radius: var(--r-s); background: var(--paper); }
+.as-confirm p { flex: 1 1 100%; margin: 0; }
+.as-thread { flex: 1 1 auto; min-height: 0; display: flex; }
+.as-view { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; padding-right: 0.25rem; }
+.as-msg { max-width: 92%; padding: 0.6rem 0.8rem; border-radius: var(--r-s); overflow-wrap: anywhere; }
+.as-user { align-self: flex-end; background: var(--tint); }
+.as-asst { align-self: flex-start; background: var(--paper); border: 1px solid var(--line); }
+.as-md p, .as-md ul, .as-md ol { margin: 0 0 0.5rem; }
+.as-md ul, .as-md ol { padding-left: 1.3rem; }
+.as-md code, .as-card .mono { font-family: var(--mono); font-size: 0.85em; background: var(--sand); padding: 0 0.25em; border-radius: 4px; }
+.as-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.4rem; }
+.as-chip { padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--sand); font-size: 0.75rem; }
+.as-chip-warn { background: var(--tint); }
+.as-cards { display: grid; gap: 0.6rem; }
+.as-card { padding: 0.7rem; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--ivory); }
+.as-card h4 { margin: 0 0 0.3rem; font-size: 1rem; }
+.as-card p { margin: 0 0 0.4rem; }
+.as-stale, .as-failed { border-color: var(--clay); }
+.as-src, .as-scope, .as-note { font-size: 0.8rem; color: var(--muted); }
+.as-diff { margin: 0 0 0.5rem; display: grid; gap: 0.25rem; }
+.as-diff div { display: grid; grid-template-columns: 7rem 1fr; gap: 0.5rem; }
+.as-diff dt { font-weight: 600; font-size: 0.8rem; }
+.as-diff dd { margin: 0; }
+.as-diff del { color: var(--clay); }
+.as-diff ins { color: var(--moss); text-decoration: none; font-weight: 600; }
+.as-card-act, .as-prompts { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.as-prompts { list-style: none; padding: 0; margin: 0; }
+.as-prompts .btn { height: auto; min-height: 44px; padding-block: 0.5rem; white-space: normal; text-align: left; }
+.as-err, .as-error { color: var(--clay); font-size: 0.9rem; margin: 0; }
+.as-error p { margin: 0 0 0.35rem; }
+.as-done { color: var(--moss); font-weight: 600; }
+.as-compose { display: grid; gap: 0.5rem; }
+.as-compose textarea { resize: vertical; }
+.as-compose-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.as-send { margin-left: auto; }
+.as-timer { font-size: 0.85rem; }
+@keyframes as-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes as-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 860px) {
+  .as-panel { top: auto; left: 0; width: 100vw; height: min(86dvh, 720px); border-left: 0; border-top: 1px solid var(--line); border-radius: var(--r-m) var(--r-m) 0 0; animation-name: as-up; }
+}
+@media (prefers-reduced-motion: reduce) { .as-panel { animation: none; } }
