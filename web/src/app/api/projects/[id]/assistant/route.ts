@@ -148,7 +148,12 @@ function startTurn(
     try {
       // Installed AI SDK contract: streamText(options: StreamTextOptions<TOOLS,...>): StreamTextResult<TOOLS,...>; result.fullStream: AsyncIterableStream<TextStreamPart<TOOLS>>.
       // UI adapter contract: createUIMessageStream({ execute({ writer }) }) returns a ReadableStream<InferUIMessageChunk<UI_MESSAGE>>.
-      const result = streamText({ model, system: context.system, messages, tools, maxRetries: 0, maxOutputTokens: 800, abortSignal: modelAbort.signal, timeout: 30_000,
+      // Local models on a laptop CPU are slow (measured: qwen3:1.7b took ~140 s for a short tool call with the app running),
+      // so the private class gets a longer limit. Qwen3 also "thinks" before answering unless reasoning is switched off.
+      const local = provider.kind === "ollama";
+      const result = streamText({ model, system: context.system, messages, tools, maxRetries: 0, maxOutputTokens: 800, abortSignal: modelAbort.signal,
+        timeout: local ? 180_000 : 30_000,
+        ...(local ? { providerOptions: { openaiCompatible: { reasoningEffort: "none" } } } : {}),
         // ai@7 calls this on every turn, with an empty list when nothing needs downloading.
         // Refuse any real URL; let an empty list through, or no text turn could ever run.
         experimental_download: async (requested: unknown[]) => {

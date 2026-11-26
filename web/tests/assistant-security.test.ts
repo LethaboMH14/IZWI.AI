@@ -464,7 +464,8 @@ describe("limits", () => {
   }, 60_000);
 
   it("a provider that stalls is cut by the 30 s timeout and the lease is released", async () => {
-    const fx = fixture({ model: "slow:free" });
+    // A hosted-style (may_log) provider: the 30 s limit applies. Local Ollama gets a longer limit; see the next test.
+    const fx = fixture({ kind: "openai_compat", model: "slow:free" });
     const t0 = Date.now();
     const r = await send(fx);
     const took = Date.now() - t0;
@@ -474,6 +475,12 @@ describe("limits", () => {
     expect(count(`SELECT COUNT(*) n FROM assistant_lease WHERE user_id = ?`, fx.user)).toBe(0);
     expect(count(`SELECT COUNT(*) n FROM assistant_message WHERE project_id = ?`, fx.project)).toBe(0);
   }, 60_000);
+
+  it("local Ollama turns get the longer local limit and reasoning switched off", () => {
+    const src = readFileSync(path.join(root, "src", "app", "api", "projects", "[id]", "assistant", "route.ts"), "utf8");
+    expect(src).toMatch(/timeout: local \? 180_000 : 30_000/);
+    expect(src).toMatch(/openaiCompatible: \{ reasoningEffort: "none" \}/);
+  });
 });
 
 describe("voice admission", () => {

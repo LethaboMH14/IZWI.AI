@@ -32,7 +32,7 @@ type ErrorData = { code: "rate_limited" | "budget" | "busy" | "canary" | "provid
 type Stage = Exclude<TabId, "canvas">;
 
 const BADGE: Record<Privacy, string> = {
-  private: "Private: on this machine (owner-configured; IZWI can't verify that it doesn't forward elsewhere)",
+  private: "Private: on this machine (owner-configured; IZWI can't verify that it doesn't forward elsewhere). Local models are slow on a laptop, so an answer can take 1 to 3 minutes.",
   standard: "Standard: Meta",
   may_log: "May log: the provider may keep what you send",
 };
