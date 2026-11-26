@@ -444,6 +444,34 @@ CREATE INDEX job_queue_priority ON job(status, priority DESC, created_at);
     name: "single cross-process whisper lease",
     sql: `CREATE TABLE whisper_lease (id INTEGER PRIMARY KEY CHECK (id = 1), job_id TEXT NOT NULL, expires_at INTEGER NOT NULL);`,
   },
+  {
+    version: 7,
+    name: "provider presets, owner free tier and task model routes",
+    sql: `
+CREATE TABLE provider_v7 (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('openai_compat','madlad_endpoint','asr_endpoint','openrouter','groq','gemini','aimlapi','ollama','meta')),
+  label TEXT NOT NULL, base_url TEXT NOT NULL, model TEXT, key_sealed TEXT, key_hint TEXT,
+  roles TEXT NOT NULL DEFAULT '["plan","translate"]' CHECK (json_valid(roles)),
+  free_tier INTEGER NOT NULL DEFAULT 0 CHECK (free_tier IN (0,1)),
+  last_test_at INTEGER, last_test_ok INTEGER, last_test_note TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+INSERT INTO provider_v7 (id,workspace_id,kind,label,base_url,model,key_sealed,key_hint,roles,last_test_at,last_test_ok,last_test_note,created_by,created_at)
+SELECT id,workspace_id,kind,label,base_url,model,key_sealed,key_hint,roles,last_test_at,last_test_ok,last_test_note,created_by,created_at FROM provider;
+DROP TABLE provider;
+ALTER TABLE provider_v7 RENAME TO provider;
+CREATE TABLE model_route (
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('chat','plan','translate','clips')),
+  provider_id TEXT NOT NULL REFERENCES provider(id) ON DELETE CASCADE,
+  model TEXT NOT NULL CHECK (length(model) BETWEEN 1 AND 120),
+  updated_by TEXT NOT NULL REFERENCES "user"(id), updated_at INTEGER NOT NULL,
+  PRIMARY KEY (workspace_id, role)
+);
+CREATE INDEX model_route_provider ON model_route(provider_id);
+`,
+  },
 ];
 
 function reconcileStudioHistory() {

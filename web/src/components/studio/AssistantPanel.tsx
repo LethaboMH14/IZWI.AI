@@ -252,6 +252,14 @@ function Chat({ projectId, stage, refresh, data }: { projectId: string; stage: S
   const [notice, setNotice] = useState<string | null>(null);
   // What the transport reads at send time. It lives outside render so the callback never touches a ref there.
   const [sel] = useState(() => newSelection(providerId, data.thread));
+  useEffect(() => {
+    let live = true;
+    fetch("/api/providers/routes", { credentials: "same-origin" }).then(r => r.ok ? r.json() as Promise<{ routes?: { role: string; providerId: string }[] }> : null).then(value => {
+      const route = value?.routes?.find(item => item.role === "chat");
+      if (live && route && ready.some(p => p.id === route.providerId)) setProviderId(route.providerId);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [ready]);
   useEffect(() => { chooseProvider(sel, providerId); }, [sel, providerId]);
 
   const initial = useMemo<UIMessage[]>(() => (data.thread?.messages ?? []).map((m) => ({

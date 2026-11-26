@@ -2,7 +2,7 @@
 // vLLM, LM Studio...), one for a MADLAD-400 translation endpoint, one for a speech endpoint.
 // The model proposes; code validates the shape and the rules before anything is saved.
 import { z } from "zod";
-import { all, parse } from "./db";
+import { all, one, parse } from "./db";
 import { unseal } from "./crypto";
 import net from "node:net";
 import { BlockedAddressError, type GuardedInit } from "./ssrf";
@@ -10,14 +10,15 @@ import { sdkFetch } from "./sdk-fetch";
 import { PUBLIC_URL } from "./env";
 import { recordTrialTokens, reserveTrialCall, TrialPolicyError, trialEnabled } from "./provider-trial";
 
-export type ProviderKind = "openai_compat" | "madlad_endpoint" | "asr_endpoint" | "openrouter" | "ollama" | "meta";
+export type ProviderKind = "openai_compat" | "madlad_endpoint" | "asr_endpoint" | "openrouter" | "groq" | "gemini" | "aimlapi" | "ollama" | "meta";
 export type ProviderRow = {
   id: string; workspace_id: string; kind: ProviderKind; label: string; base_url: string; model: string | null;
-  key_sealed: string | null; key_hint: string | null; roles: string; last_test_at: number | null;
+  key_sealed: string | null; key_hint: string | null; roles: string; free_tier?: number; last_test_at: number | null;
   last_test_ok: number | null; last_test_note: string | null; created_by: string; created_at: number;
 };
-export type Role = "plan" | "translate" | "clips" | "asr" | "chat";
+export type Role = "plan" | "translate" | "clips" | "chat";
 export type Privacy = "private" | "standard" | "may_log";
+export const canMarkFreeTier = (workspaceRole: string) => workspaceRole === "owner";
 
 function loopback(host: string): boolean {
   const name = host.replace(/^\[|\]$/g, "").toLowerCase();
@@ -32,9 +33,25 @@ export function privacyOf(p: Pick<ProviderRow, "kind" | "base_url">): Privacy {
   return "may_log";
 }
 
+export const PROVIDER_PRESETS = {
+  openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", verified: true },
+  groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", verified: true },
+  gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/", verified: true },
+  aimlapi: { label: "AI/ML API", baseUrl: "https://api.aimlapi.com/v1", verified: true },
+  meta: { label: "Meta Model API (Standard mode)", baseUrl: "https://api.meta.ai/v1", verified: true },
+  ollama: { label: "Ollama (this machine)", baseUrl: "http://127.0.0.1:11434/v1", verified: true },
+} as const;
+
+export type ModelPrice = { in: number; out: number; source: string; asOf: string; currency: "USD" };
+// Rates are USD per million tokens from the provider's own price list. See engineering/PROVIDERS.md.
+export const PRICE_PER_MTOK: Record<string, ModelPrice> = {
+  "openai/gpt-oss-120b": { in: 0.15, out: 0.60, source: "https://console.groq.com/docs/models", asOf: "2026-11-26", currency: "USD" },
+  "openai/gpt-oss-20b": { in: 0.075, out: 0.30, source: "https://console.groq.com/docs/models", asOf: "2026-11-26", currency: "USD" },
+};
+
 export const publicProvider = (p: ProviderRow) => ({
   id: p.id, kind: p.kind, label: p.label, baseUrl: p.base_url, model: p.model, keyHint: p.key_hint, roles: parse<string[]>(p.roles, []),
-  privacy: privacyOf(p), lastTestAt: p.last_test_at, lastTestOk: p.last_test_ok === null ? null : p.last_test_ok === 1, lastTestNote: p.last_test_note,
+  privacy: privacyOf(p), freeTier: p.free_tier === 1, lastTestAt: p.last_test_at, lastTestOk: p.last_test_ok === null ? null : p.last_test_ok === 1, lastTestNote: p.last_test_note,
 });
 
 export class ProviderError extends Error {
@@ -43,7 +60,80 @@ export class ProviderError extends Error {
   }
 }
 
+export type ListedModel = { id: string; label: string; contextTokens?: number; costTag: "Free" | "Cheap" | "Moderate" | "Expensive" | "Unknown"; estRandPerTurn?: number; estUsdPerTurn?: number; rateAsOf?: string; priceSource?: string };
+const modelCache = new Map<string, { at: number; rows: ListedModel[] }>();
+const livePrices = new Map<string, { in: number; out: number; at: number }>();
+const MODEL_TTL = 10 * 60_000;
+const livePriceKey = (model: string, provider: Pick<ProviderRow, "kind" | "base_url">) => `${provider.kind}\n${provider.base_url}\n${model}`;
+export function livePriceFor(model: string, provider?: Pick<ProviderRow, "kind" | "base_url">): { in: number; out: number } | null {
+  if (!provider) return null;
+  const found = livePrices.get(livePriceKey(model, provider));
+  return found && Date.now() - found.at < MODEL_TTL ? { in: found.in * 1_000_000, out: found.out * 1_000_000 } : null;
+}
+export async function listProviderModels(p: ProviderRow): Promise<ListedModel[]> {
+  const cached = modelCache.get(p.id);
+  if (cached && Date.now() - cached.at < MODEL_TTL) return cached.rows;
+  try {
+    const endpoint = p.kind === "aimlapi" ? `${p.base_url.replace(/\/$/, "")}/models?include=pricing` : `${p.base_url.replace(/\/$/, "")}/models`;
+    const res = await sdkFetch(endpoint, { method: "GET", headers: p.key_sealed ? { authorization: `Bearer ${unseal(p.key_sealed)}` } : {}, signal: AbortSignal.timeout(20_000), maxResponseBytes: 4 * 1024 * 1024 } as RequestInit);
+    if (!res.ok) { await res.body?.cancel(); throw new ProviderError("The provider could not return its model list."); }
+    const payload: unknown = await res.json();
+    const raw: unknown[] = Array.isArray(payload) ? payload : (payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data) ? (payload as { data: unknown[] }).data : []);
+    const usdRate = Number(process.env.IZWI_USD_ZAR);
+    const rateDate = process.env.IZWI_USD_ZAR_ASOF;
+    const rows = raw.flatMap((item): ListedModel[] => {
+      if (!item || typeof item !== "object") return [];
+      const v = item as Record<string, unknown>;
+      if (typeof v.id !== "string" || !/^[\w./:-]{1,160}$/.test(v.id)) return [];
+      const info = v.info && typeof v.info === "object" ? v.info as Record<string, unknown> : {};
+      const pricing = v.pricing && typeof v.pricing === "object" ? v.pricing as Record<string, unknown> : {};
+      const promptPrice = pricing.prompt === null || pricing.prompt === undefined || pricing.prompt === "" ? Number.NaN : Number(pricing.prompt);
+      const completionPrice = pricing.completion === null || pricing.completion === undefined || pricing.completion === "" ? Number.NaN : Number(pricing.completion);
+      const live = Number.isFinite(promptPrice) && promptPrice >= 0 && Number.isFinite(completionPrice) && completionPrice >= 0
+        ? { input: promptPrice, output: completionPrice } : null;
+      if (live) livePrices.set(livePriceKey(v.id, p), { in: live.input, out: live.output, at: Date.now() });
+      const table = PRICE_PER_MTOK[v.id];
+      const input = live ? live.input : table ? table.in / 1_000_000 : undefined;
+      const output = live ? live.output : table ? table.out / 1_000_000 : undefined;
+      // Local (private) providers run on this machine, so they cost nothing; this matches priceFor in budget.ts.
+      const free = privacyOf(p) === "private" || !!p.free_tier || v.id.endsWith(":free") || (input === 0 && output === 0);
+      let costTag: ListedModel["costTag"] = "Unknown", estUsdPerTurn: number | undefined;
+      if (free) costTag = "Free";
+      else if (input !== undefined && output !== undefined) {
+        estUsdPerTurn = (1500 * input + 400 * output);
+        const rate = Number.isFinite(usdRate) && usdRate > 0 ? usdRate : undefined;
+        if (rate !== undefined) {
+          const rands = estUsdPerTurn * rate;
+          costTag = rands < 0.01 ? "Cheap" : rands < 0.1 ? "Moderate" : "Expensive";
+        }
+      }
+      const result: ListedModel = { id: v.id, label: typeof v.name === "string" ? v.name : typeof info.name === "string" ? info.name : v.id, costTag };
+      const context = Number(v.context_length ?? v.context_window ?? info.contextLength);
+      if (Number.isSafeInteger(context) && context > 0) result.contextTokens = context;
+      if (estUsdPerTurn !== undefined) {
+        if (Number.isFinite(usdRate) && usdRate > 0 && rateDate) { result.estRandPerTurn = Math.round(estUsdPerTurn * usdRate * 100_000) / 100_000; result.rateAsOf = rateDate; }
+        else result.estUsdPerTurn = Math.round(estUsdPerTurn * 100_000) / 100_000;
+        result.priceSource = live ? `${p.base_url.replace(/\/$/, "")}/models` : table?.source;
+      }
+      return [result];
+    }).sort((a, b) => {
+      const order = (x: ListedModel) => x.costTag === "Free" ? 0 : x.estRandPerTurn ?? x.estUsdPerTurn ?? Number.POSITIVE_INFINITY;
+      return order(a) - order(b) || (a.contextTokens ?? Number.POSITIVE_INFINITY) - (b.contextTokens ?? Number.POSITIVE_INFINITY) || a.id.localeCompare(b.id);
+    });
+    modelCache.set(p.id, { at: Date.now(), rows });
+    return rows;
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
+    throw new ProviderError("Could not load models from this provider.", true);
+  }
+}
+
 export function providerFor(workspaceId: string, role: Role): ProviderRow | undefined {
+  const routed = one<{ provider_id: string; model: string }>(`SELECT provider_id, model FROM model_route WHERE workspace_id = ? AND role = ?`, workspaceId, role);
+  if (routed) {
+    const provider = one<ProviderRow>(`SELECT * FROM provider WHERE id = ? AND workspace_id = ? AND last_test_ok = 1`, routed.provider_id, workspaceId);
+    return provider ? { ...provider, model: routed.model } : undefined;
+  }
   return all<ProviderRow>(`SELECT * FROM provider WHERE workspace_id = ? ORDER BY created_at`, workspaceId).find(
     (p) => parse<string[]>(p.roles, []).includes(role) && p.last_test_ok === 1,
   );
@@ -62,10 +152,8 @@ export function checkBaseUrl(raw: string, kind?: ProviderKind): string {
   if (u.protocol !== "https:" && u.protocol !== "http:") throw new ProviderError("Only http and https addresses are allowed.");
   if (u.username || u.password) throw new ProviderError("Put the key in the key field, not in the address.");
   if (u.search || u.hash) throw new ProviderError("Leave out the ? and # parts of the address.");
-  if ((kind === "openrouter" || kind === "meta") && u.protocol !== "https:") throw new ProviderError("External providers must use https.");
-  if (kind === "openrouter") return "https://openrouter.ai/api/v1";
-  if (kind === "meta") return "https://api.meta.ai/v1";
   if (kind === "ollama" && (u.protocol !== "http:" || !loopback(u.hostname))) throw new ProviderError("Ollama must use an http loopback address on this machine.");
+  if (kind && Object.hasOwn(PROVIDER_PRESETS, kind)) return PROVIDER_PRESETS[kind as keyof typeof PROVIDER_PRESETS].baseUrl;
   if (kind !== "ollama" && u.protocol !== "https:") throw new ProviderError("External providers must use https.");
   const h = u.hostname;
   if (/^169\.254\./.test(h) || h === "metadata.google.internal" || h === "[fd00:ec2::254]") throw new ProviderError("That address is not allowed.");
@@ -75,6 +163,7 @@ export function checkBaseUrl(raw: string, kind?: ProviderKind): string {
 
 // The key is unsealed here, inside the request that needs it, and never stored decrypted.
 const authHeader = (p: ProviderRow): Record<string, string> => (p.key_sealed ? { authorization: `Bearer ${unseal(p.key_sealed)}` } : {});
+const endpoint = (p: ProviderRow, path: string) => `${p.base_url.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 
 // Fixed messages only: the upstream body is never shown, because it can echo the request, the key or internal detail.
 const STATUS_HINT: Record<number, string> = {
@@ -112,7 +201,7 @@ export async function chatJSON<T>(p: ProviderRow, system: string, user: string, 
   }
   const maxTokens = trialEnabled() ? Math.min(o.maxTokens ?? 1000, 1000) : o.maxTokens ?? 2000;
   const send = (jsonMode: boolean) =>
-    call(p, `${p.base_url}/chat/completions`, {
+    call(p, endpoint(p, "chat/completions"), {
       method: "POST",
       headers: { "content-type": "application/json", ...authHeader(p) },
       body: JSON.stringify({
@@ -163,10 +252,10 @@ async function madlad(p: ProviderRow, text: string, lang: string) {
 
 export async function testProvider(p: ProviderRow): Promise<{ ok: boolean; note: string }> {
   try {
-    if (p.kind === "openrouter" || p.kind === "ollama" || p.kind === "meta" || parse<string[]>(p.roles, []).includes("chat")) {
+    if (["openrouter", "ollama", "meta", "groq", "gemini", "aimlapi"].includes(p.kind) || parse<string[]>(p.roles, []).includes("chat")) {
       if (!p.model) throw new ProviderError(`${p.label} has no model name. Add one in Run on.`);
       const headers = { "content-type": "application/json", ...authHeader(p) };
-      const { response } = await call(p, `${p.base_url}/chat/completions`, {
+      const { response } = await call(p, endpoint(p, "chat/completions"), {
         method: "POST", headers,
         body: JSON.stringify({ model: p.model, messages: [{ role: "user", content: "Hi" }], max_tokens: 1 }),
         signal: AbortSignal.timeout(60_000),

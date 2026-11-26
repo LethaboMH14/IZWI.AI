@@ -1,13 +1,22 @@
 import { newId, now, one, run } from "./db";
-import { privacyOf, type ProviderRow } from "./providers";
+import { PRICE_PER_MTOK, livePriceFor, privacyOf, type ProviderRow } from "./providers";
 
 // Rates are integer cents per million tokens. Add only reviewed, versioned price sources here.
-export const PRICE_PER_MTOK: Record<string, { in: number; out: number }> = {};
+export { PRICE_PER_MTOK };
 
-export function priceFor(model: string, provider?: Pick<ProviderRow, "kind" | "base_url">): { in: number; out: number } | null {
+export function priceFor(model: string, provider?: Pick<ProviderRow, "kind" | "base_url" | "free_tier">, live?: { in: number; out: number } | null): { in: number; out: number } | null {
   if (provider && privacyOf(provider) === "private") return { in: 0, out: 0 };
+  if (provider?.free_tier === 1) return { in: 0, out: 0 };
   if (model.endsWith(":free")) return { in: 0, out: 0 };
-  return PRICE_PER_MTOK[model] ?? null;
+  const liveUsdPerMillion = live ?? livePriceFor(model, provider);
+  const tableUsdPerMillion = PRICE_PER_MTOK[model];
+  const p = liveUsdPerMillion ?? (tableUsdPerMillion ? { in: tableUsdPerMillion.in, out: tableUsdPerMillion.out } : null);
+  const usdZar = Number(process.env.IZWI_USD_ZAR);
+  // Budget caps are ZAR cents. Without a configured exchange rate we cannot reserve
+  // a paid USD-priced request safely, even though the UI can still show its USD estimate.
+  return p && Number.isFinite(usdZar) && usdZar > 0
+    ? { in: Math.ceil(p.in * usdZar * 100), out: Math.ceil(p.out * usdZar * 100) }
+    : null;
 }
 
 export type Usage = { input: number; output: number };
@@ -25,7 +34,7 @@ const centsFor = (input: number, output: number, price: { in: number; out: numbe
 
 export function reserveAttempt(args: {
   workspaceId: string; userId: string; providerId: string; model: string;
-  provider?: Pick<ProviderRow, "kind" | "base_url">;
+  provider?: Pick<ProviderRow, "kind" | "base_url" | "free_tier">;
   serializedRequestBytes: number; maxOutputTokens: number;
 }): BudgetReceipt {
   if (!Number.isSafeInteger(args.serializedRequestBytes) || args.serializedRequestBytes < 0 ||
