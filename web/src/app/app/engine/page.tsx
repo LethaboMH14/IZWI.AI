@@ -8,6 +8,7 @@ import { useLive } from "@/lib/useLive";
 import { ago, bytes } from "@/lib/format";
 import { authClient } from "@/lib/auth-client";
 import "../../settings.css";
+import { ProviderRouting, ModelList } from "@/components/engine/ProviderRouting";
 
 /* ---------- This device (read in the browser, nothing leaves it) ---------- */
 type Specs = { cores: number | null; memGb: number | null; gpu: string | null; webgpu: boolean; browser: string; freeGb: number | null; net: string | null; saveData: boolean };
@@ -166,11 +167,11 @@ function Worker() {
 }
 
 /* ---------- Your own AI keys ---------- */
-type Kind = "openai_compat" | "madlad_endpoint" | "asr_endpoint" | "openrouter" | "ollama" | "meta";
+type Kind = "openai_compat" | "madlad_endpoint" | "asr_endpoint" | "openrouter" | "groq" | "gemini" | "aimlapi" | "ollama" | "meta";
 type Role = "plan" | "translate" | "clips" | "asr" | "chat";
-type Provider = { id: string; kind: Kind; label: string; baseUrl: string; model: string | null; keyHint: string | null; roles: Role[]; privacy: "private" | "standard" | "may_log"; lastTestAt: number | null; lastTestOk: boolean | null; lastTestNote: string | null };
+type Provider = { id: string; kind: Kind; label: string; baseUrl: string; model: string | null; keyHint: string | null; freeTier: boolean; roles: Role[]; privacy: "private" | "standard" | "may_log"; lastTestAt: number | null; lastTestOk: boolean | null; lastTestNote: string | null };
 
-const KIND_LABEL: Record<Kind, string> = { openai_compat: "OpenAI-compatible chat", madlad_endpoint: "MADLAD-400 endpoint", asr_endpoint: "Speech endpoint", openrouter: "OpenRouter", ollama: "Ollama", meta: "Meta API" };
+const KIND_LABEL: Record<Kind, string> = { openai_compat: "OpenAI-compatible chat", madlad_endpoint: "MADLAD-400 endpoint", asr_endpoint: "Speech endpoint", openrouter: "OpenRouter", groq: "Groq", gemini: "Gemini", aimlapi: "AI/ML API", ollama: "Ollama", meta: "Meta Model API (Standard mode)" };
 const ROLE_LABEL: Record<Role, string> = { plan: "Plan", translate: "Translate", clips: "Find clips", asr: "Transcribe", chat: "Studio assistant chat" };
 const PRIVACY_TEXT: Record<Provider["privacy"], string> = {
   private: "Private: on this machine (owner-configured; IZWI can't verify that it doesn't forward elsewhere)",
@@ -178,12 +179,14 @@ const PRIVACY_TEXT: Record<Provider["privacy"], string> = {
   may_log: "May log: the provider may keep what you send",
 };
 
-type Preset = { id: string; name: string; kind: Kind; label: string; baseUrl: string; modelHint: string; roles: Role[]; keyOptional?: boolean; note?: string };
+type Preset = { id: string; name: string; kind: Kind; label: string; baseUrl: string; modelHint: string; roles: Role[]; verified?: boolean; keyOptional?: boolean; note?: string };
 const PRESETS: Preset[] = [
-  { id: "aiml", name: "AI/ML API", kind: "openai_compat", label: "AI/ML API", baseUrl: "https://api.aimlapi.com/v1", modelHint: "model id from your AI/ML API dashboard", roles: ["plan", "translate"] },
-  { id: "openrouter", name: "OpenRouter", kind: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", modelHint: "provider/model from OpenRouter", roles: ["plan", "translate", "chat"] },
-  { id: "ollama", name: "Ollama on this computer", kind: "ollama", label: "Ollama (this computer)", baseUrl: "http://127.0.0.1:11434/v1", modelHint: "a model you have pulled", roles: ["plan", "translate", "chat"], keyOptional: true, note: "No key needed. Big local models slow this PC down while they run." },
-  { id: "meta", name: "Meta API", kind: "meta", label: "Meta API", baseUrl: "https://api.meta.ai/v1", modelHint: "model id from Meta's API", roles: ["plan", "translate", "chat"] },
+    { id: "aiml", name: "AI/ML API", kind: "aimlapi", label: "AI/ML API", baseUrl: "https://api.aimlapi.com/v1", modelHint: "model id from your AI/ML API dashboard", roles: ["plan", "translate", "chat"], verified: true },
+  { id: "openrouter", name: "OpenRouter", kind: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", modelHint: "provider/model from OpenRouter", roles: ["plan", "translate", "chat"], verified: true },
+    { id: "groq", name: "Groq", kind: "groq", label: "Groq", baseUrl: "https://api.groq.com/openai/v1", modelHint: "model id from Groq", roles: ["plan", "translate", "chat"], verified: true },
+    { id: "gemini", name: "Gemini", kind: "gemini", label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/", modelHint: "Gemini model id", roles: ["plan", "translate", "chat"], verified: true },
+  { id: "ollama", name: "Ollama on this computer", kind: "ollama", label: "Ollama (this computer)", baseUrl: "http://127.0.0.1:11434/v1", modelHint: "a model you have pulled", roles: ["plan", "translate", "chat"], verified: true, keyOptional: true, note: "No key needed. Big local models slow this PC down while they run." },
+  { id: "meta", name: "Meta API", kind: "meta", label: "Meta API", baseUrl: "https://api.meta.ai/v1", modelHint: "model id from Meta's API", roles: ["plan", "translate", "chat"], verified: true },
   { id: "madlad", name: "MADLAD-400 endpoint", kind: "madlad_endpoint", label: "MADLAD-400", baseUrl: "", modelHint: "", roles: ["translate"], keyOptional: true, note: "Paste the URL of an endpoint you deployed, for example on Hugging Face or Kaggle." },
   { id: "asr", name: "Speech endpoint", kind: "asr_endpoint", label: "Speech endpoint", baseUrl: "", modelHint: "", roles: ["asr"], keyOptional: true, note: "Paste the URL of a transcription endpoint that accepts a WAV file." },
 ];
@@ -225,7 +228,9 @@ function ProviderCard({ p, onChange }: { p: Provider; onChange: () => void }) {
         {p.model && <div><dt>Model</dt><dd>{p.model}</dd></div>}
         <div><dt>Key</dt><dd className="mono">{p.keyHint ? `ends in ${p.keyHint}` : "No key stored"}</dd></div>
         <div><dt>Used for</dt><dd>{p.roles.map((r) => ROLE_LABEL[r] ?? r).join(", ")}</dd></div>
+        <div><dt>Free tier</dt><dd>{p.freeTier ? "Owner marked" : "Not marked"}</dd></div>
       </dl>
+      <ModelList id={p.id} onChoose={async (m) => { try { await api(`/api/providers/${p.id}`, { method: "PATCH", body: { model: m.id, roles: p.roles } }); onChange(); } catch (e) { setMsg((e as Error).message); } }} />
       {p.lastTestAt && <p className="st-test">{p.lastTestNote} <span className="mono">· {ago(p.lastTestAt)}</span></p>}
       {msg && <p className="st-note bad" role="alert">{msg}</p>}
       <div className="st-actions">
@@ -254,6 +259,9 @@ function AddProvider({ onAdded }: { onAdded: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Provider | null>(null);
+  const [freeTier, setFreeTier] = useState(false);
+  const [canFreeTier, setCanFreeTier] = useState(false);
+  useEffect(() => { api<{ canFreeTier: boolean }>("/api/providers/routes").then(v => setCanFreeTier(v.canFreeTier)).catch(() => {}); }, []);
 
   const pick = (p: Preset) => {
     setPreset(p); setKind(p.kind); setLabel(p.label); setBaseUrl(p.baseUrl); setModel(""); setRoles(p.roles); setError(""); setResult(null);
@@ -266,7 +274,7 @@ function AddProvider({ onAdded }: { onAdded: () => void }) {
     if (!roles.length) { setError("Pick at least one job for this provider."); return; }
     setBusy(true);
     try {
-      const p = await api<Provider>("/api/providers", { method: "POST", body: { kind, label: label.trim(), baseUrl: baseUrl.trim(), model: model.trim() || undefined, key: key.trim() || undefined, roles } });
+      const p = await api<Provider>("/api/providers", { method: "POST", body: { kind, label: label.trim(), baseUrl: baseUrl.trim(), model: model.trim() || undefined, key: key.trim() || undefined, roles, freeTier } });
       setResult(p); setKey(""); onAdded();
     } catch (err) { setError(errText(err, true)); }
     setBusy(false);
@@ -277,7 +285,7 @@ function AddProvider({ onAdded }: { onAdded: () => void }) {
       <h3>Add a provider</h3>
       <p className="st-note" style={{ marginTop: "0.4rem" }}>Your key is encrypted on this server and never shown again. Only its last few characters are kept so you can recognise it. Only owners and admins can add or remove keys.</p>
       <div className="st-presets" role="group" aria-label="Start from a preset">
-        {PRESETS.map((p) => <button type="button" key={p.id} aria-pressed={preset?.id === p.id} onClick={() => pick(p)}>{p.name}</button>)}
+        {PRESETS.map((p) => <button type="button" key={p.id} aria-pressed={preset?.id === p.id} onClick={() => pick(p)}>{p.name}{p.verified === false ? " · unverified" : p.verified ? " · verified" : ""}</button>)}
         <button type="button" aria-pressed={preset === null && label !== ""} onClick={() => { setPreset(null); setKind("openai_compat"); setLabel(""); setBaseUrl(""); setModel(""); setRoles([]); setResult(null); setError(""); }}>Something else</button>
       </div>
       {preset?.note && <p className="st-note" role="note" style={{ marginBottom: "1rem" }}>{preset.note}</p>}
@@ -290,9 +298,10 @@ function AddProvider({ onAdded }: { onAdded: () => void }) {
             </select>
           </label>
         </div>
-        <label className="field"><span>Address (base URL)</span><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required inputMode="url" placeholder={kind === "openai_compat" ? "https://…/v1" : "https://your-endpoint…"} /></label>
+        <label className="field"><span>Address (base URL)</span><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} readOnly={!!preset && kind !== "openai_compat"} required inputMode="url" placeholder="https://provider.example/v1" /></label>
         {["openai_compat", "openrouter", "ollama", "meta"].includes(kind) && <label className="field"><span>Model</span><input value={model} onChange={(e) => setModel(e.target.value)} required placeholder={preset?.modelHint || "the model id this provider gives you"} /></label>}
         <label className="field"><span>Key {preset?.keyOptional || kind !== "openai_compat" ? "(optional)" : ""}</span><input type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} placeholder="Paste it here once" /><small>Encrypted on this server. Never shown again.</small></label>
+        {canFreeTier && ["groq", "gemini", "openrouter"].includes(kind) && <label className="field"><span><input type="checkbox" checked={freeTier} onChange={e => setFreeTier(e.target.checked)} /> I have this provider&apos;s free tier</span></label>}
         <fieldset className="st-roles">
           <legend>Use it for</legend>
           <div>{(Object.keys(ROLE_LABEL) as Role[]).map((r) => <label key={r}><input type="checkbox" checked={roles.includes(r)} onChange={() => toggle(r)} /> {ROLE_LABEL[r]}</label>)}</div>
@@ -398,6 +407,7 @@ export default function Engine() {
       <DeviceCheck />
       <Worker />
       <Keys />
+        <ProviderRouting />
       <Passkeys />
     </div>
   );

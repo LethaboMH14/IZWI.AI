@@ -57,6 +57,24 @@ describe("assistant budget reservations and leases", () => {
     expect(r.reservedCents).toBe(0);
   });
 
+  it("allows an owner-marked free tier at zero cost but keeps token caps, and refuses unknown models", () => {
+    const ws = workspace("budget-free-tier");
+    const provider = { kind: "groq" as const, base_url: "https://api.groq.com/openai/v1", free_tier: 1 };
+    expect(priceFor("any-provider-model", provider)).toEqual({ in: 0, out: 0 });
+    expect(priceFor("unknown-model", { kind: "groq", base_url: "https://api.groq.com/openai/v1" })).toBeNull();
+    const r = reserveAttempt({ workspaceId: ws, userId: "u", providerId: "p", model: "any-provider-model", provider, serializedRequestBytes: 13, maxOutputTokens: 7 });
+    expect(r.reservedTokens).toBe(20);
+    expect(r.reservedCents).toBe(0);
+  });
+
+  it("requires the configured exchange rate before reserving a paid USD price in the ZAR budget", () => {
+    expect(priceFor("openai/gpt-oss-20b")).toBeNull();
+    vi.stubEnv("IZWI_USD_ZAR", "18.5");
+    vi.stubEnv("IZWI_USD_ZAR_ASOF", "2026-11-26");
+    expect(priceFor("openai/gpt-oss-20b")).toEqual({ in: 139, out: 555 });
+    vi.unstubAllEnvs();
+  });
+
   it("allows one stream per user and reclaims an expired lease", () => {
     const ws = workspace("budget-lease");
     const user = "user_budget-lease";
