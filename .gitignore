@@ -23,3 +23,6 @@ models/
 work/
 *.part
 .DS_Store
+
+# Browser-test snapshots (may contain test logins and link tokens)
+.playwright-mcp/
