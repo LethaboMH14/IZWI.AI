@@ -7,7 +7,7 @@ import http from "node:http";
 import https from "node:https";
 import dns from "node:dns";
 import net from "node:net";
-import { Readable, Transform } from "node:stream";
+import { Transform } from "node:stream";
 
 export class BlockedAddressError extends Error {
   constructor() {
@@ -94,19 +94,32 @@ export function guardedFetch(url: string, init: GuardedInit = {}): Promise<Respo
   const mod = u.protocol === "https:" ? https : http;
   const max = init.maxResponseBytes ?? 16 * 1024 * 1024;
   return new Promise((resolve, reject) => {
+    let response: http.IncomingMessage | undefined;
+    let settled = false;
+    const destroyTransport = () => {
+      response?.destroy();
+      req.destroy();
+    };
     const req = mod.request(
       u,
       { method: init.method ?? "GET", headers: init.headers, lookup: guardedLookup as unknown as net.LookupFunction, signal: init.signal },
       (res) => {
+        response = res;
         let seen = 0;
         const counted = new Transform({
           transform(c: Buffer, _enc, done) {
             seen += c.length;
-            if (seen > max) return done(new Error("The provider sent more data than IZWI accepts."));
+            if (seen > max) {
+              const error = new Error("The provider sent more data than IZWI accepts.");
+              destroyTransport();
+              return done(error);
+            }
             done(null, c);
           },
         });
-        res.on("error", (e) => counted.destroy(e));
+        res.on("error", (e) => { destroyTransport(); counted.destroy(e); });
+        res.on("aborted", () => { destroyTransport(); counted.destroy(new Error("The provider closed the response early.")); });
+        counted.on("error", () => destroyTransport());
         res.pipe(counted);
         const headers = new Headers();
         for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
@@ -114,7 +127,25 @@ export function guardedFetch(url: string, init: GuardedInit = {}): Promise<Respo
         // Statuses that must not carry a body (Fetch spec "null body status"); building a Response with one throws.
         const nullBody = status === 101 || status === 103 || status === 204 || status === 205 || status === 304 || (init.method ?? "GET") === "HEAD";
         try {
-          resolve(new Response(nullBody ? null : (Readable.toWeb(counted) as ReadableStream), { status, headers }));
+          if (nullBody) { destroyTransport(); counted.destroy(); }
+          let cancelled = false;
+          const chunks = counted[Symbol.asyncIterator]();
+          const stream = nullBody ? null : new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              try {
+                const { done, value } = await chunks.next();
+                if (cancelled) return;
+                if (done) controller.close();
+                else controller.enqueue(value);
+              } catch (error) {
+                destroyTransport();
+                if (!cancelled) controller.error(error);
+              }
+            },
+            cancel() { cancelled = true; destroyTransport(); counted.destroy(); },
+          });
+          settled = true;
+          resolve(new Response(stream, { status, headers }));
         } catch (e) {
           // An unusual upstream status must reject the call, never throw inside this callback and crash the process.
           res.destroy();
@@ -123,7 +154,9 @@ export function guardedFetch(url: string, init: GuardedInit = {}): Promise<Respo
         }
       },
     );
-    req.on("error", reject);
+    req.on("error", (error) => { destroyTransport(); if (!settled) reject(error); });
+    if (init.signal?.aborted) { destroyTransport(); reject(init.signal.reason ?? new Error("The request was aborted.")); return; }
+    init.signal?.addEventListener("abort", destroyTransport, { once: true });
     if (init.body !== undefined) req.write(init.body);
     req.end();
   });

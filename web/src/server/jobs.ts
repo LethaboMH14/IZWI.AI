@@ -4,7 +4,7 @@
 import { all, newId, now, one, parse, run, tx } from "./db";
 import { gateFor } from "./rights";
 
-export type JobType = "probe" | "proxy" | "transcribe" | "suggest_clips" | "translate" | "publish" | "render" | "package";
+export type JobType = "probe" | "proxy" | "transcribe" | "voice_transcribe" | "suggest_clips" | "translate" | "publish" | "render" | "package";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "blocked";
 export type JobRow = {
   id: string; workspace_id: string; project_id: string | null; type: JobType; status: JobStatus;
@@ -12,11 +12,12 @@ export type JobRow = {
   attempts: number; max_attempts: number; idempotency_key: string | null; depends_on: string | null;
   run_after: number; lease_until: number | null; worker_id: string | null; created_by: string | null;
   created_at: number; started_at: number | null; finished_at: number | null;
+  priority: number;
 };
 
 export function enqueue(j: {
   workspaceId: string; projectId: string | null; type: JobType; input?: unknown;
-  idempotencyKey?: string; dependsOn?: string | null; createdBy?: string | null; maxAttempts?: number;
+  idempotencyKey?: string; dependsOn?: string | null; createdBy?: string | null; maxAttempts?: number; priority?: number;
 }): JobRow {
   // Keys are scoped to the workspace: the same key in two workspaces names two different jobs.
   const key = j.idempotencyKey ? `${j.workspaceId}:${j.idempotencyKey}` : null;
@@ -28,11 +29,20 @@ export function enqueue(j: {
     }
     const id = newId("job");
     run(
-      `INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, depends_on, run_after, created_by, created_at, max_attempts)
-       VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, depends_on, run_after, created_by, created_at, max_attempts, priority)
+       VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, j.workspaceId, j.projectId, j.type, JSON.stringify(j.input ?? {}), key,
-      j.dependsOn ?? null, now(), j.createdBy ?? null, now(), j.maxAttempts ?? 3,
+      j.dependsOn ?? null, now(), j.createdBy ?? null, now(), j.maxAttempts ?? 3, j.priority ?? 0,
     );
+    return one<JobRow>(`SELECT * FROM job WHERE id = ?`, id)!;
+  });
+}
+
+export function enqueueVoice(j: { workspaceId: string; projectId: string; input: unknown; createdBy: string; idempotencyKey: string }): JobRow | null {
+  return tx(() => {
+    if (one(`SELECT 1 FROM job WHERE created_by = ? AND type = 'voice_transcribe' AND status IN ('queued','running') LIMIT 1`, j.createdBy)) return null;
+    const id = newId("job");
+    run(`INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, run_after, created_by, created_at, max_attempts, priority) VALUES (?, ?, ?, 'voice_transcribe', 'queued', ?, ?, ?, ?, ?, 3, 10)`, id, j.workspaceId, j.projectId, JSON.stringify(j.input), `${j.workspaceId}:${j.idempotencyKey}`, now(), j.createdBy, now());
     return one<JobRow>(`SELECT * FROM job WHERE id = ?`, id)!;
   });
 }
@@ -45,7 +55,7 @@ export function claim(workerId: string, leaseMs: number): JobRow | undefined {
        SELECT j.id FROM job j
        WHERE j.status = 'queued' AND j.run_after <= ?
          AND (j.depends_on IS NULL OR EXISTS (SELECT 1 FROM job d WHERE d.id = j.depends_on AND d.status = 'succeeded'))
-       ORDER BY j.created_at LIMIT 1
+       ORDER BY j.priority DESC, j.created_at LIMIT 1
      )
      RETURNING *`,
     workerId, t + leaseMs, t, t,
@@ -88,6 +98,27 @@ export function block(id: string, workerId: string, reason: string) {
 
 export function cancel(id: string, workspaceId: string) {
   return run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status IN ('queued','blocked','running')`, now(), id, workspaceId).changes > 0;
+}
+
+export function cancelQueued(id: string, workspaceId: string) {
+  return run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status = 'queued'`, now(), id, workspaceId).changes > 0;
+}
+
+export function acquireWhisperLease(jobId: string, leaseMs = 300_000) {
+  const t = now();
+  return Boolean(one(`INSERT INTO whisper_lease (id, job_id, expires_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET job_id = excluded.job_id, expires_at = excluded.expires_at WHERE whisper_lease.expires_at <= ? RETURNING job_id`, jobId, t + leaseMs, t));
+}
+
+export function renewWhisperLease(jobId: string, leaseMs = 300_000) {
+  return run(`UPDATE whisper_lease SET expires_at = ? WHERE id = 1 AND job_id = ? AND expires_at > ?`, now() + leaseMs, jobId, now()).changes > 0;
+}
+
+export function releaseWhisperLease(jobId: string) {
+  return run(`DELETE FROM whisper_lease WHERE id = 1 AND job_id = ?`, jobId).changes > 0;
+}
+
+export function deferWhisperJob(id: string, workerId: string, delayMs = 2000) {
+  return run(`UPDATE job SET status = 'queued', attempts = MAX(0, attempts - 1), run_after = ?, lease_until = NULL, worker_id = NULL WHERE id = ? AND worker_id = ? AND status = 'running'`, now() + delayMs, id, workerId).changes > 0;
 }
 
 function queueRenderOutput(job: JobRow): boolean {

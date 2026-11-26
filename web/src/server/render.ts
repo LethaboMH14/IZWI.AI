@@ -63,6 +63,6 @@ export async function renderClip(o: {
   }
   const args = ["-ss", (o.startMs / 1000).toFixed(3), "-t", (dur / 1000).toFixed(3), "-i", o.src, "-filter_complex", parts.join(";"), "-map", "[v]"];
   if (o.hasAudio) args.push("-map", "[aout]", "-c:a", "aac", "-b:a", P.abr);
-  args.push("-t", (dur / 1000).toFixed(3), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(P.crf), "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart", o.out);
+  args.push("-t", (dur / 1000).toFixed(3), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(P.crf), "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart", "-f", "mp4", o.out); // explicit muxer: the release step renders to a .mp4.tmp name first
   await ffmpeg(args, { totalMs: dur, onProgress: o.onProgress, signal: o.signal, cwd: o.workDir });
 }

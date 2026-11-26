@@ -4,20 +4,37 @@
 import { z } from "zod";
 import { all, parse } from "./db";
 import { unseal } from "./crypto";
-import { BlockedAddressError, guardedFetch, type GuardedInit } from "./ssrf";
+import net from "node:net";
+import { BlockedAddressError, type GuardedInit } from "./ssrf";
+import { sdkFetch } from "./sdk-fetch";
+import { PUBLIC_URL } from "./env";
 import { recordTrialTokens, reserveTrialCall, TrialPolicyError, trialEnabled } from "./provider-trial";
 
-export type ProviderKind = "openai_compat" | "madlad_endpoint" | "asr_endpoint";
+export type ProviderKind = "openai_compat" | "madlad_endpoint" | "asr_endpoint" | "openrouter" | "ollama" | "meta";
 export type ProviderRow = {
   id: string; workspace_id: string; kind: ProviderKind; label: string; base_url: string; model: string | null;
   key_sealed: string | null; key_hint: string | null; roles: string; last_test_at: number | null;
   last_test_ok: number | null; last_test_note: string | null; created_by: string; created_at: number;
 };
-export type Role = "plan" | "translate" | "clips" | "asr";
+export type Role = "plan" | "translate" | "clips" | "asr" | "chat";
+export type Privacy = "private" | "standard" | "may_log";
+
+function loopback(host: string): boolean {
+  const name = host.replace(/^\[|\]$/g, "").toLowerCase();
+  return name === "localhost" || (net.isIP(name) === 4 && name.startsWith("127.")) || name === "::1";
+}
+
+export function privacyOf(p: Pick<ProviderRow, "kind" | "base_url">): Privacy {
+  let url: URL;
+  try { url = new URL(p.base_url); } catch { return "may_log"; }
+  if (p.kind === "ollama" && loopback(url.hostname)) return "private";
+  if (p.kind === "meta" && url.protocol === "https:" && url.hostname === "api.meta.ai") return "standard";
+  return "may_log";
+}
 
 export const publicProvider = (p: ProviderRow) => ({
   id: p.id, kind: p.kind, label: p.label, baseUrl: p.base_url, model: p.model, keyHint: p.key_hint, roles: parse<string[]>(p.roles, []),
-  lastTestAt: p.last_test_at, lastTestOk: p.last_test_ok === null ? null : p.last_test_ok === 1, lastTestNote: p.last_test_note,
+  privacy: privacyOf(p), lastTestAt: p.last_test_at, lastTestOk: p.last_test_ok === null ? null : p.last_test_ok === 1, lastTestNote: p.last_test_note,
 });
 
 export class ProviderError extends Error {
@@ -35,7 +52,7 @@ export function providerFor(workspaceId: string, role: Role): ProviderRow | unde
 // Early feedback when a provider is saved. The real check is in guardedFetch, at connect time, after DNS.
 // Cloud metadata addresses are always refused; private ranges are refused when IZWI_HOSTED=1
 // (a local install needs localhost for Ollama).
-export function checkBaseUrl(raw: string): string {
+export function checkBaseUrl(raw: string, kind?: ProviderKind): string {
   let u: URL;
   try {
     u = new URL(raw);
@@ -45,6 +62,11 @@ export function checkBaseUrl(raw: string): string {
   if (u.protocol !== "https:" && u.protocol !== "http:") throw new ProviderError("Only http and https addresses are allowed.");
   if (u.username || u.password) throw new ProviderError("Put the key in the key field, not in the address.");
   if (u.search || u.hash) throw new ProviderError("Leave out the ? and # parts of the address.");
+  if ((kind === "openrouter" || kind === "meta") && u.protocol !== "https:") throw new ProviderError("External providers must use https.");
+  if (kind === "openrouter") return "https://openrouter.ai/api/v1";
+  if (kind === "meta") return "https://api.meta.ai/v1";
+  if (kind === "ollama" && (u.protocol !== "http:" || !loopback(u.hostname))) throw new ProviderError("Ollama must use an http loopback address on this machine.");
+  if (kind !== "ollama" && u.protocol !== "https:") throw new ProviderError("External providers must use https.");
   const h = u.hostname;
   if (/^169\.254\./.test(h) || h === "metadata.google.internal" || h === "[fd00:ec2::254]") throw new ProviderError("That address is not allowed.");
   if (process.env.IZWI_HOSTED === "1" && /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\])/.test(h)) throw new ProviderError("Private addresses are not allowed on a hosted install.");
@@ -71,7 +93,11 @@ export function statusError(p: ProviderRow, status: number) {
 async function call(p: ProviderRow, url: string, init: GuardedInit): Promise<{ response: Response; receipt: ReturnType<typeof reserveTrialCall> }> {
   try {
     const receipt = reserveTrialCall(p, url);
-    return { response: await guardedFetch(url, init), receipt };
+    const headers = { ...init.headers, ...(p.kind === "openrouter" ? { "HTTP-Referer": PUBLIC_URL, "X-Title": "IZWI AI" } : {}) };
+    const body = init.body instanceof Uint8Array
+      ? init.body.buffer.slice(init.body.byteOffset, init.body.byteOffset + init.body.byteLength) as ArrayBuffer
+      : init.body;
+    return { response: await sdkFetch(url, { method: init.method, headers, body, signal: init.signal }), receipt };
   } catch (e) {
     if (e instanceof TrialPolicyError) throw new ProviderError(e.message);
     if (e instanceof BlockedAddressError) throw new ProviderError(`${p.label}: that address is not allowed.`);
@@ -137,6 +163,18 @@ async function madlad(p: ProviderRow, text: string, lang: string) {
 
 export async function testProvider(p: ProviderRow): Promise<{ ok: boolean; note: string }> {
   try {
+    if (p.kind === "openrouter" || p.kind === "ollama" || p.kind === "meta" || parse<string[]>(p.roles, []).includes("chat")) {
+      if (!p.model) throw new ProviderError(`${p.label} has no model name. Add one in Run on.`);
+      const headers = { "content-type": "application/json", ...authHeader(p) };
+      const { response } = await call(p, `${p.base_url}/chat/completions`, {
+        method: "POST", headers,
+        body: JSON.stringify({ model: p.model, messages: [{ role: "user", content: "Hi" }], max_tokens: 1 }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      await response.body?.cancel();
+      if (!response.ok) throw statusError(p, response.status);
+      return { ok: true, note: `${p.model} answered a chat test request.` };
+    }
     if (p.kind === "openai_compat") {
       const r = await chatJSON(p, "Reply with JSON only.", 'Return exactly {"ok":true}.', z.object({ ok: z.boolean() }), { maxTokens: 20, timeoutMs: 60_000 });
       return { ok: r.data.ok, note: `${p.model} answered a test request.` };

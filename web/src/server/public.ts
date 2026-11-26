@@ -17,7 +17,10 @@ export function linkFor(token: string, purpose: "review" | "consent"): Link {
   if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) fail(404, "This link is not valid.");
   const l = one<Link>(`SELECT * FROM share_link WHERE token_hash = ? AND purpose = ?`, hashToken(token), purpose);
   if (!l) fail(404, "This link is not valid.");
-  if (l.revoked_at) fail(410, "This link was switched off by the creator.");
+  if (l.revoked_at) {
+    if (purpose === "consent" && l.target_id && one(`SELECT 1 FROM consent old JOIN consent newer ON newer.workspace_id = old.workspace_id AND newer.project_id = old.project_id AND newer.person_id = old.person_id AND newer.requested_at > old.requested_at WHERE old.id = ? LIMIT 1`, l.target_id)) fail(404, "This link is not valid.");
+    fail(410, "This link was switched off by the creator.");
+  }
   if (l.expires_at < now()) fail(410, "This link has expired. Ask the creator for a new one.");
   return l;
 }

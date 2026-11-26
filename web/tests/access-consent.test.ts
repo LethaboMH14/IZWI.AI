@@ -37,6 +37,19 @@ it("checks purpose, expiry and revocation", () => {
  expect(() => pub.linkFor(token,"consent")).toThrow(expect.objectContaining({status:410}));
  db.run(`UPDATE share_link SET revoked_at = NULL WHERE id='link'`);
 });
+it("Ask again revokes the prior pending consent link and it returns 404", async () => {
+ const actions = await import("../src/server/actions");
+ const crypto = await import("../src/server/crypto");
+ const oldToken = "oldaskagainconsentlink123456";
+ db.run(`INSERT INTO person (id,workspace_id,project_id,name,role,created_at) VALUES ('ask_person','wa','pa','Ask Person','guest',0)`);
+ db.run(`INSERT INTO consent (id,workspace_id,project_id,person_id,scope,status,statement,requested_by,requested_at,updated_at) VALUES ('ask_old','wa','pa','ask_person','appearance','requested','Use appearance','ua',1,1)`);
+ db.run(`INSERT INTO share_link (id,workspace_id,project_id,purpose,target_id,token_hash,expires_at,created_by,created_at) VALUES ('ask_link','wa','pa','consent','ask_old',?,?, 'ua',0)`,crypto.hashToken(oldToken),Date.now()+60000);
+ const result = actions.requestConsent(ctx, "pa", "ask_person", "voice");
+ expect(result.url).toContain("/c/");
+ expect(() => pub.linkFor(oldToken, "consent")).toThrow(expect.objectContaining({status:404}));
+ expect(() => pub.consentData(oldToken)).toThrow(expect.objectContaining({status:404}));
+ db.run(`DELETE FROM person WHERE id = 'ask_person'`);
+});
 it("records consent and holds unpublished outputs after withdrawal", () => {
  expect(() => pub.consentAction(token,{decision:"grant",name:"Wrong"},"test","test")).toThrow(expect.objectContaining({status:400}));
  expect(pub.consentAction(token,{decision:"grant",name:"Thandi"},"test","test")).toEqual({status:"granted"});

@@ -353,6 +353,97 @@ CREATE TRIGGER consent_ledger_no_delete BEFORE DELETE ON consent_ledger BEGIN SE
     name: "reconcile security and studio migration histories",
     apply: reconcileStudioHistory,
   },
+  {
+    version: 5,
+    name: "studio assistant budgets, threads, leases, line scans and job priority",
+    sql: `
+CREATE TABLE assistant_thread (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  created_by TEXT NOT NULL REFERENCES "user"(id),
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX assistant_thread_by_project ON assistant_thread(project_id, created_at DESC);
+
+CREATE TABLE assistant_message (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL REFERENCES assistant_thread(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+  text TEXT NOT NULL,
+  provider_id TEXT,
+  provider_label TEXT,
+  model TEXT,
+  privacy TEXT CHECK (privacy IS NULL OR privacy IN ('private','standard','may_log')),
+  redacted INTEGER NOT NULL DEFAULT 0 CHECK (redacted >= 0),
+  proposals TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(proposals)),
+  outcome TEXT,
+  request_id TEXT,
+  tokens_in INTEGER,
+  tokens_out INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX assistant_message_by_thread ON assistant_message(thread_id, created_at);
+CREATE INDEX assistant_message_retention ON assistant_message(created_at);
+
+CREATE TABLE assistant_lease (
+  user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX assistant_lease_expiry ON assistant_lease(expires_at);
+
+CREATE TABLE assistant_budget (
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  day TEXT NOT NULL,
+  tokens_reserved INTEGER NOT NULL DEFAULT 0,
+  tokens_used INTEGER NOT NULL DEFAULT 0,
+  cents_reserved INTEGER NOT NULL DEFAULT 0,
+  cents_used INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (workspace_id, day)
+);
+
+CREATE TABLE line_injection_scan (
+  line_id TEXT PRIMARY KEY REFERENCES caption_line(id) ON DELETE CASCADE,
+  text_hash TEXT NOT NULL,
+  model_rev TEXT NOT NULL,
+  score REAL NOT NULL,
+  status TEXT NOT NULL,
+  scanned_at INTEGER NOT NULL
+);
+
+CREATE TABLE provider_v5 (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('openai_compat','madlad_endpoint','asr_endpoint','openrouter','ollama','meta')),
+  label TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  model TEXT,
+  key_sealed TEXT,
+  key_hint TEXT,
+  roles TEXT NOT NULL DEFAULT '["plan","translate"]' CHECK (json_valid(roles)),
+  last_test_at INTEGER,
+  last_test_ok INTEGER,
+  last_test_note TEXT,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+INSERT INTO provider_v5 SELECT id, workspace_id, kind, label, base_url, model, key_sealed, key_hint, roles,
+  last_test_at, last_test_ok, last_test_note, created_by, created_at FROM provider;
+DROP TABLE provider;
+ALTER TABLE provider_v5 RENAME TO provider;
+
+ALTER TABLE job ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX job_queue_priority ON job(status, priority DESC, created_at);
+`,
+  },
+  {
+    version: 6,
+    name: "single cross-process whisper lease",
+    sql: `CREATE TABLE whisper_lease (id INTEGER PRIMARY KEY CHECK (id = 1), job_id TEXT NOT NULL, expires_at INTEGER NOT NULL);`,
+  },
 ];
 
 function reconcileStudioHistory() {

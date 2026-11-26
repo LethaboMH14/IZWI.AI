@@ -6,11 +6,13 @@ import { loadLocalEnv } from "../src/server/env";
 loadLocalEnv();
 
 async function main() {
-  const { claim, heartbeat, succeed, failJob, block, sweep, isCancelled } = await import("../src/server/jobs");
+  const { claim, heartbeat, succeed, failJob, block, sweep, isCancelled, acquireWhisperLease, renewWhisperLease, releaseWhisperLease, deferWhisperJob } = await import("../src/server/jobs");
   const { handle, Blocked, onFailed } = await import("../src/server/pipeline");
   const { toolVersions } = await import("../src/server/media");
   const { parse, run, now, one } = await import("../src/server/db");
+  const { scanProjectBatch } = await import("../src/server/injection");
   const { appliedVersion, SCHEMA_VERSION } = await import("../src/server/migrations");
+  const { purgeOldAssistantMessages } = await import("../src/server/assistant-store");
 
   if (appliedVersion() < SCHEMA_VERSION) {
     console.error("The database needs migrating. Run: npm run db:migrate");
@@ -29,6 +31,10 @@ async function main() {
     );
   beatWorker();
   const beatTimer = setInterval(beatWorker, 5000);
+  try { purgeOldAssistantMessages(); } catch (e) { console.error("assistant retention purge failed", e instanceof Error ? e.name : "unknown"); }
+  const retentionTimer = setInterval(() => {
+    try { purgeOldAssistantMessages(); } catch (e) { console.error("assistant retention purge failed", e instanceof Error ? e.name : "unknown"); }
+  }, 60 * 60_000);
 
   const stop = () => {
     if (stopping) return;
@@ -47,6 +53,11 @@ async function main() {
       await new Promise((r) => setTimeout(r, 1000));
       continue;
     }
+    const usesWhisper = job.type === "transcribe" || (job.type as string) === "voice_transcribe";
+    if (usesWhisper && !acquireWhisperLease(job.id)) {
+      deferWhisperJob(job.id, workerId);
+      continue;
+    }
     const ctrl = new AbortController();
     current = { id: job.id, ctrl };
     let last = 0;
@@ -58,10 +69,20 @@ async function main() {
       if (isCancelled(job.id)) ctrl.abort();
     };
     const keepAlive = setInterval(() => beat(), 10_000);
+    const whisperKeepAlive = usesWhisper ? setInterval(() => { if (!renewWhisperLease(job.id)) ctrl.abort(); }, 30_000) : null;
     const started = Date.now();
     console.log(`→ ${job.type} ${job.id}`);
     try {
-      const out = await handle({ job, input: parse(job.input, {}), beat, signal: ctrl.signal });
+      const input = parse<Record<string, unknown>>(job.input, {});
+      const out = (job.type as string) === "injection_scan"
+        ? await scanProjectBatch({
+          workspaceId: job.workspace_id,
+          projectId: job.project_id ?? "",
+          trackId: typeof input.trackId === "string" ? input.trackId : "",
+          afterIdx: typeof input.afterIdx === "number" ? input.afterIdx : -1,
+          createdBy: job.created_by,
+        })
+        : await handle({ job, input, beat, signal: ctrl.signal });
       succeed(job.id, workerId, out);
       console.log(`✓ ${job.type} ${job.id} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
     } catch (e) {
@@ -80,10 +101,13 @@ async function main() {
       }
     } finally {
       clearInterval(keepAlive);
+      if (whisperKeepAlive) clearInterval(whisperKeepAlive);
+      if (usesWhisper) releaseWhisperLease(job.id);
       current = null;
     }
   }
   clearInterval(beatTimer);
+  clearInterval(retentionTimer);
   run(`DELETE FROM worker_beat WHERE worker_id = ?`, workerId);
   process.exit(0);
 }

@@ -1,10 +1,10 @@
 // What each job does. Runs in the worker process. Every step writes real files and real rows, or fails with a reason.
-import { readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { strToU8, zipSync, type Zippable } from "fflate";
 import { all, newId, now, one, parse, run, tx } from "./db";
 import { BIN, LIMITS, STORAGE } from "./env";
-import { enqueue, type JobRow } from "./jobs";
+import { enqueue, type JobRow, type JobType } from "./jobs";
 import { absPath, ensureDirFor, sha256File, storageKey } from "./storage";
 import { extractSpeechWav, makeProxy, peaks, poster, probe, ToolError, whisper, type Probe } from "./media";
 import { applyGlossary, buildLines, lineFlag, lineText, sliceLines, toASS, toSRT, toVTT, type CapLine, type GlossaryEntry, type Seg, type Word } from "./captions";
@@ -13,7 +13,10 @@ import { toEDL, toOTIO } from "./interop";
 import { gateFor, gateReason } from "./rights";
 import { providerFor, translateLines, type ProviderRow } from "./providers";
 import { isPreset, PRESETS, renderClip } from "./render";
+import { PROVENANCE_LABEL, verifyProvenance, writeProvenance } from "./provenance";
+import { canonical, ledgerKeys } from "./ledger";
 import { LANGUAGES, langName } from "../lib/languages";
+import { transcribeVoiceJob } from "./voice";
 
 export class Blocked extends Error {}
 export type JobCtx = { job: JobRow; input: Record<string, unknown>; beat: (p?: number, stage?: string) => void; signal: AbortSignal };
@@ -46,11 +49,24 @@ async function addAsset(a: { ws: string; projectId: string; kind: string; key: s
 
 const tmpDir = (jobId: string) => path.join(STORAGE, "tmp", jobId);
 
+function renderConsentSnapshot(projectId: string, startMs: number, endMs: number) {
+  const people = all<{ id: string; whole_recording: number }>(`SELECT id, whole_recording FROM person WHERE project_id = ? ORDER BY id`, projectId)
+    .filter((person) => person.whole_recording === 1 || !!one(`SELECT 1 FROM appearance WHERE person_id = ? AND start_ms < ? AND end_ms > ?`, person.id, endMs, startMs));
+  return people.map((person, index) => {
+    const consent = one<{ id: string; status: string }>(`SELECT id, status FROM consent WHERE person_id = ? ORDER BY requested_at DESC LIMIT 1`, person.id);
+    if (consent?.status !== "granted") throw new Blocked("Consent changed during rendering. The signed render was discarded; check consent and render again.");
+    const entry = one<{ seq: number; hash: string; record: string }>(`SELECT seq, hash, record FROM consent_ledger WHERE consent_id = ? ORDER BY seq DESC LIMIT 1`, consent.id);
+    if (!entry || JSON.parse(entry.record).decision !== "granted") throw new Blocked("A granted consent ledger entry is missing. The signed render was discarded.");
+    return { consent_id: consent.id, person_label: `Person ${index + 1}`, ledger_seq: entry.seq, entry_hash: entry.hash };
+  });
+}
+
 export async function handle(c: JobCtx): Promise<unknown> {
-  switch (c.job.type) {
+  switch (c.job.type as string) {
     case "probe": return probeJob(c);
     case "proxy": return proxyJob(c);
     case "transcribe": return transcribeJob(c);
+    case "voice_transcribe": return transcribeVoiceJob(c);
     case "suggest_clips": return suggestJob(c);
     case "translate": return translateJob(c);
     case "publish": return publishJob(c);
@@ -131,6 +147,9 @@ async function transcribeJob(c: JobCtx) {
   c.beat(0.95, "Writing the transcript");
   const trackId = newId("trk");
   tx(() => {
+    if (c.input.assistant === true && one(`SELECT 1 FROM caption_track WHERE project_id = ? AND workspace_id = ? AND kind = 'source'`, proj.id, proj.workspace_id)) {
+      fail("This assistant Hear is stale because a transcript already exists.");
+    }
     run(`DELETE FROM caption_track WHERE project_id = ? AND kind = 'source'`, proj.id);
     run(
       `INSERT INTO caption_track (id, workspace_id, project_id, language, kind, status, engine, created_at, updated_at) VALUES (?, ?, ?, ?, 'source', 'draft', ?, ?, ?)`,
@@ -152,6 +171,18 @@ async function transcribeJob(c: JobCtx) {
   if (!one(`SELECT 1 FROM clip WHERE project_id = ? LIMIT 1`, proj.id)) {
     enqueue({ workspaceId: proj.workspace_id, projectId: proj.id, type: "suggest_clips", input: { count: 3 }, idempotencyKey: `suggest:${trackId}`, dependsOn: c.job.id, createdBy: c.job.created_by });
   }
+    if (process.env.IZWI_FLAG_INJECTION === "1") {
+      enqueue({
+        workspaceId: proj.workspace_id,
+        projectId: proj.id,
+        type: "injection_scan" as unknown as JobType,
+        input: { trackId, afterIdx: -1 },
+        idempotencyKey: `injection_scan:${trackId}:start`,
+        dependsOn: c.job.id,
+        createdBy: c.job.created_by,
+        priority: 0,
+      });
+    }
   return { language: t.language, lines: lines.length, glossaryFixes: fixes, seconds: Math.round((now() - started) / 1000), engine: t.engine };
 }
 
@@ -272,6 +303,10 @@ async function renderJob(c: JobCtx) {
     run(`UPDATE output SET status = 'blocked', note = ?, updated_at = ? WHERE id = ?`, gateReason(gate), now(), out.id);
     throw new Blocked(gateReason(gate));
   }
+  const declaration = one<{ id: string; created_at: number; statement: string }>(`SELECT id, created_at, statement FROM declaration WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`, proj.id);
+  if (!declaration) fail("The creator declaration changed before this render could start.");
+  const consentSnapshot = renderConsentSnapshot(proj.id, clip.start_ms, clip.end_ms);
+  const snapshot = { declaration: { id: declaration.id, created_at: declaration.created_at, text: declaration.statement }, consentRefs: consentSnapshot };
   const src = latest(proj.id, "source") ?? fail("The original recording is missing.");
   const p = parse<Probe>(src.meta, { durationMs: src.duration_ms ?? 0, hasAudio: true, hasVideo: false, format: "" });
   let lines: CapLine[] = [];
@@ -288,55 +323,75 @@ async function renderJob(c: JobCtx) {
   }
   const preset = PRESETS[out.preset];
   const key = storageKey(proj.workspace_id, proj.id, `render-${out.id}-${c.job.attempts}-${c.job.worker_id}.mp4`);
-  ensureDirFor(absPath(key));
+  const tempKey = `${key}.tmp`;
+  const sidecarKey = `${key}.provenance.json`;
+  const tempSidecarKey = `${sidecarKey}.tmp`;
+  const srtKey = lines.length ? storageKey(proj.workspace_id, proj.id, `render-${out.id}-${c.job.attempts}-${c.job.worker_id}.srt`) : undefined;
+  const tempSrtKey = srtKey ? `${srtKey}.tmp` : undefined;
+  ensureDirFor(absPath(tempKey));
   const ass = out.burn && lines.length ? toASS(lines, { width: preset.w, height: preset.h, font: BIN.captionFont, karaoke: lines.some((l) => l.words.length > 0) }) : undefined;
   const renderDir = tmpDir(`${c.job.id}-${c.job.attempts}`);
   try {
     await renderClip({
-      src: absPath(src.storage_key), out: absPath(key), workDir: renderDir, startMs: clip.start_ms, endMs: clip.end_ms,
+      src: absPath(src.storage_key), out: absPath(tempKey), workDir: renderDir, startMs: clip.start_ms, endMs: clip.end_ms,
       preset: out.preset, hasVideo: p.hasVideo, hasAudio: p.hasAudio, ass, onProgress: (x) => c.beat(x * 0.95, `Rendering ${preset.label}`), signal: c.signal,
     });
   } catch (e) {
-    rmSync(absPath(key), { force: true });
+    rmSync(absPath(tempKey), { force: true });
     throw e;
   } finally {
     rmSync(renderDir, { recursive: true, force: true });
   }
   const slug = clip.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40).replace(/^-|-$/g, "") || "clip";
-  const assetId = await addAsset({ ws: proj.workspace_id, projectId: proj.id, kind: "render", key, filename: `${slug}-${out.preset}${out.language ? "-" + out.language : ""}.mp4`, mime: "video/mp4", durationMs: clip.end_ms - clip.start_ms, width: preset.w, height: preset.h, meta: { outputId: out.id, clipId: clip.id } });
-  let captionAssetId: string | undefined;
-  let srtKey: string | undefined;
-  if (lines.length) {
-    srtKey = storageKey(proj.workspace_id, proj.id, `render-${out.id}-${c.job.attempts}-${c.job.worker_id}.srt`);
-    writeFileSync(absPath(srtKey), toSRT(lines), "utf8");
-    captionAssetId = await addAsset({ ws: proj.workspace_id, projectId: proj.id, kind: "caption", key: srtKey, filename: `${slug}-${out.language}.srt`, mime: "application/x-subrip", meta: { outputId: out.id } });
-  }
-  // Serialize the final gate and publication with consent changes in SQLite.
-  const release = tx(() => {
-    const active = one(`SELECT 1 FROM job WHERE id = ? AND worker_id = ? AND attempts = ? AND status = 'running' AND lease_until > ?`, c.job.id, c.job.worker_id, c.job.attempts, now());
-    const current = one<{ status: string; job_id: string | null }>(`SELECT status, job_id FROM output WHERE id = ? AND workspace_id = ?`, out.id, out.workspace_id);
-    if (!active || c.signal.aborted || !current || current.job_id !== c.job.id) return "inactive";
-    const finalGate = gateFor(proj.id, clip.start_ms, clip.end_ms);
-    if (!finalGate.ok) {
-      const reason = gateReason(finalGate);
-      run(`UPDATE output SET status = 'blocked', note = ?, updated_at = ? WHERE id = ?`, reason, now(), out.id);
-      return reason;
-    }
-    if (current.status !== "queued") return "inactive";
-    const result = { outputId: out.id, preset: out.preset, bytes: statSync(absPath(key)).size };
-    run(`UPDATE output SET status = 'ready', asset_id = ?, note = NULL, updated_at = ? WHERE id = ?`, assetId, now(), out.id);
-    run(`UPDATE job SET status = 'succeeded', output = ?, progress = 1, stage = 'done', lease_until = NULL, finished_at = ? WHERE id = ?`, JSON.stringify(result), now(), c.job.id);
-    return "ready";
-  });
-  if (release !== "ready") {
-    run(`DELETE FROM asset WHERE id = ?`, assetId);
-    if (captionAssetId) run(`DELETE FROM asset WHERE id = ?`, captionAssetId);
-    rmSync(absPath(key), { force: true });
+  const filename = `${slug}-${out.preset}${out.language ? "-" + out.language : ""}.mp4`;
+  let assetId = "";
+  const keys = ledgerKeys();
+  try {
+    const plan = one<{ planner: string }>(`SELECT planner FROM plan_run WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`, proj.id);
+    const sourceTrack = one<{ engine: string }>(`SELECT engine FROM caption_track WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, proj.id);
+    writeProvenance(absPath(tempSidecarKey), {
+      output_id: out.id, project_id: proj.id, created_at: now(), declaration: snapshot.declaration,
+      ai_use: { transcription: sourceTrack?.engine || "whisper.cpp base", planner: plan?.planner || "rules" },
+      consent_refs: snapshot.consentRefs,
+    }, absPath(tempKey), keys);
+    if (!verifyProvenance(readFileSync(absPath(tempSidecarKey)), readFileSync(absPath(tempKey)), keys.pubHex).ok) throw new Error("Provenance verification failed.");
+    if (tempSrtKey) writeFileSync(absPath(tempSrtKey), toSRT(lines), "utf8");
+    const mediaBytes = statSync(absPath(tempKey)).size;
+    const mediaHash = await sha256File(absPath(tempKey));
+    const srtBytes = tempSrtKey ? statSync(absPath(tempSrtKey)).size : 0;
+    const srtHash = tempSrtKey ? await sha256File(absPath(tempSrtKey)) : "";
+    const release = tx(() => {
+      const active = one(`SELECT 1 FROM job WHERE id = ? AND worker_id = ? AND attempts = ? AND status = 'running' AND lease_until > ?`, c.job.id, c.job.worker_id, c.job.attempts, now());
+      const current = one<{ status: string; job_id: string | null }>(`SELECT status, job_id FROM output WHERE id = ? AND workspace_id = ?`, out.id, out.workspace_id);
+      if (!active || c.signal.aborted || !current || current.job_id !== c.job.id || current.status !== "queued") return "inactive";
+      const currentDeclaration = one<{ id: string; created_at: number; statement: string }>(`SELECT id, created_at, statement FROM declaration WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`, proj.id);
+      if (!currentDeclaration || currentDeclaration.id !== snapshot.declaration.id || currentDeclaration.created_at !== snapshot.declaration.created_at) return "The creator declaration changed during rendering. Render again to create fresh signed provenance.";
+      const currentConsents = renderConsentSnapshot(proj.id, clip.start_ms, clip.end_ms);
+      if (canonical(currentConsents) !== canonical(snapshot.consentRefs)) return "Consent changed during rendering. The signed render was discarded; render again after checking consent.";
+      const finalGate = gateFor(proj.id, clip.start_ms, clip.end_ms);
+      if (!finalGate.ok) return gateReason(finalGate);
+      renameSync(absPath(tempKey), absPath(key));
+      renameSync(absPath(tempSidecarKey), absPath(sidecarKey));
+      if (tempSrtKey && srtKey) renameSync(absPath(tempSrtKey), absPath(srtKey));
+      assetId = newId("ast");
+      run(`INSERT INTO asset (id, workspace_id, project_id, kind, storage_key, filename, mime, bytes, sha256, duration_ms, width, height, meta, created_at) VALUES (?, ?, ?, 'render', ?, ?, 'video/mp4', ?, ?, ?, ?, ?, ?, ?)`, assetId, proj.workspace_id, proj.id, key, filename, mediaBytes, mediaHash, clip.end_ms - clip.start_ms, preset.w, preset.h, JSON.stringify({ outputId: out.id, clipId: clip.id, provenance: PROVENANCE_LABEL, sidecar: path.basename(absPath(sidecarKey)) }), now());
+      if (srtKey && tempSrtKey) run(`INSERT INTO asset (id, workspace_id, project_id, kind, storage_key, filename, mime, bytes, sha256, meta, created_at) VALUES (?, ?, ?, 'caption', ?, ?, 'application/x-subrip', ?, ?, ?, ?)`, newId("ast"), proj.workspace_id, proj.id, srtKey, `${slug}-${out.language}.srt`, srtBytes, srtHash, JSON.stringify({ outputId: out.id }), now());
+      run(`UPDATE output SET status = 'ready', asset_id = ?, note = NULL, updated_at = ? WHERE id = ?`, assetId, now(), out.id);
+      run(`UPDATE job SET status = 'succeeded', output = ?, progress = 1, stage = 'done', lease_until = NULL, finished_at = ? WHERE id = ?`, JSON.stringify({ outputId: out.id, preset: out.preset, bytes: mediaBytes, provenance: PROVENANCE_LABEL }), now(), c.job.id);
+      return "ready";
+    });
+    if (release !== "ready") throw new Blocked(release);
+    return { outputId: out.id, preset: out.preset, bytes: mediaBytes, provenance: PROVENANCE_LABEL, sidecar: path.basename(absPath(sidecarKey)) };
+  } catch (error) {
+    rmSync(absPath(tempKey), { force: true }); rmSync(absPath(tempSidecarKey), { force: true });
+    if (tempSrtKey) rmSync(absPath(tempSrtKey), { force: true });
+    rmSync(absPath(key), { force: true }); rmSync(absPath(sidecarKey), { force: true });
     if (srtKey) rmSync(absPath(srtKey), { force: true });
-    if (release !== "inactive") throw new Blocked(release);
-    throw new ToolError("This render is no longer active.");
+    if (assetId) run(`DELETE FROM asset WHERE id = ?`, assetId);
+    const reason = error instanceof Error ? error.message : "Signed provenance failed.";
+    run(`UPDATE output SET status = 'failed', note = ?, updated_at = ? WHERE id = ? AND status != 'ready'`, reason, now(), out.id);
+    throw error;
   }
-  return { outputId: out.id, preset: out.preset, bytes: statSync(absPath(key)).size };
 }
 
 async function packageJob(c: JobCtx) {
@@ -377,6 +432,8 @@ async function packageJob(c: JobCtx) {
   for (const r of ready) {
     add(`renders/${r.filename}`, new Uint8Array(readFileSync(absPath(r.storage_key))), undefined, true);
     record[record.length - 1].sha256 = r.sha256;
+    const sidecarPath = `${absPath(r.storage_key)}.provenance.json`;
+    if (existsSync(sidecarPath)) add(`renders/${r.filename}.provenance.json`, new Uint8Array(readFileSync(sidecarPath)), PROVENANCE_LABEL);
   }
 
   c.beat(0.8, "Writing the record sheet");
@@ -398,6 +455,7 @@ async function packageJob(c: JobCtx) {
     "captions/   SRT and VTT per language. Files marked DRAFT have not been approved by a person.",
     "timeline/   clips.edl (CMX 3600) and clips.otio. In DaVinci Resolve: File > Import > Timeline, then relink the source file.",
     "renders/    Finished clips, ready to upload.",
+    "renders/*.provenance.json  IZWI signed provenance (not C2PA), signed with the IZWI ledger key.",
     "record.json Who declared and agreed to what, with file checksums.", "",
     "CapCut: on Desktop or Web, use Captions > Add captions > Import file and pick an .srt file. The mobile app cannot import caption files.",
   ].join("\n")));

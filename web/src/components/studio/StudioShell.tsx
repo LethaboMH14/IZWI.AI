@@ -15,6 +15,7 @@ import { LocaliseTab } from "./LocaliseTab";
 import { ProtectTab } from "./ProtectTab";
 import { PublishTab } from "./PublishTab";
 import { EarnTab } from "./EarnTab";
+import { AssistantPanel } from "./AssistantPanel";
 import "@/app/studio.css";
 
 type Job = ProjectState["jobs"][number];
@@ -87,7 +88,7 @@ function stageStatus(s: ProjectState): Record<Exclude<TabId, "canvas">, { status
 }
 
 export function StudioShell({ id, initial }: { id: string; initial: ProjectState }) {
-  const { data, error, refresh } = useLive<ProjectState>(`/api/projects/${id}`, { initial, busy: (s) => s.jobs.some(active) });
+  const { data, error, refresh } = useLive<ProjectState>(`/api/projects/${id}`, { initial, busy: (s) => s.jobs.some(active) || s.people.some((p) => p.consent?.status === "pending" || p.consent?.status === "requested") });
   const state = data ?? initial;
   const hash = useSyncExternalStore(subscribe, hashNow, hashServer);
   const tab: TabId = (TABS as string[]).includes(hash) ? (hash as TabId) : "canvas";
@@ -153,6 +154,7 @@ export function StudioShell({ id, initial }: { id: string; initial: ProjectState
             onChange={(e) => setTitle(e.target.value)} onBlur={() => void saveTitle()}
             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setTitle(null); e.currentTarget.blur(); } }} />
         </div>
+        <AssistantPanel projectId={id} tab={tab} refresh={refreshed} />
         <span className={"studio-live" + (running ? " on" : "")} role="status">{running ? <><CircleNotch className="spin" /> {plural(running, "job")} running</> : "Up to date"}</span>
       </header>
       {saveErr && <p className="studio-note bad" role="alert"><Warning weight="fill" /> {saveErr}</p>}
