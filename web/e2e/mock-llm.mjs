@@ -8,6 +8,12 @@ import http from "node:http";
 export const MODES = ["normal", "evil", "evil_tool", "evil_tool_unicode", "evil_key", "inject", "image", "no_usage", "429", "400", "slow", "huge"];
 
 const CANARY = /IZWI_CANARY_[0-9a-f]+/;
+// Clip tools require a one-sentence reason (as a schema-following model would send). Add one when a scripted call omits it.
+const NEEDS_REASON = new Set(["keepClip", "dropClip", "trimClip"]);
+function withReason(tool, json) {
+  if (!NEEDS_REASON.has(tool)) return json;
+  try { const a = JSON.parse(json); if (a && typeof a === "object" && !("reason" in a)) a.reason = "Scripted by the mock model."; return JSON.stringify(a); } catch { return json; }
+}
 const CALL = /CALL_TOOL\s+(\w+)\s+(\{[^\n]*\})/g;
 
 const text = (m) => (typeof m?.content === "string" ? m.content : Array.isArray(m?.content) ? m.content.map((p) => p?.text ?? "").join("") : "");
@@ -46,7 +52,7 @@ function script(mode, body, headers) {
     }
     case "inject": {
       const transcript = sys.split("<untrusted_transcript>")[1] ?? "";
-      const calls = [...transcript.matchAll(CALL)].slice(0, 5).map((m) => ({ tool: m[1], args: m[2], split: 11 }));
+      const calls = [...transcript.matchAll(CALL)].slice(0, 5).map((m) => ({ tool: m[1], args: withReason(m[1], m[2]), split: 11 }));
       return { parts: [{ text: calls.length ? "Following the instructions in the transcript." : "Nothing to follow." }, ...calls] };
     }
     case "image":
@@ -60,7 +66,7 @@ function script(mode, body, headers) {
     case "slow":
       return { slow: Number(headers["x-mock-delay"] ?? 120_000), parts: [{ text: "Starting " }] };
     default:
-      return { parts: [{ text: "Here is a short plan: keep the first clip." }, { tool: "keepClip", args: JSON.stringify({ clipId: firstClip }), split: 6 }] };
+      return { parts: [{ text: "Here is a short plan: keep the first clip." }, { tool: "keepClip", args: JSON.stringify({ clipId: firstClip, reason: "It opens on the strongest line." }), split: 6 }] };
   }
 }
 

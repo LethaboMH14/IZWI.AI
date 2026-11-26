@@ -4,6 +4,7 @@ import { z } from "zod";
 import { tool } from "ai";
 import { all, newId, now, one, run } from "./db";
 import { HttpError } from "./http";
+import { clock } from "../lib/format";
 import type { Ctx } from "./guard";
 import type { Privacy, ProviderRow } from "./providers";
 import { privacyOf } from "./providers";
@@ -90,7 +91,7 @@ export function buildAssistantContext(ctx: Ctx, projectId: string, privacy: Priv
 
 export type Proposal = { planId: string; title: string; reason: string; source?: { lineId: string; index: number; atMs: number }; preview: { label: string; before?: string; after?: string }[]; scope?: string; kind: "action" | "jobs" };
 
-export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; preview: Proposal["preview"]; scope?: string }>, hasTranscript: boolean, decodedInputs: unknown[] = []) {
+export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; source?: Proposal["source"]; preview: Proposal["preview"]; scope?: string }>, hasTranscript: boolean, decodedInputs: unknown[] = []) {
   const action = (actionName: string, schema: z.ZodTypeAny, title: (v: Record<string, unknown>) => string) => tool({
     description: "Create a proposal for the person to review. This tool never changes project data.", inputSchema: schema as never,
     execute: async (input: Record<string, unknown>) => {
@@ -119,26 +120,45 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
   } as never);
   const clipId = z.string().min(1);
   const currentClip = (id: string) => one<{ id: string; updated_at: number; start_ms: number; end_ms: number; title: string; status: string }>(`SELECT id, updated_at, start_ms, end_ms, title, status FROM clip WHERE id = ? AND project_id = ? AND workspace_id = ?`, id, projectId, ctx.workspaceId);
-  const makeAction = (actionName: string, schema: z.ZodTypeAny, title: (v: Record<string, unknown>) => string) => tool({
-    description: "Propose this change for approval. It will not run now.", inputSchema: schema as never,
-    execute: async (input: Record<string, unknown>) => {
-      decodedInputs.push(input);
+  // The transcript line where a clip starts, so each card can say "from transcript line N".
+  const sourceLine = (atMs: number) => one<{ id: string; idx: number; start_ms: number }>(
+    `SELECT l.id, l.idx, l.start_ms FROM caption_line l JOIN caption_track t ON t.id = l.track_id
+     WHERE t.project_id = ? AND t.workspace_id = ? AND t.kind = 'source' AND l.end_ms > ? ORDER BY l.start_ms LIMIT 1`,
+    projectId, ctx.workspaceId, atMs,
+  );
+  const span = (s: number, e: number) => `${clock(s)}–${clock(e)}`;
+  const NOOP: Record<string, string> = { keepClip: "kept", dropClip: "dropped" };
+  const AFTER: Record<string, string> = { keepClip: "kept", dropClip: "dropped" };
+  const makeAction = (actionName: string, schema: z.ZodTypeAny, title: (v: Record<string, unknown>, c: { title: string; start_ms: number; end_ms: number }) => string) => tool({
+    description: "Propose this change for approval, with a one-sentence reason a creator would understand. It will not run now.", inputSchema: schema as never,
+    execute: async (raw: Record<string, unknown>) => {
+      decodedInputs.push(raw);
+      const { reason, ...input } = raw as Record<string, unknown> & { reason?: string };
       const id = String(input.clipId ?? ""); const c = currentClip(id);
       if (!c) throw new HttpError(404, "Clip not found.");
+      // A proposal that would change nothing is noise: say so to the model instead of showing a card.
+      if (NOOP[actionName] && c.status === NOOP[actionName]) return { proposed: false, note: `That clip is already ${c.status}.` };
       if (actionName === "trimClip") {
         const duration = one<{ duration_ms: number | null }>(`SELECT duration_ms FROM asset WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, projectId)?.duration_ms;
         if (Number(input.startMs) < 0 || Number(input.endMs) <= Number(input.startMs) || (duration && Number(input.endMs) > duration)) throw new HttpError(400, "Clip times must stay within the source recording.");
       }
       const step = { kind: "action", action: actionName, args: input, pre: { clips: [{ id, updatedAt: c.updated_at, textHash: hashText(c.title) }], lines: [], consent: null } };
       StepSchema.parse(step);
-      proposals.push({ steps: [step], title: title(input), reason: "Suggested by the studio assistant.", preview: [{ label: "Clip", before: `${c.start_ms}-${c.end_ms} ms · ${c.status}`, after: actionName === "trimClip" ? `${input.startMs}-${input.endMs} ms` : String(input.status ?? actionName) }] });
+      const line = sourceLine(c.start_ms);
+      proposals.push({
+        steps: [step], title: title(input, c),
+        reason: typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 300) : "Suggested by the studio assistant.",
+        ...(line ? { source: { lineId: line.id, index: line.idx + 1, atMs: line.start_ms } } : {}),
+        preview: [{ label: "Clip", before: `${span(c.start_ms, c.end_ms)} · ${c.status}`, after: actionName === "trimClip" ? span(Number(input.startMs), Number(input.endMs)) : (AFTER[actionName] ?? actionName) }],
+      });
       return { proposed: true };
     },
   } as never);
+  const reasonField = z.string().min(3).max(300).describe("Why, in one plain sentence for the creator.");
   const tools = {
-    keepClip: makeAction("keepClip", z.object({ clipId }), (v) => `Keep clip ${v.clipId}`),
-    dropClip: makeAction("dropClip", z.object({ clipId }), (v) => `Drop clip ${v.clipId}`),
-    trimClip: makeAction("trimClip", z.object({ clipId, startMs: z.number().int().nonnegative(), endMs: z.number().int().positive() }), (v) => `Trim clip ${v.clipId}`),
+    keepClip: makeAction("keepClip", z.object({ clipId, reason: reasonField }), (_v, c) => `Keep “${c.title}” (${span(c.start_ms, c.end_ms)})`),
+    dropClip: makeAction("dropClip", z.object({ clipId, reason: reasonField }), (_v, c) => `Drop “${c.title}” (${span(c.start_ms, c.end_ms)})`),
+    trimClip: makeAction("trimClip", z.object({ clipId, startMs: z.number().int().nonnegative(), endMs: z.number().int().positive(), reason: reasonField }), (_v, c) => `Trim “${c.title}”`),
     requestConsent: action("requestConsent", z.object({ personId: z.string().min(1).max(120), scope: ConsentScopeSchema }).strict(), (v) => `Request ${v.scope} consent`),
     addGlossaryTerm: action("addGlossaryTerm", z.object({ term: z.string().min(1).max(60), heard: z.string().max(60).optional() }), (v) => `Add glossary term ${v.term}`),
     draftTitles: tool({ description: "Suggest text titles only; do not propose edits.", inputSchema: z.object({ titles: z.array(z.string().max(120)).max(8) }).strict(), execute: async ({ titles }) => { decodedInputs.push({ titles }); return { titles }; } }),
@@ -161,12 +181,12 @@ export function saveAssistantTurn(args: { threadId: string; projectId: string; w
   run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.assistantText, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, JSON.stringify(args.proposals), args.requestId, args.tokensIn, args.tokensOut, t + 1);
 }
 
-export function persistProposals(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; preview: Proposal["preview"]; scope?: string }>, provider: ProviderRow) {
+export function persistProposals(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; source?: Proposal["source"]; preview: Proposal["preview"]; scope?: string }>, provider: ProviderRow) {
   const result: Proposal[] = [];
   for (const p of proposals) {
     const steps = p.steps.map((s) => StepSchema.parse(s));
     const id = savePlan(ctx, projectId, p.reason.slice(0, 300), `assistant:${provider.id}/${provider.model}`, steps);
-    result.push({ planId: id, title: p.title, reason: p.reason, preview: p.preview, ...(p.scope ? { scope: p.scope } : {}), kind: p.steps.some((s) => (s as { kind?: string }).kind === "job") ? "jobs" : "action" });
+    result.push({ planId: id, title: p.title, reason: p.reason, ...(p.source ? { source: p.source } : {}), preview: p.preview, ...(p.scope ? { scope: p.scope } : {}), kind: p.steps.some((s) => (s as { kind?: string }).kind === "job") ? "jobs" : "action" });
   }
   return result;
 }

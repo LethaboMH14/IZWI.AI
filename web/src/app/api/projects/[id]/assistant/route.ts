@@ -24,11 +24,16 @@ export const GET = route<{ id: string }>(async (_req, { id }) => {
     .filter((p) => parse<string[]>(p.roles, []).includes("chat"))
     .map((p) => ({ id: p.id, label: p.label, kind: p.kind, model: p.model, privacy: privacyOf(p), ready: true }));
   const thread = one<{ id: string }>(`SELECT id FROM assistant_thread WHERE project_id = ? AND workspace_id = ? AND created_by = ? ORDER BY created_at DESC LIMIT 1`, id, ctx.workspaceId, ctx.userId);
-  const messages = thread ? all(`SELECT id, role, text, provider_label, model, privacy, redacted, proposals, created_at FROM assistant_message WHERE thread_id = ? ORDER BY created_at`, thread.id).map((m: Record<string, unknown>) => ({ id: m.id, role: m.role, text: m.text, provider: { label: m.provider_label, model: m.model, privacy: m.privacy }, redacted: m.redacted, proposals: parse(m.proposals, []), createdAt: m.created_at })) : [];
+  const messages = thread ? all(`SELECT id, role, text, provider_label, model, privacy, redacted, proposals, created_at FROM assistant_message WHERE thread_id = ? ORDER BY created_at`, thread.id).map((m: Record<string, unknown>) => ({ id: m.id, role: m.role, text: m.text, provider: { label: m.provider_label, model: m.model, privacy: m.privacy }, redacted: m.redacted, proposals: withStatus(parse<Proposal[]>(m.proposals, []), ctx.workspaceId), createdAt: m.created_at })) : [];
   const dayKey = Math.floor(now() / LIMIT.assistantDay.windowMs) * LIMIT.assistantDay.windowMs;
   const used = one<{ count: number }>(`SELECT count FROM rate_limit WHERE key = ? AND window_start = ?`, `assistant-day:${ctx.workspaceId}:${ctx.userId}`.slice(0, 200), dayKey)?.count ?? 0;
   return { providers, thread: thread ? { id: thread.id, messages } : null, limits: { perMinute: LIMIT.assistant.max, perDay: LIMIT.assistantDay.max, usedToday: used } };
 });
+
+// Stored cards carry the plan's current status, so an approved or dismissed card never offers its buttons again.
+function withStatus(proposals: Proposal[], workspaceId: string) {
+  return proposals.map((p) => ({ ...p, status: one<{ status: string }>(`SELECT status FROM plan_run WHERE id = ? AND workspace_id = ?`, p.planId, workspaceId)?.status ?? "missing" }));
+}
 
 // Text-only tool results, as the lines the creator should see. Everything else (proposals) renders as cards.
 export function draftText(toolName: string, output: unknown): string[] {

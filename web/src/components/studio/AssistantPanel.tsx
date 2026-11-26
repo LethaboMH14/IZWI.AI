@@ -25,6 +25,8 @@ type Proposal = {
   source?: { lineId: string; index: number; atMs: number };
   preview: { label: string; before?: string; after?: string }[];
   scope?: string; kind: "action" | "jobs";
+  // From stored history: the plan's current status. Live cards from a new turn have none (they are "proposed").
+  status?: "proposed" | "approved" | "dismissed" | "missing" | string;
 };
 type StoredMessage = { id: string; role: "user" | "assistant"; text: string; provider?: ProviderInfo; redacted?: number; proposals?: Proposal[]; createdAt: string };
 type Loaded = { providers: ProviderChoice[]; thread: { id: string; messages: StoredMessage[] } | null; limits: { perMinute: number; perDay: number; usedToday: number } };
@@ -100,7 +102,7 @@ function ErrorPart({ data }: { data: ErrorData }) {
 type CardState = "idle" | "working" | "approved" | "dismissed" | "stale" | "failed";
 function ProposalCard({ p }: { p: Proposal }) {
   const { refresh, askAgain, busy } = usePanel();
-  const [state, setState] = useState<CardState>("idle");
+  const [state, setState] = useState<CardState>(p.status === "approved" ? "approved" : p.status === "dismissed" ? "dismissed" : p.status === "missing" ? "stale" : "idle");
   const [msg, setMsg] = useState<string | null>(null);
   const act = async (action: "approve" | "dismiss") => {
     setState("working");

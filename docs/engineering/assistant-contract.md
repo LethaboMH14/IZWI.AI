@@ -35,11 +35,17 @@ type Proposal = {
   preview: { label: string; before?: string; after?: string }[]; // diff rows
   scope?: string;           // e.g. "Teaches this spelling to the whole workspace; changes 3 draft lines in 2 projects"
   kind: "action" | "jobs";
+  status?: string;          // stored history only: the plan_run status ("proposed" | "approved" | "dismissed"), or "missing"
 };
 ```
 
 ## `POST /api/projects/[id]/assistant/transcribe`
 Multipart with a single `audio` field (at most 10 MB, at most 60 s). Returns `{ text }`, or 413, 415 or 429 `{ error, retryAfter }` when whisper is busy. It runs through the worker's `voice_transcribe` job.
+
+## Proposal content
+- Clip tools require a one-sentence `reason` from the model; it becomes the card's reason.
+- A keep or drop of a clip that is already in that state is not a proposal; the tool tells the model so.
+- Clip cards carry `source`: the transcript line where the clip starts.
 
 ## Approval
 The existing `POST /api/plan/[planId]` with `{ action: "approve" | "dismiss" }`. A 409 means the proposal is stale; the UI shows the message and offers "Ask again".
