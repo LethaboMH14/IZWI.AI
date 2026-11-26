@@ -6,6 +6,6 @@ import { projectState } from "@/server/state";
 export const runtime = "nodejs";
 type P = { id: string };
 
-export const GET = route<P>(async (_req, { id }) => projectState(await requireCtx(), id));
+export const GET = route<P>(async (req, { id }) => projectState(await requireCtx(), id, { lite: new URL(req.url).searchParams.get("lite") === "1" }));
 export const PATCH = route<P>(async (req, { id }) => updateProject(await requireCtx(), id, await body(req, ProjectIn.partial())));
 export const DELETE = route<P>(async (_req, { id }) => deleteProject(await requireCtx(), id));

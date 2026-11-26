@@ -225,8 +225,8 @@ async function publishJob(c: JobCtx) {
       run(`UPDATE clip SET status = 'kept', updated_at = ? WHERE id = ? AND project_id = ? AND workspace_id = ? AND status = 'suggested'`, now(), id, proj.id, ws);
     }
   }
-  const clips = all<{ id: string }>(
-    `SELECT c.id FROM clip c WHERE c.project_id = ? AND c.workspace_id = ? AND c.status = 'kept'
+  const clips = all<{ id: string; start_ms: number; end_ms: number; version: number }>(
+    `SELECT c.id, c.start_ms, c.end_ms, c.version FROM clip c WHERE c.project_id = ? AND c.workspace_id = ? AND c.status = 'kept'
        AND NOT EXISTS (SELECT 1 FROM output o WHERE o.clip_id = c.id AND o.preset = 'vertical' AND o.status IN ('queued','ready','blocked'))
      ORDER BY c.start_ms`,
     proj.id, ws,
@@ -242,7 +242,7 @@ async function publishJob(c: JobCtx) {
         `INSERT INTO output (id, workspace_id, project_id, clip_id, preset, language, burn, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, 'vertical', ?, 1, 'queued', ?, ?, ?)`,
         outId, ws, proj.id, clip.id, language, c.job.created_by ?? "system", now(), now(),
       );
-      const j = enqueue({ workspaceId: ws, projectId: proj.id, type: "render", input: { outputId: outId }, idempotencyKey: `${c.job.id}:${clip.id}`, createdBy: c.job.created_by });
+      const j = enqueue({ workspaceId: ws, projectId: proj.id, type: "render", input: { outputId: outId, clip: { startMs: clip.start_ms, endMs: clip.end_ms, version: clip.version } }, idempotencyKey: `${c.job.id}:${clip.id}`, createdBy: c.job.created_by });
       run(`UPDATE output SET job_id = ? WHERE id = ?`, j.id, outId);
       renders.push(j.id);
       lastRender = j.id;
@@ -295,7 +295,11 @@ type OutputRow = { id: string; workspace_id: string; project_id: string; clip_id
 
 async function renderJob(c: JobCtx) {
   const out = one<OutputRow>(`SELECT * FROM output WHERE id = ? AND workspace_id = ?`, String(c.input.outputId), c.job.workspace_id) ?? fail("This export was removed.");
-  const clip = one<{ id: string; title: string; start_ms: number; end_ms: number }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ?`, out.clip_id, out.workspace_id) ?? fail("The clip for this export was removed.");
+  const liveClip = one<{ id: string; title: string; start_ms: number; end_ms: number; version: number }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ?`, out.clip_id, out.workspace_id) ?? fail("The clip for this export was removed.");
+  const clipSnapshot = c.input.clip as { startMs?: number; endMs?: number; version?: number } | undefined;
+  const clip = clipSnapshot && Number.isInteger(clipSnapshot.startMs) && Number.isInteger(clipSnapshot.endMs) && Number.isInteger(clipSnapshot.version)
+    ? { ...liveClip, start_ms: clipSnapshot.startMs!, end_ms: clipSnapshot.endMs!, version: clipSnapshot.version! }
+    : liveClip;
   const proj = project(c.job.workspace_id, out.project_id);
   if (!isPreset(out.preset)) fail("Unknown export format.");
   const gate = gateFor(proj.id, clip.start_ms, clip.end_ms);
@@ -364,6 +368,8 @@ async function renderJob(c: JobCtx) {
       const active = one(`SELECT 1 FROM job WHERE id = ? AND worker_id = ? AND attempts = ? AND status = 'running' AND lease_until > ?`, c.job.id, c.job.worker_id, c.job.attempts, now());
       const current = one<{ status: string; job_id: string | null }>(`SELECT status, job_id FROM output WHERE id = ? AND workspace_id = ?`, out.id, out.workspace_id);
       if (!active || c.signal.aborted || !current || current.job_id !== c.job.id || current.status !== "queued") return "inactive";
+      const currentClip = one<{ start_ms: number; end_ms: number; version: number }>(`SELECT start_ms, end_ms, version FROM clip WHERE id = ? AND workspace_id = ?`, clip.id, out.workspace_id);
+      if (!currentClip || currentClip.start_ms !== clip.start_ms || currentClip.end_ms !== clip.end_ms || currentClip.version !== clip.version) return "The clip changed during rendering. Render it again.";
       const currentDeclaration = one<{ id: string; created_at: number; statement: string }>(`SELECT id, created_at, statement FROM declaration WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`, proj.id);
       if (!currentDeclaration || currentDeclaration.id !== snapshot.declaration.id || currentDeclaration.created_at !== snapshot.declaration.created_at) return "The creator declaration changed during rendering. Render again to create fresh signed provenance.";
       const currentConsents = renderConsentSnapshot(proj.id, clip.start_ms, clip.end_ms);

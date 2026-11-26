@@ -3,7 +3,7 @@ import { z } from "zod";
 import { all, newId, now, one, parse, run, tx } from "./db";
 import { projectOf, requireRole, type Ctx } from "./guard";
 import { HttpError, fail } from "./http";
-import { enqueue, publicJob, requeueBlocked } from "./jobs";
+import { enqueue, publicJob, requeueBlocked, cancelQueuedOrBlocked } from "./jobs";
 import { audit } from "./audit";
 import { hashToken, newToken } from "./crypto";
 import { LIMITS, PUBLIC_URL } from "./env";
@@ -79,6 +79,7 @@ export const ClipIn = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   startMs: z.number().int().min(0).optional(),
   endMs: z.number().int().min(1).optional(),
+  expectUpdatedAt: z.number().int().optional(),
   status: z.enum(["suggested", "kept", "dropped"]).optional(),
 });
 
@@ -92,14 +93,20 @@ export function createClip(ctx: Ctx, projectId: string, c: { title: string; star
 }
 
 export function updateClip(ctx: Ctx, id: string, patch: z.infer<typeof ClipIn>, expectedProjectId?: string) {
-  const c = one<{ id: string; project_id: string; title: string; start_ms: number; end_ms: number; status: string }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ? AND (? IS NULL OR project_id = ?)`, id, ctx.workspaceId, expectedProjectId ?? null, expectedProjectId ?? null) ?? fail(404, "Not found.");
+  const c = one<{ id: string; project_id: string; title: string; start_ms: number; end_ms: number; status: string; updated_at: number }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ? AND (? IS NULL OR project_id = ?)`, id, ctx.workspaceId, expectedProjectId ?? null, expectedProjectId ?? null) ?? fail(404, "Not found.");
   const start = patch.startMs ?? c.start_ms, end = patch.endMs ?? c.end_ms;
   if (end - start < 1000) fail(400, "A clip must be at least one second long.");
   const src = one<{ duration_ms: number | null }>(`SELECT duration_ms FROM asset WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, c.project_id);
   if (src?.duration_ms && end > src.duration_ms + 50) fail(400, "The clip ends after the recording does.");
   const moved = start !== c.start_ms || end !== c.end_ms;
-  run(`UPDATE clip SET title = ?, start_ms = ?, end_ms = ?, status = ?, version = version + ?, updated_at = ? WHERE id = ?`, patch.title ?? c.title, start, end, patch.status ?? c.status, moved ? 1 : 0, now(), c.id);
-  if (moved) run(`UPDATE output SET status = 'failed', note = 'The clip changed after this render. Render it again.' WHERE clip_id = ? AND status = 'ready' AND posted_at IS NULL`, c.id);
+  const updated = run(`UPDATE clip SET title = ?, start_ms = ?, end_ms = ?, status = ?, version = version + ?, updated_at = ? WHERE id = ?${patch.expectUpdatedAt !== undefined ? " AND updated_at = ?" : ""}`, patch.title ?? c.title, start, end, patch.status ?? c.status, moved ? 1 : 0, now(), c.id, ...(patch.expectUpdatedAt !== undefined ? [patch.expectUpdatedAt] : []));
+  if (patch.expectUpdatedAt !== undefined && !updated.changes) fail(409, "This changed since you loaded it.");
+  if (moved) {
+    const note = "The clip changed during rendering. Render it again.";
+    const affected = all<{ id: string; job_id: string | null }>(`SELECT id, job_id FROM output WHERE clip_id = ? AND status IN ('ready','queued','blocked','running') AND posted_at IS NULL`, c.id);
+    run(`UPDATE output SET status = 'failed', note = ?, updated_at = ? WHERE clip_id = ? AND status IN ('ready','queued','blocked','running') AND posted_at IS NULL`, note, now(), c.id);
+    for (const o of affected) if (o.job_id) cancelQueuedOrBlocked(o.job_id, ctx.workspaceId);
+  }
   touch(c.project_id);
 }
 
@@ -121,17 +128,18 @@ export function refreshTrack(trackId: string) {
   }
 }
 
-export const LineIn = z.object({ text: z.string().trim().min(1).max(400).optional(), approve: z.boolean().optional() });
+export const LineIn = z.object({ text: z.string().trim().min(1).max(400).optional(), expectText: z.string().max(400).optional(), approve: z.boolean().optional() });
 
 export function updateLine(ctx: Ctx, id: string, patch: z.infer<typeof LineIn>, by: string) {
   const l = lineOf(ctx, id);
   if (patch.text !== undefined && patch.text !== l.text.replace(/\n/g, " ")) {
     const words = patch.text.split(/\s+/);
     const step = (l.end_ms - l.start_ms) / words.length;
-    run(
-      `UPDATE caption_line SET text = ?, words = ?, edited = 1, status = 'draft', approved_by = NULL, approved_at = NULL, flag = NULL WHERE id = ?`,
-      lineText(words.map((w) => ({ w }))), JSON.stringify(words.map((w, i) => ({ w, s: Math.round(l.start_ms + i * step), e: Math.round(l.start_ms + (i + 1) * step) }))), l.id,
+    const updated = run(
+      `UPDATE caption_line SET text = ?, words = ?, edited = 1, status = 'draft', approved_by = NULL, approved_at = NULL, flag = NULL WHERE id = ?${patch.expectText !== undefined ? " AND text = ?" : ""}`,
+      lineText(words.map((w) => ({ w }))), JSON.stringify(words.map((w, i) => ({ w, s: Math.round(l.start_ms + i * step), e: Math.round(l.start_ms + (i + 1) * step) }))), l.id, ...(patch.expectText !== undefined ? [patch.expectText] : []),
     );
+    if (patch.expectText !== undefined && !updated.changes) fail(409, "This changed since you loaded it.");
   }
   if (patch.approve !== undefined) {
     run(`UPDATE caption_line SET status = ?, approved_by = ?, approved_at = ? WHERE id = ?`, patch.approve ? "approved" : "draft", patch.approve ? by : null, patch.approve ? now() : null, l.id);
@@ -267,20 +275,33 @@ export const OutputIn = z.object({ clipId: z.string(), preset: z.string(), langu
 
 export function createOutput(ctx: Ctx, projectId: string, o: z.infer<typeof OutputIn>, idem: string | null) {
   const p = projectOf(ctx, projectId);
+  return tx(() => {
+  const jobKey = idem ? `api:${idem.slice(0, 80)}` : null;
+  if (jobKey) {
+    const existing = one<{ input: string }>(`SELECT input FROM job WHERE workspace_id = ? AND project_id = ? AND idempotency_key = ?`, ctx.workspaceId, p.id, `${ctx.workspaceId}:${jobKey}`);
+    if (existing) {
+      const input = parse<{ outputId?: string }>(existing.input, {});
+      if (input.outputId) {
+        const old = one<{ status: string; note: string | null }>(`SELECT status, note FROM output WHERE id = ?`, input.outputId);
+        return { id: input.outputId, blocked: old?.status === "blocked", reason: old?.status === "blocked" ? old.note : null };
+      }
+    }
+  }
   if (!isPreset(o.preset)) fail(400, "Unknown format.");
-  const clip = one<{ id: string; start_ms: number; end_ms: number; version: number }>(`SELECT id, start_ms, end_ms, version FROM clip WHERE id = ? AND project_id = ?`, o.clipId, p.id) ?? fail(404, "Clip not found.");
   if (o.language && !one(`SELECT 1 FROM caption_track WHERE project_id = ? AND language = ?`, p.id, o.language)) fail(409, `There are no ${langName(o.language)} captions yet.`);
+  const clip = one<{ id: string; start_ms: number; end_ms: number; version: number }>(`SELECT id, start_ms, end_ms, version FROM clip WHERE id = ? AND project_id = ?`, o.clipId, p.id) ?? fail(404, "Clip not found.");
   const outId = newId("out");
   const gate = gateFor(p.id, clip.start_ms, clip.end_ms);
   run(
     `INSERT INTO output (id, workspace_id, project_id, clip_id, preset, language, burn, status, note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     outId, ctx.workspaceId, p.id, clip.id, o.preset, o.language, o.burn ? 1 : 0, gate.ok ? "queued" : "blocked", gate.ok ? null : gateReason(gate), ctx.userId, now(), now(),
   );
-  const job = enqueue({ workspaceId: ctx.workspaceId, projectId: p.id, type: "render", input: { outputId: outId }, idempotencyKey: idem ? `api:${idem.slice(0, 80)}` : `render:${outId}`, createdBy: ctx.userId });
+  const job = enqueue({ workspaceId: ctx.workspaceId, projectId: p.id, type: "render", input: { outputId: outId, clip: { startMs: clip.start_ms, endMs: clip.end_ms, version: clip.version } }, idempotencyKey: jobKey ?? `render:${outId}`, createdBy: ctx.userId });
   run(`UPDATE output SET job_id = ? WHERE id = ?`, job.id, outId);
   if (!gate.ok) run(`UPDATE job SET status = 'blocked', error = ? WHERE id = ? AND status = 'queued'`, gateReason(gate), job.id);
   touch(p.id);
   return { id: outId, blocked: !gate.ok, reason: gate.ok ? null : gateReason(gate) };
+  });
 }
 
 export const PostedIn = z.object({ platform: z.string().trim().min(1).max(40), url: z.string().trim().url().max(500).optional() });
