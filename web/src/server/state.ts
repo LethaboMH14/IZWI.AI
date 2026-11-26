@@ -9,14 +9,16 @@ import { PUBLIC_URL } from "./env";
 
 type A = { id: string; kind: string; filename: string; mime: string; bytes: number; sha256: string | null; duration_ms: number | null; width: number | null; height: number | null; meta: string; storage_key: string; created_at: number };
 
-export function projectState(ctx: Ctx, projectId: string) {
+export function projectState(ctx: Ctx, projectId: string, options: { lite?: boolean } = {}) {
   const p = projectOf(ctx, projectId);
-  const assets = all<A>(`SELECT * FROM asset WHERE project_id = ? ORDER BY created_at`, p.id);
+  const assets = all<A>(`SELECT * FROM asset WHERE workspace_id = ? AND project_id = ? ORDER BY created_at`, ctx.workspaceId, p.id);
   const pick = (kind: string) => [...assets].reverse().find((a) => a.kind === kind);
   const source = pick("source");
-  const peaksAsset = pick("peaks");
   let peaks: number[] = [];
-  if (peaksAsset && existsSync(absPath(peaksAsset.storage_key))) peaks = parse<number[]>(readFileSync(absPath(peaksAsset.storage_key), "utf8"), []);
+  if (!options.lite) {
+    const peaksAsset = pick("peaks");
+    if (peaksAsset && existsSync(absPath(peaksAsset.storage_key))) peaks = parse<number[]>(readFileSync(absPath(peaksAsset.storage_key), "utf8"), []);
+  }
   const pub = (a?: A) => a && { id: a.id, filename: a.filename, mime: a.mime, bytes: a.bytes, sha256: a.sha256, durationMs: a.duration_ms, width: a.width, height: a.height, meta: parse<Record<string, unknown>>(a.meta, {}) };
 
   const tracks = all<{ id: string; language: string; kind: string; status: string; engine: string; updated_at: number; lines: number; approved: number; flagged: number }>(
@@ -33,9 +35,12 @@ export function projectState(ctx: Ctx, projectId: string) {
       ).map((l) => ({ id: l.id, idx: l.idx, startMs: l.start_ms, endMs: l.end_ms, text: l.text, words: parse(l.words, []), status: l.status, flag: l.flag, edited: !!l.edited }))
     : [];
 
-  const clips = all<{ id: string; title: string; start_ms: number; end_ms: number; reason: string; origin: string; status: string; updated_at: number }>(
-    `SELECT * FROM clip WHERE project_id = ? ORDER BY start_ms`, p.id,
-  ).map((c) => ({ id: c.id, title: c.title, startMs: c.start_ms, endMs: c.end_ms, reason: c.reason, origin: c.origin, status: c.status, gate: gateFor(p.id, c.start_ms, c.end_ms) }));
+  const clips = all<{ id: string; title: string; start_ms: number; end_ms: number; reason: string; origin: string; status: string; version: number; updated_at: number }>(
+    `SELECT * FROM clip WHERE workspace_id = ? AND project_id = ? ORDER BY start_ms`, ctx.workspaceId, p.id,
+  ).map((c) => ({ id: c.id, title: c.title, startMs: c.start_ms, endMs: c.end_ms, reason: c.reason, origin: c.origin, status: c.status, version: c.version, updatedAt: c.updated_at, gate: gateFor(p.id, c.start_ms, c.end_ms) }));
+  const storageRows = all<{ kind: string; bytes: number | null }>(`SELECT kind, SUM(bytes) AS bytes FROM asset WHERE workspace_id = ? AND project_id = ? GROUP BY kind`, ctx.workspaceId, p.id);
+  const byKind = Object.fromEntries(storageRows.map((row) => [row.kind, row.bytes ?? 0]));
+  const storage = { bytes: Object.values(byKind).reduce((sum, bytes) => sum + bytes, 0), byKind };
 
   const people = all<{ id: string; name: string; role: string; whole_recording: number }>(`SELECT * FROM person WHERE project_id = ? ORDER BY created_at`, p.id).map((x) => ({
     id: x.id, name: x.name, role: x.role, wholeRecording: !!x.whole_recording,
@@ -65,13 +70,15 @@ export function projectState(ctx: Ctx, projectId: string) {
   const declaration = one<{ statement: string; created_at: number }>(`SELECT statement, created_at FROM declaration WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`, p.id) ?? null;
   const plans = all<{ id: string; prompt: string; planner: string; steps: string; status: string; created_at: number }>(`SELECT * FROM plan_run WHERE project_id = ? ORDER BY created_at DESC LIMIT 5`, p.id).map((x) => ({ ...x, steps: parse(x.steps, []) }));
 
-  return {
+  const result = {
     project: { id: p.id, title: p.title, kind: p.kind, spokenLanguage: p.spoken_language, createdAt: p.created_at, updatedAt: p.updated_at },
-    source: pub(source) ?? null, proxy: pub(pick("proxy")) ?? null, poster: pub(pick("poster")) ?? null, peaks,
+    source: pub(source) ?? null, proxy: pub(pick("proxy")) ?? null, poster: pub(pick("poster")) ?? null, peaks, storage,
     packages: assets.filter((a) => a.kind === "package").reverse().map(pub),
     tracks, lines, clips, people, outputs, links, comments, listings, declaration, plans,
     jobs: projectJobs(p.id),
   };
+  if (options.lite) delete (result as { peaks?: number[] }).peaks;
+  return result;
 }
 
 export type ProjectState = ReturnType<typeof projectState>;

@@ -104,6 +104,10 @@ export function cancelQueued(id: string, workspaceId: string) {
   return run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status = 'queued'`, now(), id, workspaceId).changes > 0;
 }
 
+export function cancelQueuedOrBlocked(id: string, workspaceId: string) {
+  return run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status IN ('queued','blocked')`, now(), id, workspaceId).changes > 0;
+}
+
 export function acquireWhisperLease(jobId: string, leaseMs = 300_000) {
   const t = now();
   return Boolean(one(`INSERT INTO whisper_lease (id, job_id, expires_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET job_id = excluded.job_id, expires_at = excluded.expires_at WHERE whisper_lease.expires_at <= ? RETURNING job_id`, jobId, t + leaseMs, t));
