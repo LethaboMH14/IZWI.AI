@@ -12,11 +12,18 @@ import { unseal } from "../../../../../server/crypto";
 import { privacyOf, type ProviderRow } from "../../../../../server/providers";
 import { PUBLIC_URL } from "../../../../../server/env";
 import { assistantTools, buildAssistantContext, persistProposals, saveAssistantTurn, type Proposal, redactForMayLog } from "../../../../../server/assistant";
+import { assistantEnabled } from "../../../../../server/flags";
 
 const Input = z.object({ threadId: z.string().min(1).optional(), providerId: z.string().min(1), text: z.string().min(1).max(2000) }).strict();
 const idSchema = z.string().min(1);
 
+// Kill switch: with the assistant off, both routes answer 404 before reading the body or the session.
+function requireAssistant() {
+  if (!assistantEnabled()) throw new HttpError(404, "Not found.");
+}
+
 export const GET = route<{ id: string }>(async (_req, { id }) => {
+  requireAssistant();
   idSchema.parse(id);
   const ctx = await requireCtx();
   projectOf(ctx, id);
@@ -24,7 +31,7 @@ export const GET = route<{ id: string }>(async (_req, { id }) => {
     .filter((p) => parse<string[]>(p.roles, []).includes("chat"))
     .map((p) => ({ id: p.id, label: p.label, kind: p.kind, model: p.model, privacy: privacyOf(p), ready: true }));
   const thread = one<{ id: string }>(`SELECT id FROM assistant_thread WHERE project_id = ? AND workspace_id = ? AND created_by = ? ORDER BY created_at DESC LIMIT 1`, id, ctx.workspaceId, ctx.userId);
-  const messages = thread ? all(`SELECT id, role, text, provider_label, model, privacy, redacted, proposals, created_at FROM assistant_message WHERE thread_id = ? ORDER BY created_at`, thread.id).map((m: Record<string, unknown>) => ({ id: m.id, role: m.role, text: m.text, provider: { label: m.provider_label, model: m.model, privacy: m.privacy }, redacted: m.redacted, proposals: withStatus(parse<Proposal[]>(m.proposals, []), ctx.workspaceId), createdAt: m.created_at })) : [];
+  const messages = thread ? all(`SELECT id, role, text, provider_label, model, privacy, redacted, excluded_lines, proposals, created_at FROM assistant_message WHERE thread_id = ? ORDER BY created_at`, thread.id).map((m: Record<string, unknown>) => ({ id: m.id, role: m.role, text: m.text, provider: { label: m.provider_label, model: m.model, privacy: m.privacy }, redacted: m.redacted, excludedLines: m.excluded_lines, proposals: withStatus(parse<Proposal[]>(m.proposals, []), ctx.workspaceId), createdAt: m.created_at })) : [];
   const dayKey = Math.floor(now() / LIMIT.assistantDay.windowMs) * LIMIT.assistantDay.windowMs;
   const used = one<{ count: number }>(`SELECT count FROM rate_limit WHERE key = ? AND window_start = ?`, `assistant-day:${ctx.workspaceId}:${ctx.userId}`.slice(0, 200), dayKey)?.count ?? 0;
   return { providers, thread: thread ? { id: thread.id, messages } : null, limits: { perMinute: LIMIT.assistant.max, perDay: LIMIT.assistantDay.max, usedToday: used } };
@@ -94,6 +101,7 @@ function containsSecret(value: unknown, secrets: string[]): boolean {
 }
 
 export const POST = route<{ id: string }>(async (req, { id }) => {
+  requireAssistant();
   const raw = await readCapped(req, 16 * 1024);
   let payload: unknown;
   try { payload = JSON.parse(raw); } catch { throw new HttpError(400, "Send a JSON body."); }
@@ -161,7 +169,7 @@ function startTurn(
   req.signal.addEventListener("abort", disconnect, { once: true });
   const renew = setInterval(() => { if (!renewLease(ctx.userId, ctx.workspaceId)) modelAbort.abort(); }, 20_000);
   const stream = createUIMessageStream({ execute: async ({ writer }) => {
-    writer.write({ type: "data-meta", data: { threadId, messageId: newId("asm"), provider: { label: provider.label, model: provider.model, privacy }, redacted } } as never);
+    writer.write({ type: "data-meta", data: { threadId, messageId: newId("asm"), provider: { label: provider.label, model: provider.model, privacy }, redacted, excludedLines: context.excludedLines } } as never);
     const filter = canaryFilter(context.canary, [key]);
     const toolFilter = canaryFilter(context.canary, [key]);
     const textId = "assistant-text";
@@ -239,8 +247,8 @@ function startTurn(
       const finalText = modelText + extra;
       let saved: Proposal[] = [];
       tx(() => {
-        saved = persistProposals(ctx, id, proposals, provider);
-        saveAssistantTurn({ threadId, projectId: id, workspaceId: ctx.workspaceId, provider, text: input.text, assistantText: finalText, redacted, proposals: saved, requestId, tokensIn, tokensOut });
+        saved = persistProposals(ctx, id, proposals, provider, threadId);
+        saveAssistantTurn({ threadId, projectId: id, workspaceId: ctx.workspaceId, provider, text: input.text, assistantText: finalText, redacted, excludedLines: context.excludedLines, proposals: saved, requestId, tokensIn, tokensOut });
       });
       writer.write({ type: "data-proposals", data: { proposals: saved } } as never);
       outcome = "ok";

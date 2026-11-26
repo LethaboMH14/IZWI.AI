@@ -472,6 +472,11 @@ CREATE TABLE model_route (
 CREATE INDEX model_route_provider ON model_route(provider_id);
 `,
   },
+  {
+    version: 8,
+    name: "assistant reply records held-back transcript lines",
+    sql: `ALTER TABLE assistant_message ADD COLUMN excluded_lines INTEGER NOT NULL DEFAULT 0 CHECK (excluded_lines >= 0);`,
+  },
 ];
 
 function reconcileStudioHistory() {
