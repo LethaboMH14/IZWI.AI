@@ -18,9 +18,9 @@
   --moss: #4f6b3a;
   --moss-tint: #e2ebd8;
   --display: var(--font-fraunces), Georgia, serif;
-  --text: "Switzer", "Segoe UI", sans-serif;
+  --text: var(--font-ui), "Segoe UI", sans-serif;
   --serif: var(--font-fraunces), Georgia, serif;
-  --mono: var(--font-mono), ui-monospace, monospace;
+  --mono: var(--font-time), ui-monospace, monospace;
   --r-s: 10px;
   --r-m: 18px;
   --r-l: 28px;

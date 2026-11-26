@@ -118,3 +118,26 @@
   .gx-consent .gx-quote { font-size: 0.85rem; }
   .gx-consent .gx-hint { padding: 0.35rem 0.6rem; }
 }
+
+/* Design system v2 (docs/design/DESIGN-SYSTEM.md): the public pages take the studio's ivory surfaces, Fraunces
+   upright titles, Instrument Sans text, amber actions and 8 px controls. Markup unchanged. */
+.gx { background: var(--z-ivory-2); color: var(--z-ink); font-family: var(--z-font-ui); }
+.gx h1, .gx h2, .gx h3 { font-family: var(--z-font-display); font-weight: 650; letter-spacing: -0.01em; font-variation-settings: "SOFT" 0, "WONK" 0; font-style: normal; }
+.gx-kicker { text-transform: none; letter-spacing: 0; font-size: var(--z-text-meta); color: var(--z-amber-text); }
+.gx-top small, .gx-small, .gx .field small { color: var(--z-ink-muted); }
+.gx-card { background: var(--z-ivory-0); border: 1px solid var(--z-ivory-line); border-radius: var(--z-r-panel); box-shadow: none; }
+.gx-quote, .gx-tr { font-style: normal; }
+.gx-quote { border-left-color: var(--z-amber); background: var(--z-ivory-1); }
+.gx-withdraw, .gx-range, .gx-nomedia, .gx-langs span { background: var(--z-ivory-4); }
+.gx-range.on, .gx-hint { background: var(--z-amber-tint); }
+.gx-line.now { border-color: var(--z-amber); background: var(--z-amber-tint); }
+.gx .btn { border-radius: var(--z-r-control); font-family: var(--z-font-ui); font-weight: 600; }
+.gx .btn-gold { background: var(--z-amber); color: var(--z-amber-ink); border: 1px solid var(--z-amber-strong); }
+.gx .btn-gold:hover { background: var(--z-amber-glow); }
+.gx .btn-clay { background: var(--z-clay); color: #fff; }
+.gx .field input, .gx .field textarea { border-radius: var(--z-r-control); border-color: var(--z-ivory-line-strong); background: #fffaf3; }
+.gx .field input:focus, .gx .field textarea:focus { border-color: var(--z-amber-strong); box-shadow: 0 0 0 3px var(--z-amber-tint); }
+.gx-ok { color: var(--z-moss); background: var(--z-moss-tint); }
+.gx-err, .gx-flag { color: var(--z-clay); background: var(--z-clay-tint); }
+.gx button:focus-visible, .gx a:focus-visible { outline: 2px solid var(--z-amber-strong); outline-offset: 2px; }
+.gx .mono { font-family: var(--z-font-mono); font-variant-numeric: tabular-nums; }

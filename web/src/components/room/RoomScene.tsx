@@ -1,0 +1,15 @@
+"use client";
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useEffect, useMemo, useRef } from 'react';
+import * as THREE from 'three';
+function Interior({peaks, selected, onSelect}:{peaks:number[]; selected:number|null; onSelect:(index:number)=>void}) {
+ const {camera, invalidate} = useThree(); const animation = useRef<{start:number; from:THREE.Vector3; to:THREE.Vector3; target:THREE.Vector3}|null>(null);
+ useEffect(() => { const a = selected === null ? 0 : selected * Math.PI*2/5; animation.current = {start:performance.now(), from:camera.position.clone(), to:selected === null ? new THREE.Vector3(0,8,12) : new THREE.Vector3(Math.sin(a)*7,4,Math.cos(a)*7), target:selected === null ? new THREE.Vector3(0,0,0) : new THREE.Vector3(Math.sin(a)*4,0,Math.cos(a)*4)}; invalidate(); },[selected,camera,invalidate]);
+ useFrame(() => { const a=animation.current; if (!a) return; const t=Math.min(1,(performance.now()-a.start)/650), ease=1-Math.pow(1-t,3); camera.position.lerpVectors(a.from,a.to,ease); camera.lookAt(a.target); if(t<1) invalidate(); else animation.current=null; });
+ const samples=useMemo(() => peaks.length <= 120 ? peaks : Array.from({length:120},(_,i)=>peaks[Math.floor(i*peaks.length/120)]),[peaks]);
+ return <><color attach="background" args={['#110d09']}/><fog attach="fog" args={['#20150c',12,35]}/><ambientLight intensity={0.6}/><pointLight position={[0,7,0]} color="#ffb85e" intensity={75}/><pointLight position={[-7,4,-5]} color="#c4712e" intensity={32}/>
+ <mesh rotation={[-Math.PI/2,0,0]}><planeGeometry args={[50,50]}/><meshStandardMaterial color="#1c1712" metalness={0.65} roughness={0.42}/></mesh><gridHelper args={[30,30,'#805126','#4e3925']} position={[0,.01,0]} material-transparent material-opacity={0.12}/>
+ {samples.map((v,i) => { const a=i*Math.PI*2/samples.length, h=.06+Math.min(1,Math.abs(Number.isFinite(v)?v:0))*1.2; return <mesh key={i} position={[Math.sin(a)*2,h/2+.03,Math.cos(a)*2]}><boxGeometry args={[.055,h,.055]}/><meshStandardMaterial color="#e5a448" emissive="#bf6d1c" emissiveIntensity={1.4}/></mesh>; })}
+ {Array.from({length:5},(_,i)=>{const a=i*Math.PI*2/5;return <group key={i} position={[Math.sin(a)*4,0,Math.cos(a)*4]} onClick={(event)=>{event.stopPropagation();onSelect(i)}}><mesh position={[0,.18,0]}><cylinderGeometry args={[.7,.85,.36,48]}/><meshStandardMaterial color="#574536" metalness={.75} roughness={.35}/></mesh><mesh position={[0,.37,0]}><cylinderGeometry args={[.65,.65,.025,48]}/><meshStandardMaterial color="#aa6829" emissive="#a45513" emissiveIntensity={selected===i?1.8:.6}/></mesh></group>})}</>;
+}
+export default function RoomScene({peaks,selected,onFailure,onSelect}:{peaks:number[];selected:number|null;onFailure:()=>void;onSelect:(index:number)=>void}) {return <Canvas frameloop="demand" dpr={[1,1.5]} camera={{position:[0,8,12],fov:45}} onCreated={({gl})=>gl.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();onFailure()},{once:true})}><Interior peaks={peaks} selected={selected} onSelect={onSelect}/></Canvas>}
