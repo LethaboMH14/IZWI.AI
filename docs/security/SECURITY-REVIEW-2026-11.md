@@ -9,6 +9,8 @@ Scope: plan v3 §1 (security fixes) and §2 backend (correctness bugs), on branc
 
 Nothing here is marked fixed because it was designed or mocked.
 
+Rows below describe the 24 Nov review. What changed or was measured on 26 Nov is in [Update, 26 Nov 2026](#update-26-nov-2026).
+
 ## Verification, 24 Nov 2026 (Windows 11, Node 24)
 | Check | Result |
 |---|---|
@@ -54,3 +56,38 @@ Nothing here is marked fixed because it was designed or mocked.
 - Security CI workflow (§7): waits on the foundation-CI PR.
 - HTTP-level two-tenant tests through the route handlers. The current isolation tests call the server functions directly.
 - CSP enforcement and a walk through the signed-in studio with the CSP enforced.
+
+## Update, 26 Nov 2026
+
+Measurements and their limits are in the [QA report](../QA-REPORT.md). PR #10, #11 and #12 were open and not reviewed, so nothing marked with a PR number is on `main`.
+
+### Verification
+| Check | Result |
+|---|---|
+| CI on `main` (`6eb0185`) | 176 tests in 24 files, build, gitleaks (no leaks), semgrep (74 rules, 0 findings), `npm audit --omit=dev` (0 vulnerabilities) |
+| CI on PR #10 / PR #11 | 184 / 180 tests, same scans clean. Not tested merged together |
+| CSP enforced, signed-in walk (PR #10 build) | One violation kind: Zod's blocked `eval` probe. Account creation, listing page, passkeys, microphone, a live assistant reply and phone width not walked |
+| Injection check on a planted line (PR #10 build) | 25 lines, 1 flagged and held back, no proposal. One run; not an accuracy measure |
+| Signed provenance (PR #10 build) | 5 of 5 renders verified; a one-byte change failed. Consent ledger ok, 6 entries |
+| Hosted-mode origin check (emulation) | Own `Origin` passes on both hostnames with PR #11; foreign, mismatched or missing `Origin` and unknown `Host` get 403 |
+
+### Changes to rows above
+| Row | Change |
+|---|---|
+| §1 2, headers and CSP | The signed-in walk with the policy enforced has now been done on the PR #10 build. Still Report-Only by default |
+| §1 3, CSRF | **Defect found in hosted mode:** every write sent to a configured public hostname was refused, because the check used the server's listen address. It failed closed. Fix with tests in PR #11, not merged |
+| §1 10, audit and ledger | Assistant proposal audit and the `/trust` ledger head are in PR #10, not merged |
+| §1 11, tunnel | Runbook and a consent-only allowlist in PR #11. Checked by emulation; still no real tunnel. The provider is still an assumption |
+| §1 12, deliverables | `../business/SSDLC.md` and `../DATA-USE.md` now exist |
+
+### Open findings from 26 Nov
+| Finding | Effect | Status |
+|---|---|---|
+| The assistant chat route does not call the hosted trial's reservation (`reserveTrialCall`) | Trial request and spending caps don't cover assistant replies. The assistant's own budget still applies | Open (found by reading the code; not exercised) |
+| A transcript line edited after transcription is not rescanned | Edited text reaches the assistant without the injection check | Open |
+| `deploy/tunnel/demo.env.example` enables trial mode with empty rules | Fails closed: provider connection tests are refused until rules are written | Open; PR #11's runbook explains it |
+| The consent link note says links work for 30 days; `LIMITS.linkDays` is 14 | The creator is told the wrong expiry | Open |
+
+### Still not done
+HTTP-level two-tenant tests, a security CI workflow beyond the current checks, penetration testing, and any test against a public address.
+
