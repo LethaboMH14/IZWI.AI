@@ -30,6 +30,22 @@ export const GET = route<{ id: string }>(async (_req, { id }) => {
   return { providers, thread: thread ? { id: thread.id, messages } : null, limits: { perMinute: LIMIT.assistant.max, perDay: LIMIT.assistantDay.max, usedToday: used } };
 });
 
+// Text-only tool results, as the lines the creator should see. Everything else (proposals) renders as cards.
+export function draftText(toolName: string, output: unknown): string[] {
+  const o = (output ?? {}) as { titles?: unknown; caption?: unknown; post?: unknown };
+  if (toolName === "draftTitles" && Array.isArray(o.titles)) {
+    const titles = o.titles.filter((t): t is string => typeof t === "string" && t.trim().length > 0);
+    return titles.length ? ["Draft titles:", ...titles.map((t) => `- ${t.trim()}`)] : [];
+  }
+  if (toolName === "draftCaptionPost") {
+    const lines: string[] = [];
+    if (typeof o.caption === "string" && o.caption.trim()) lines.push(`Draft caption: ${o.caption.trim()}`);
+    if (typeof o.post === "string" && o.post.trim()) lines.push(`Draft post: ${o.post.trim()}`);
+    return lines;
+  }
+  return [];
+}
+
 export function canaryFilter(canary: string, secrets: string[] = []) {
   let tail = "";
   const markers = [canary, ...secrets.filter(Boolean)];
@@ -190,17 +206,32 @@ function startTurn(
           if (activeReceipt === receipt) activeReceipt = null;
         },
       });
+      // Draft tools (titles, caption posts) return text only. Small models often answer with just a tool call,
+      // so their results must become visible text, or the creator sees an empty reply.
+      const drafted: string[] = [];
       for await (const part of result.fullStream) {
         if (part.type === "text-delta") {
           const safe = filter.push(part.text);
           if (safe) writer.write({ type: "text-delta", id: textId, delta: safe } as never);
         } else if (part.type === "tool-input-delta") toolFilter.push(part.delta);
+        else if (part.type === "tool-result") drafted.push(...draftText(part.toolName, part.output));
         else if (part.type === "error") throw part.error;
       }
       const rest = filter.flush(); if (rest) writer.write({ type: "text-delta", id: textId, delta: rest } as never);
+      const modelText = await result.text;
+      if (containsSecret(modelText, [context.canary, key]) || containsSecret(drafted, [context.canary, key]) || containsSecret(proposals, [context.canary, key]) || containsSecret(decodedToolInputs, [context.canary, key])) throw new Error("CANARY");
+      // Never end a turn silently: say what came back, or that nothing usable did.
+      const tail: string[] = [];
+      if (drafted.length) tail.push(drafted.join("\n"));
+      if (!modelText.trim() && !drafted.length) {
+        tail.push(proposals.length
+          ? `Here ${proposals.length === 1 ? "is 1 suggestion" : `are ${proposals.length} suggestions`} to review. Nothing changes until you approve.`
+          : "I couldn't come up with a usable suggestion this time. Try asking again, a little more specifically, or use a larger model.");
+      }
+      const extra = tail.length ? `${modelText.trim() ? "\n\n" : ""}${tail.join("\n\n")}` : "";
+      if (extra) writer.write({ type: "text-delta", id: textId, delta: extra } as never);
       writer.write({ type: "text-end", id: textId } as never);
-      const finalText = await result.text;
-      if (containsSecret(finalText, [context.canary, key]) || containsSecret(proposals, [context.canary, key]) || containsSecret(decodedToolInputs, [context.canary, key])) throw new Error("CANARY");
+      const finalText = modelText + extra;
       let saved: Proposal[] = [];
       tx(() => {
         saved = persistProposals(ctx, id, proposals, provider);
