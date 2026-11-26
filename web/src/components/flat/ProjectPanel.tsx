@@ -99,6 +99,7 @@ function People() {
 export function ProjectPanel({ onClose }: { onClose?: () => void }) {
   const source = useProject((s) => s.state.source);
   const posterId = useProject((s) => s.state.poster?.id);
+  const storageBytes = useProject((s) => s.state.storage?.bytes ?? 0); // all of this project's assets (ui-contracts D)
   const scenes = useScenes();
   const facts = source
     ? ["Source", source.width && source.height ? `${source.width}×${source.height}` : null, source.bytes ? bytes(source.bytes) : null].filter(Boolean).join(" · ")
@@ -127,7 +128,7 @@ export function ProjectPanel({ onClose }: { onClose?: () => void }) {
       <Outputs />
       <Languages />
       <People />
-      {source && <p className="fs-project-foot">Source <span className="fs-mono">{bytes(source.bytes)}</span></p>}
+      {storageBytes > 0 && <p className="fs-project-foot" title="All files in this project: source, preview, renders, captions, packages">Project files <span className="fs-mono">{bytes(storageBytes)}</span></p>}
     </div>
   );
 }

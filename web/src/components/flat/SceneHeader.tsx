@@ -92,7 +92,7 @@ export function SceneHeader({ compact = false }: { compact?: boolean }) {
       <div className="fs-head-text">
         <h1 className="fs-h1">
           <EditableTitle value={scene.title} label="Scene title" disabledReason={readOnly}
-            onSave={(title) => store.getState().mutate(`clip:${scene.id}`, (signal) => api(`/api/items/clip/${scene.id}`, { method: "PATCH", body: { title }, signal }).then(() => undefined))} />
+            onSave={(title) => store.getState().mutate(`clip:${scene.id}`, (signal) => api(`/api/items/clip/${scene.id}`, { method: "PATCH", body: { title, expectUpdatedAt: store.getState().state.clips.find((c) => c.id === scene.id)?.updatedAt }, signal }).then(() => undefined))} />
         </h1>
         <div className="fs-sub">
           {!compact && <>{projectTitle} · </>}{sceneLabel(scenes, scene.id)}

@@ -24,7 +24,9 @@ export type ProjectStoreState = {
   stopPolling(): void;
 };
 
-export function createProjectStore(id: string, initial: ProjectState): StoreApi<ProjectStoreState> {
+// singleEditor: the old second-tab read-only guard. Off by default since the server's conditional writes
+// (ui-contracts C: expectUpdatedAt / expectText → 409) protect concurrent edits; kept for tests and as a fallback.
+export function createProjectStore(id: string, initial: ProjectState, opts: { singleEditor?: boolean } = {}): StoreApi<ProjectStoreState> {
   let requestGeneration = 0;
   let newestApplied = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -73,6 +75,8 @@ export function createProjectStore(id: string, initial: ProjectState): StoreApi<
         } catch (cause) {
           const message = cause instanceof Error ? cause.message : "Save failed.";
           set((s) => ({ save: { ...s.save, lastError: message } }));
+          // 409: someone else changed it first. Load their version instead of leaving a stale view on screen.
+          if (cause instanceof ApiError && cause.status === 409) void refresh();
           throw cause;
         } finally { set((s) => ({ save: { ...s.save, pending: Math.max(0, s.save.pending - 1) } })); }
       });
@@ -96,7 +100,7 @@ export function createProjectStore(id: string, initial: ProjectState): StoreApi<
     startPolling() {
       if (!stopped) return;
       stopped = false;
-      if (channel) { guardActive = true; channel.postMessage({ type: "hello", tabId, startedAt }); window.addEventListener("beforeunload", onBeforeUnload); }
+      if (channel && opts.singleEditor) { guardActive = true; channel.postMessage({ type: "hello", tabId, startedAt }); window.addEventListener("beforeunload", onBeforeUnload); }
       document.addEventListener("visibilitychange", onVisibility);
       const schedule = () => {
         if (stopped) return;
@@ -123,7 +127,11 @@ export function createProjectStore(id: string, initial: ProjectState): StoreApi<
     controllers.add(requestController);
     store.setState({ loading: true });
     try {
-      const state = await api<ProjectState>(`/api/projects/${id}`, { signal: requestController.signal });
+      // Once peaks are loaded, poll the lite read (ui-contracts F) and keep the peaks we already have.
+      const prev = store.getState().state;
+      const lite = (prev.peaks?.length ?? 0) > 0;
+      const fetched = await api<ProjectState>(`/api/projects/${id}${lite ? "?lite=1" : ""}`, { signal: requestController.signal });
+      const state = lite ? { ...fetched, peaks: fetched.peaks ?? prev.peaks } : fetched;
       if (generation < newestApplied || requestController.signal.aborted) return;
       newestApplied = generation;
       store.setState({ state, error: null });

@@ -17,6 +17,7 @@ import { useTimelineRenders } from "./useTimelineRenders";
 
 type Clip = ReturnType<typeof useProject> extends never ? never : {
   id: string; title: string; startMs: number; endMs: number; status: string; gate: { ok: boolean; [key: string]: unknown };
+  updatedAt?: number; // sent back as expectUpdatedAt (ui-contracts C)
 };
 type Caption = { id: string; startMs: number; endMs: number; text: string; status?: string };
 type DragRange = { id: string; startMs: number; endMs: number };
@@ -222,7 +223,8 @@ export function Timeline({ compact = false, onAskAI }: { compact?: boolean; onAs
     setDraft(null);
     if (range.startMs === clip.startMs && range.endMs === clip.endMs) return;
     try {
-      await projectStore.getState().mutate(`clip:${clip.id}`, (signal) => api(`/api/items/clip/${encodeURIComponent(clip.id)}`, { method: "PATCH", body: range, signal }));
+      // expectUpdatedAt: the server refuses (409) if the clip changed since this view loaded it (ui-contracts C).
+      await projectStore.getState().mutate(`clip:${clip.id}`, (signal) => api(`/api/items/clip/${encodeURIComponent(clip.id)}`, { method: "PATCH", body: { ...range, expectUpdatedAt: clip.updatedAt }, signal }));
     } catch (error) { setNotice(error instanceof Error ? error.message : "The trim could not be saved."); }
   }, [pendingRef, projectStore]);
 
@@ -285,7 +287,7 @@ export function Timeline({ compact = false, onAskAI }: { compact?: boolean; onAs
   };
 
   const updateStatuses = async (targets: Clip[], status: "kept" | "dropped") => {
-    const results = await Promise.allSettled(targets.map((clip) => projectStore.getState().mutate(`clip:${clip.id}`, (signal) => api(`/api/items/clip/${encodeURIComponent(clip.id)}`, { method: "PATCH", body: { status }, signal }))));
+    const results = await Promise.allSettled(targets.map((clip) => projectStore.getState().mutate(`clip:${clip.id}`, (signal) => api(`/api/items/clip/${encodeURIComponent(clip.id)}`, { method: "PATCH", body: { status, expectUpdatedAt: clip.updatedAt }, signal }))));
     const failed = results.filter((result) => result.status === "rejected");
     setNotice(failed.length ? `${failed.length} failed: ${(failed[0] as PromiseRejectedResult).reason instanceof Error ? (failed[0] as PromiseRejectedResult).reason.message : "request failed"}` : `${targets.length} scene${targets.length === 1 ? "" : "s"} ${status === "kept" ? "kept" : "dropped"}`);
   };

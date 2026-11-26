@@ -120,9 +120,9 @@ describe("project store", () => {
     vi.stubGlobal("BroadcastChannel", ChannelMock);
     vi.useFakeTimers();
     vi.setSystemTime(1000);
-    const older = createProjectStore("p", fixture());
+    const older = createProjectStore("p", fixture(), { singleEditor: true });
     vi.setSystemTime(2000);
-    const newer = createProjectStore("p", fixture());
+    const newer = createProjectStore("p", fixture(), { singleEditor: true });
     vi.stubGlobal("document", { visibilityState: "hidden", addEventListener: vi.fn(), removeEventListener: vi.fn() });
     vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
     older.getState().startPolling();

@@ -38,13 +38,15 @@ const Row = memo(function Row({ line, current, query, readOnly, onSeek, onMake, 
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const settle = () => { setEditing(false); requestAnimationFrame(() => editButton.current?.focus()); };
-  const start = () => { setDraft(flat(line.text)); setError(null); setStatus("idle"); setEditing(true); };
+  // The text this edit started from: sent as expectText so an edit made elsewhere meanwhile is refused, not overwritten.
+  const baseText = useRef<string | null>(null);
+  const start = () => { baseText.current = line.text; setDraft(flat(line.text)); setError(null); setStatus("idle"); setEditing(true); };
   const save = async () => {
     const next = flat(draft);
     if (!next || next === flat(line.text)) { settle(); return; }
     setStatus("saving"); setError(null);
     try {
-      await store.getState().mutate(`line:${line.id}`, (signal) => api(`/api/items/line/${encodeURIComponent(line.id)}`, { method: "PATCH", body: { text: next }, signal }));
+      await store.getState().mutate(`line:${line.id}`, (signal) => api(`/api/items/line/${encodeURIComponent(line.id)}`, { method: "PATCH", body: { text: next, expectText: baseText.current ?? line.text }, signal }));
       setStatus("saved");
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setStatus("idle"), 2500);
