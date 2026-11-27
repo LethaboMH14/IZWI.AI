@@ -43,7 +43,7 @@ export default function Landing() {
         </nav>
         <div className="nav-cta">
           <Link href="/sign-in" className="link">Sign in</Link>
-          <Link href="/sign-in?new=1" className="btn">Try IZWI AI <ArrowRight weight="bold" /></Link>
+          <Link href="/sign-in?mode=create" className="btn">Try IZWI AI <ArrowRight weight="bold" /></Link>
         </div>
       </header>
 
@@ -57,8 +57,8 @@ export default function Landing() {
           </h1>
           <p className="lede">Bring a podcast, a film, a lesson or a song. Leave with clips, captions in the languages your audience speaks, and a record of who agreed to what.</p>
           <div className="hero-actions">
-            <Link href="/sign-in?new=1" className="btn btn-lg">Try IZWI AI <ArrowRight weight="bold" /></Link>
-            <Link href="/app/episode-04" className="link">Open the sample episode <ArrowUpRight /></Link>
+            <Link href="/sign-in?mode=create" className="btn btn-lg">Try IZWI AI <ArrowRight weight="bold" /></Link>
+            <a href="#speak" className="link">Play the sample episode <ArrowUpRight /></a>
           </div>
         </div>
         <div className="hero-frame">
@@ -77,7 +77,7 @@ export default function Landing() {
 
       <section className="makersec" id="makers">
         <h2>Whatever you <em>make.</em></h2>
-        <MakerPicker cta="/sign-in?new=1" />
+        <MakerPicker cta="/sign-in?mode=create" />
       </section>
 
       <section className="marketsec" id="markets">
@@ -122,7 +122,7 @@ export default function Landing() {
           <div className="stagecopy" key={stage}>
             <h3>{stageCopy[stage].h}</h3>
             <p>{stageCopy[stage].p}</p>
-            <Link href={`/app/episode-04#${stage.toLowerCase()}`} className="link">See the {stage} screen <ArrowUpRight /></Link>
+            <Link href="/sign-in?mode=create" className="link">Try {stage} <ArrowUpRight /></Link>
           </div>
           <StoryMap />
         </div>
@@ -168,7 +168,7 @@ export default function Landing() {
 
       <footer className="closer">
         <h2>Your voice. Your work. <em>More possibilities.</em></h2>
-        <Link href="/sign-in?new=1" className="btn btn-lg">Try IZWI AI <ArrowRight weight="bold" /></Link>
+        <Link href="/sign-in?mode=create" className="btn btn-lg">Try IZWI AI <ArrowRight weight="bold" /></Link>
         <p className="fine">IZWI AI by Team Sonar. For independent creators and small studios. Concept preview, features introduced in stages.</p>
       </footer>
     </main>

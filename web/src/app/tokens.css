@@ -1,0 +1,132 @@
+/* IZWI AI design tokens (docs/design/DESIGN-SYSTEM.md). Colours were measured from the two approved images.
+   Everything is namespaced --z-* so pages not yet moved to the new system keep their old look. */
+:root {
+  /* Shell: charcoal, used for the rail, header, stage bar and project panel */
+  --z-shell-0: #181514;
+  --z-shell-1: #1e1a1a;
+  --z-shell-2: #241d1b;
+  --z-shell-3: #24211f;
+  --z-shell-4: #2f2a26;
+  --z-shell-page: #2a2522;
+  --z-shell-line: rgba(255, 236, 210, 0.09);
+  --z-shell-line-strong: rgba(255, 236, 210, 0.16);
+  --z-shell-text: #eee3ce;
+  --z-shell-muted: #a9a294;
+  --z-shell-active: #322419;
+
+  /* Ivory working panels */
+  --z-ivory-0: #fcf4e9;
+  --z-ivory-1: #fbf0e4;
+  --z-ivory-2: #f8ebdc;
+  --z-ivory-3: #f8e9d8;
+  --z-ivory-4: #f4e3cf;
+  --z-ivory-line: #e7d6c1;
+  --z-ivory-line-strong: #d8c3a8;
+  --z-ink: #211a14;
+  --z-ink-muted: #6f6253;
+  --z-ink-faint: #8f8170;
+
+  /* Amber: selection and primary action */
+  --z-amber: #e79922;
+  --z-amber-strong: #c77d12;
+  --z-amber-ink: #241a0e;
+  --z-amber-text: #8a520a;
+  --z-amber-tint: #fcdea8;
+  --z-amber-hover: #f3d299;
+  --z-amber-glow: #efb54b;
+
+  /* Material and motion foundations: restrained texture, no glow on ivory. */
+  --z-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.36'/%3E%3C/svg%3E");
+  --z-grain-opacity-shell: 0.05;
+  --z-grain-opacity-paper: 0.035;
+  --z-paper: var(--z-ivory-0);
+  --z-elev-0: 0 1px 2px rgba(65, 43, 22, 0.08);
+  --z-elev-1: 0 2px 6px rgba(65, 43, 22, 0.08), 0 10px 26px rgba(31, 22, 14, 0.12);
+  --z-elev-2: 0 3px 10px rgba(65, 43, 22, 0.1), 0 16px 36px rgba(31, 22, 14, 0.18);
+  --z-elev-3: 0 5px 14px rgba(65, 43, 22, 0.12), 0 18px 42px rgba(12, 9, 7, 0.34);
+  --z-lit-edge: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --z-sel-ring: 0 0 0 2px var(--z-amber);
+  --z-sel-tint: rgba(231, 153, 34, 0.11);
+  --z-lift: translateY(-1px);
+  --z-focus-ring: 0 0 0 2px var(--z-ivory-0), 0 0 0 4px var(--z-amber-strong);
+
+  /* Status (never colour alone: always with a word, icon or pattern) */
+  --z-moss: #3f6b1e;
+  --z-moss-icon: #54a213;
+  --z-moss-tint: #eef0cc;
+  --z-clay: #974a3b;
+  --z-clay-tint: #f3d6cc;
+  --z-gold: #d3a96f;
+  --z-gold-tint: #f7e7c9;
+  --z-wave-original: #e1918a;
+  --z-wave-proposed: #91be63;
+
+  /* Spatial scene (dark, 3D views only) */
+  --z-night: #0b0907;
+  --z-glass: rgba(24, 20, 17, 0.78);
+  --z-glass-line: rgba(240, 190, 120, 0.18);
+  --z-edge: rgba(231, 153, 34, 0.35);
+  --z-edge-lit: #efb54b;
+
+  /* Type. The families are set by next/font in app/layout.tsx */
+  --z-font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
+  --z-font-ui: var(--font-ui), "Segoe UI", system-ui, sans-serif;
+  --z-font-mono: var(--font-time), ui-monospace, "Cascadia Mono", monospace;
+  --z-text-micro: 11px;
+  --z-text-meta: 12px;
+  --z-text-ui: 13px;
+  --z-text-body: 14px;
+  --z-text-title-s: 18px;
+  --z-text-title-m: 22px;
+  --z-text-title-l: 28px;
+  --z-text-figure: 32px;
+
+  /* Space, shape, depth */
+  --z-s1: 2px;
+  --z-s2: 4px;
+  --z-s3: 6px;
+  --z-s4: 8px;
+  --z-s5: 12px;
+  --z-s6: 16px;
+  --z-s7: 20px;
+  --z-s8: 24px;
+  --z-s9: 32px;
+  --z-r-panel: 12px;
+  --z-r-card: 10px;
+  --z-r-control: 8px;
+  --z-r-clip: 6px;
+  --z-shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.25);
+  --z-shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --z-focus: var(--z-focus-ring);
+
+  /* Layout */
+  --z-rail-w: 72px;
+  --z-header-h: 48px;
+  --z-stagebar-h: 44px;
+  --z-panel-w: 272px;
+  --z-agent-w: 360px;
+
+  /* Motion */
+  --z-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --z-dur-1: 120ms;
+  --z-dur-2: 180ms;
+  --z-dur-3: 260ms;
+  --z-dur-4: 420ms;
+  --z-ease-out: cubic-bezier(.2,.8,.2,1);
+  --z-ease-spring: cubic-bezier(.34,1.3,.64,1);
+  --z-t-hover: 120ms;
+  --z-t-menu: 160ms;
+  --z-t-panel: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --z-dur-1: 1ms;
+    --z-dur-2: 1ms;
+    --z-dur-3: 1ms;
+    --z-dur-4: 1ms;
+    --z-t-hover: 0ms;
+    --z-t-menu: 0ms;
+    --z-t-panel: 0ms;
+  }
+}

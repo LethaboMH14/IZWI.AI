@@ -3,7 +3,7 @@
 - Read README.md, docs/HANDOFF.md and docs/PRODUCT.md before changing scope.
 - The product name is IZWI AI. Team Sonar is the team. MzansiCreator OS was an unapproved draft name.
 - Preserve all five pillars: Create, Localise, Protect, Publish, Earn. A podcast is the example, not the whole product.
-- Use white/ivory surfaces, amber/gold accents and charcoal type. No purple or dark default theme. Preserve the supplied Figma template's typography and device composition.
+- Product UI: charcoal shell (icon rail, header, stage bar, project panel), ivory working panels, amber selection and actions, charcoal type on ivory. Dark surfaces only in the 3D Spatial Canvas and Story Room. No purple, and no dark Flat Studio (approved by Lethabo, 26 Nov 2026; see docs/design/DESIGN-SYSTEM.md). Presentation materials keep the supplied Figma template's typography and device composition.
 - Preserve the existing fictional Naledi character from current presentation images. Do not regenerate her identity without a request.
 - Current approved prices: Free R0, Creator R149, Studio R499, Agency R1499; proposed fixed monthly budget R85000. These are assumptions, not measured results.
 - No fabricated revenue, payouts, consent verification, translation quality or publishing success.
