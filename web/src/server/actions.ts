@@ -93,7 +93,7 @@ export async function createClip(ctx: Ctx, projectId: string, c: { title: string
 }
 
 export async function updateClip(ctx: Ctx, id: string, patch: z.infer<typeof ClipIn>, expectedProjectId?: string) {
-  const c = await one<{ id: string; project_id: string; title: string; start_ms: number; end_ms: number; status: string; updated_at: number }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ? AND (? IS NULL OR project_id = ?)`, id, ctx.workspaceId, expectedProjectId ?? null, expectedProjectId ?? null) ?? fail(404, "Not found.");
+  const c = await one<{ id: string; project_id: string; title: string; start_ms: number; end_ms: number; status: string; updated_at: number }>(`SELECT * FROM clip WHERE id = ? AND workspace_id = ? AND (?::text IS NULL OR project_id = ?)`, id, ctx.workspaceId, expectedProjectId ?? null, expectedProjectId ?? null) ?? fail(404, "Not found.");
   const start = patch.startMs ?? c.start_ms, end = patch.endMs ?? c.end_ms;
   if (end - start < 1000) fail(400, "A clip must be at least one second long.");
   const src = await one<{ duration_ms: number | null }>(`SELECT duration_ms FROM asset WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, c.project_id);

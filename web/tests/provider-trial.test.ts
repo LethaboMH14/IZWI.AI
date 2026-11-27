@@ -29,13 +29,13 @@ it("leaves ordinary local use unmetered when the trial is off", async () => {
   expect((await trial.reserveTrialCall(provider, endpoint))).toBeNull();
 });
 
-it("requires a configured exact provider, model and endpoint", () => {
+it("requires a configured exact provider, model and endpoint", async () => {
   vi.stubEnv("IZWI_PROVIDER_TRIAL", "1");
   vi.stubEnv("IZWI_PROVIDER_TRIAL_RULES", "");
-  expect(() => trial.reserveTrialCall(provider, endpoint)).toThrow(/no valid provider policy/);
+  await expect(trial.reserveTrialCall(provider, endpoint)).rejects.toThrow(/no valid provider policy/);
   configure(100, 40, 3);
-  expect(() => trial.reserveTrialCall({ ...provider, model: "other" }, endpoint)).toThrow(/outside/);
-  expect(() => trial.reserveTrialCall(provider, base)).toThrow(/outside/);
+  await expect(trial.reserveTrialCall({ ...provider, model: "other" }, endpoint)).rejects.toThrow(/outside/);
+  await expect(trial.reserveTrialCall(provider, base)).rejects.toThrow(/outside/);
 });
 
 it("reserves before dispatch and enforces the same spending cap across workspaces", async () => {
@@ -43,7 +43,7 @@ it("reserves before dispatch and enforces the same spending cap across workspace
   const receipt = (await trial.reserveTrialCall(provider, endpoint));
   (await trial.recordTrialTokens(receipt, 40, 10));
   (await trial.reserveTrialCall({ ...provider, workspace_id: "workspace-b" }, endpoint));
-  expect(() => trial.reserveTrialCall(provider, endpoint)).toThrow(/cap has been reached/);
+  await expect(trial.reserveTrialCall(provider, endpoint)).rejects.toThrow(/cap has been reached/);
   expect((await db.all("SELECT unit, amount FROM usage_event ORDER BY unit, amount"))).toEqual([
     { unit: "trial_input_tokens", amount: 40 },
     { unit: "trial_output_tokens", amount: 10 },
@@ -55,5 +55,5 @@ it("reserves before dispatch and enforces the same spending cap across workspace
 it("enforces request limits on a free route", async () => {
   configure(0, 0, 1);
   expect((await trial.reserveTrialCall(provider, endpoint))).toBeTruthy();
-  expect(() => trial.reserveTrialCall(provider, endpoint)).toThrow(/cap has been reached/);
+  await expect(trial.reserveTrialCall(provider, endpoint)).rejects.toThrow(/cap has been reached/);
 });

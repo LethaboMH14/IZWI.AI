@@ -25,7 +25,7 @@ it("scopes projects to the workspace and enforces allowed roles", async () => {
  expect((await guard.projectOf(ctx,"pa")).id).toBe("pa");
  await expect(guard.projectOf(ctx,"pb")).rejects.toThrow(expect.objectContaining({status:404}));
  expect(() => guard.requireRole(ctx,["owner","admin"])).not.toThrow();
- await expect(guard.requireRole({...ctx,role:"member"},["owner","admin"])).rejects.toThrow(expect.objectContaining({status:403}));
+ expect(() => guard.requireRole({...ctx,role:"member"},["owner","admin"])).toThrow(expect.objectContaining({status:403}));
 });
 it("checks purpose, expiry and revocation", async () => {
  expect((await pub.linkFor(token,"consent")).id).toBe("link");

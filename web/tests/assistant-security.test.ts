@@ -106,8 +106,8 @@ const send = async (fx: Fx, extra: Record<string, unknown> = {}, text = "Hello")
   return parse(res.status, res.headers, await res.text());
 };
 const dump = async () => {
-  const tables = (await db.all<{ name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)).map((t) => t.name).sort();
-  return tables.map(async (t) => `${t}:${JSON.stringify((await db.all(`SELECT * FROM "${t}"`)))}`).join("\n");
+  const tables = (await db.all<{ name: string }>(`SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'`)).map((t) => t.name).sort();
+  return (await Promise.all(tables.map(async (t) => `${t}:${JSON.stringify((await db.all(`SELECT * FROM "${t}"`)))}`))).join("\n");
 };
 const count = async (sql: string, ...a: unknown[]) => (await db.one<{ n: number }>(sql, ...a))!.n;
 const canaryIn = (m: Mock) => /IZWI_CANARY_[0-9a-f]+/.exec(JSON.stringify(m.requests.at(-1)?.body))![0];
@@ -574,7 +574,7 @@ describe("voice admission", () => {
 
     const controller = new AbortController();
     const form = new FormData(); form.append("audio", new Blob(["audio"], { type: "audio/wav" }), "voice.wav");
-    const response = (await voiceRoute.POST(new Request(`http://localhost/api/projects/${fx.project}/assistant/transcribe`, { method: "POST", headers: { origin: "http://localhost" }, body: form, signal: controller.signal }), { params: Promise.resolve({ id: fx.project }) }));
+    const response = voiceRoute.POST(new Request(`http://localhost/api/projects/${fx.project}/assistant/transcribe`, { method: "POST", headers: { origin: "http://localhost" }, body: form, signal: controller.signal }), { params: Promise.resolve({ id: fx.project }) });
     let job: { id: string } | undefined;
     for (let i = 0; i < 100 && !job; i++) { job = (await db.one(`SELECT id FROM job WHERE created_by = ? AND type = 'voice_transcribe' AND status = 'queued'`, fx.user)); if (!job) await new Promise((r) => setTimeout(r, 10)); }
     expect(job).toBeTruthy(); controller.abort();

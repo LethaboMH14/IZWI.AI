@@ -43,7 +43,7 @@ describe("Hear → Cut → Publish on an empty project", () => {
     const r = (await planner.approvePlan(ctx, id))!;
     expect(r.already).toBe(false);
     jobs = r.jobs;
-    expect(jobs.map(async (j) => (await job(j)).type)).toEqual(["transcribe", "suggest_clips", "publish"]);
+    expect((await Promise.all(jobs.map(async (j) => (await job(j)).type)))).toEqual(["transcribe", "suggest_clips", "publish"]);
   });
 
   it("queues Publish after Cut, not after Hear", async () => {
