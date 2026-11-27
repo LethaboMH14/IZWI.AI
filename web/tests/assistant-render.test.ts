@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMarkdown, type Block, type Inline } from "../src/components/studio/assistant-render";
+import { metaChips, parseMarkdown, type Block, type Inline } from "../src/components/studio/assistant-render";
 
 const inlines = (bs: Block[]): Inline[] => bs.flatMap((b) => (b.t === "p" ? b.lines.flat() : b.items.flat()));
 const allText = (bs: Block[]) => inlines(bs).map((i) => i.v).join("");
@@ -49,5 +49,20 @@ describe("parseMarkdown: the subset", () => {
     expect(bs.map((b) => b.t)).toEqual(["p", "p", "ul", "ol"]);
     expect((bs[2] as { items: unknown[] }).items).toHaveLength(2);
     expect((bs[3] as { items: unknown[] }).items).toHaveLength(2);
+  });
+});
+
+describe("metaChips: what the reply says the server held back", () => {
+  it("shows nothing when nothing was redacted or withheld", () => {
+    expect(metaChips({ redacted: 0, excludedLines: 0 })).toEqual([]);
+    expect(metaChips({})).toEqual([]);
+  });
+  it("names one held-back line, with the English-only caveat in its title", () => {
+    const [chip] = metaChips({ excludedLines: 1 });
+    expect(chip.text).toBe("1 transcript line held back: possible instruction");
+    expect(chip.title).toMatch(/English only/);
+  });
+  it("counts several, next to the redaction chip", () => {
+    expect(metaChips({ redacted: 2, excludedLines: 3 }).map((c) => c.text)).toEqual(["2 items redacted", "3 transcript lines held back: possible instructions"]);
   });
 });

@@ -8,6 +8,7 @@ import { enqueueVoice, cancelQueued } from "../../../../../../server/jobs";
 import { STORAGE } from "../../../../../../server/env";
 import { limit, LIMIT, RateLimitError } from "../../../../../../server/ratelimit";
 import { all } from "../../../../../../server/db";
+import { assistantEnabled } from "../../../../../../server/flags";
 
 const MAX = 10 * 1024 * 1024;
 async function cappedForm(req: Request) {
@@ -21,6 +22,8 @@ async function cappedForm(req: Request) {
 }
 
 export const POST = route<{ id: string }>(async (req, { id }) => {
+  // Same kill switch as the chat route: off means 404 before the session or the upload is read.
+  if (!assistantEnabled()) throw new HttpError(404, "Not found.");
   const ctx = await requireCtx(); const project = projectOf(ctx, id);
   try { limit(`voice:${ctx.workspaceId}:${ctx.userId}`, LIMIT.voice); }
   catch (e) { if (e instanceof RateLimitError) return Response.json({ error: e.message, retryAfter: e.retryAfterSec }, { status: 429, headers: { "Retry-After": String(e.retryAfterSec) } }); throw e; }

@@ -14,7 +14,7 @@ import { Microphone, PaperPlaneRight, Sparkle, Stop, Warning, X } from "@phospho
 import { api, ApiError } from "@/lib/api";
 import { clock } from "@/lib/format";
 import type { TabId } from "./types";
-import { parseMarkdown, type Inline } from "./assistant-render";
+import { metaChips, parseMarkdown, type Inline } from "./assistant-render";
 import "@/app/assistant.css";
 
 type Privacy = "private" | "standard" | "may_log";
@@ -28,7 +28,7 @@ type Proposal = {
   // From stored history: the plan's current status. Live cards from a new turn have none (they are "proposed").
   status?: "proposed" | "approved" | "dismissed" | "missing" | string;
 };
-type StoredMessage = { id: string; role: "user" | "assistant"; text: string; provider?: ProviderInfo; redacted?: number; proposals?: Proposal[]; createdAt: string };
+type StoredMessage = { id: string; role: "user" | "assistant"; text: string; provider?: ProviderInfo; redacted?: number; excludedLines?: number; proposals?: Proposal[]; createdAt: string };
 type Loaded = { providers: ProviderChoice[]; thread: { id: string; messages: StoredMessage[] } | null; limits: { perMinute: number; perDay: number; usedToday: number } };
 type ErrorData = { code: "rate_limited" | "budget" | "busy" | "canary" | "provider" | "timeout" | "switch_class"; message: string; retryAfter?: number; suggest?: "private" | "may_log" };
 type Stage = Exclude<TabId, "canvas">;
@@ -75,12 +75,11 @@ function Md({ text }: { text: string }) {
   );
 }
 
-function MetaPart({ data }: { data: { provider: ProviderInfo; redacted?: number } }) {
-  const n = data.redacted ?? 0;
+function MetaPart({ data }: { data: { provider: ProviderInfo; redacted?: number; excludedLines?: number } }) {
   return (
     <p className="as-chips">
       <span className="as-chip" title={badge(data.provider.privacy)}>{data.provider.label} · {data.provider.model}</span>
-      {n > 0 && <span className="as-chip as-chip-warn">{n === 1 ? "1 item redacted" : `${n} items redacted`}</span>}
+      {metaChips(data).map((c) => <span key={c.text} className="as-chip as-chip-warn" title={c.title}>{c.text}</span>)}
     </p>
   );
 }
@@ -265,7 +264,7 @@ function Chat({ projectId, stage, refresh, data }: { projectId: string; stage: S
   const initial = useMemo<UIMessage[]>(() => (data.thread?.messages ?? []).map((m) => ({
     id: m.id, role: m.role,
     parts: [
-      ...(m.role === "assistant" && m.provider ? [{ type: "data-meta" as const, data: { provider: m.provider, redacted: m.redacted ?? 0 } }] : []),
+      ...(m.role === "assistant" && m.provider ? [{ type: "data-meta" as const, data: { provider: m.provider, redacted: m.redacted ?? 0, excludedLines: m.excludedLines ?? 0 } }] : []),
       { type: "text" as const, text: m.text },
       ...(m.proposals?.length ? [{ type: "data-proposals" as const, data: { proposals: m.proposals } }] : []),
     ],
@@ -446,7 +445,8 @@ function Inner({ projectId, tab, refresh }: { projectId: string; tab: TabId; ref
   );
 }
 
-export function AssistantPanel(props: { projectId: string; tab: TabId; refresh: () => Promise<void> }) {
-  if (process.env.NEXT_PUBLIC_IZWI_FLAG_ASSISTANT !== "1") return null;
+// `enabled` comes from the server page (server/flags.ts), read per request: a restart switches it, no rebuild.
+export function AssistantPanel({ enabled, ...props }: { enabled: boolean; projectId: string; tab: TabId; refresh: () => Promise<void> }) {
+  if (!enabled) return null;
   return <Inner {...props} />;
 }
