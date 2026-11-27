@@ -38,7 +38,7 @@ export async function deleteProject(ctx: Ctx, id: string) {
   const p = await projectOf(ctx, id);
   await purgeOldAssistantMessages();
   await run(`DELETE FROM project WHERE id = ?`, p.id);
-  removeProjectFiles(ctx.workspaceId, p.id);
+  await removeProjectFiles(ctx.workspaceId, p.id);
   await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "project.deleted", target: p.id, meta: { title: p.title } });
 }
 

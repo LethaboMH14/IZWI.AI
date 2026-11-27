@@ -5,7 +5,7 @@ import { strToU8, zipSync, type Zippable } from "fflate";
 import { all, newId, now, one, parse, run, tx } from "./db";
 import { BIN, LIMITS, STORAGE } from "./env";
 import { enqueue, type JobRow, type JobType } from "./jobs";
-import { absPath, ensureDirFor, sha256File, storageKey } from "./storage";
+import { absPath, ensureDirFor, localCopy, persist, removeObject, sha256File, storageKey } from "./storage";
 import { extractSpeechWav, makeProxy, peaks, poster, probe, ToolError, whisper, type Probe } from "./media";
 import { applyGlossary, buildLines, lineFlag, lineText, sliceLines, toASS, toSRT, toVTT, type CapLine, type GlossaryEntry, type Seg, type Word } from "./captions";
 import { clipDefaults, suggestClips } from "./clips";
@@ -36,12 +36,15 @@ const prefs = async (ws: string) => await one<{ glossary: string; accuracy: stri
 
 async function addAsset(a: { ws: string; projectId: string; kind: string; key: string; filename: string; mime: string; durationMs?: number | null; width?: number | null; height?: number | null; meta?: unknown }) {
   const file = absPath(a.key);
+  const bytes = statSync(file).size;
+  const sha256 = await sha256File(file);
+  await persist(a.key, file, a.mime); // to the bucket in s3 mode, before the row points at it
   const id = newId("ast");
   await run(
     `INSERT INTO asset (id, workspace_id, project_id, kind, storage_key, filename, mime, bytes, sha256, duration_ms, width, height, meta, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(storage_key) DO UPDATE SET bytes = excluded.bytes, sha256 = excluded.sha256, meta = excluded.meta, created_at = excluded.created_at`,
-    id, a.ws, a.projectId, a.kind, a.key, a.filename, a.mime, statSync(file).size, await sha256File(file),
+    id, a.ws, a.projectId, a.kind, a.key, a.filename, a.mime, bytes, sha256,
     a.durationMs ?? null, a.width ?? null, a.height ?? null, JSON.stringify(a.meta ?? {}), now(),
   );
   return (await one<{ id: string }>(`SELECT id FROM asset WHERE storage_key = ?`, a.key))!.id;
@@ -82,7 +85,7 @@ export async function handle(c: JobCtx): Promise<unknown> {
 async function probeJob(c: JobCtx) {
   const a = await asset(c.job.workspace_id, c.input.assetId);
   c.beat(0.1, "Reading the file");
-  const p = await probe(absPath(a.storage_key));
+  const p = await probe(await localCopy(a.storage_key));
   if (!p.hasAudio && !p.hasVideo) fail("No audio or video was found in this file.");
   if (p.durationMs < 1000) fail("This file is shorter than one second.");
   if (p.durationMs > LIMITS.sourceSeconds * 1000) fail(`This file is longer than the ${LIMITS.sourceSeconds / 3600}-hour limit.`);
@@ -94,7 +97,7 @@ async function probeJob(c: JobCtx) {
 async function proxyJob(c: JobCtx) {
   const a = await asset(c.job.workspace_id, c.input.assetId);
   const p = parse<Probe>(a.meta, { durationMs: a.duration_ms ?? 0, hasAudio: true, hasVideo: false, format: "" });
-  const src = absPath(a.storage_key);
+  const src = await localCopy(a.storage_key);
   const key = (name: string) => storageKey(a.workspace_id, a.project_id, name);
 
   const proxyKey = key(`proxy-${a.id}.mp4`);
@@ -140,7 +143,7 @@ async function transcribeJob(c: JobCtx) {
   const dir = tmpDir(c.job.id);
   ensureDirFor(path.join(dir, "x"));
   const started = now();
-  const t = await whisper(absPath(wav.storage_key), path.join(dir, "transcript"), {
+  const t = await whisper(await localCopy(wav.storage_key), path.join(dir, "transcript"), {
     language: lang, prompt: glossary.map((g) => g.term).join(", "), accurate: pf?.accuracy === "accurate",
     onProgress: (x) => c.beat(x * 0.92, "Listening"), signal: c.signal,
   });
@@ -339,7 +342,7 @@ async function renderJob(c: JobCtx) {
   const renderDir = tmpDir(`${c.job.id}-${c.job.attempts}`);
   try {
     await renderClip({
-      src: absPath(src.storage_key), out: absPath(tempKey), workDir: renderDir, startMs: clip.start_ms, endMs: clip.end_ms,
+      src: await localCopy(src.storage_key), out: absPath(tempKey), workDir: renderDir, startMs: clip.start_ms, endMs: clip.end_ms,
       preset: out.preset, hasVideo: p.hasVideo, hasAudio: p.hasAudio, ass, onProgress: (x) => c.beat(x * 0.95, `Rendering ${preset.label}`), signal: c.signal,
     });
   } catch (e) {
@@ -351,6 +354,7 @@ async function renderJob(c: JobCtx) {
   const slug = clip.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40).replace(/^-|-$/g, "") || "clip";
   const filename = `${slug}-${out.preset}${out.language ? "-" + out.language : ""}.mp4`;
   let assetId = "";
+  let uploaded = false;
   const keys = ledgerKeys();
   try {
     const plan = await one<{ planner: string }>(`SELECT planner FROM plan_run WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`, proj.id);
@@ -366,6 +370,10 @@ async function renderJob(c: JobCtx) {
     const mediaHash = await sha256File(absPath(tempKey));
     const srtBytes = tempSrtKey ? statSync(absPath(tempSrtKey)).size : 0;
     const srtHash = tempSrtKey ? await sha256File(absPath(tempSrtKey)) : "";
+    await persist(key, absPath(tempKey), "video/mp4");
+    await persist(sidecarKey, absPath(tempSidecarKey), "application/json");
+    if (tempSrtKey && srtKey) await persist(srtKey, absPath(tempSrtKey), "application/x-subrip");
+    uploaded = true;
     const release = await tx(async () => {
       const active = await one(`SELECT 1 FROM job WHERE id = ? AND worker_id = ? AND attempts = ? AND status = 'running' AND lease_until > ?`, c.job.id, c.job.worker_id, c.job.attempts, now());
       const current = await one<{ status: string; job_id: string | null }>(`SELECT status, job_id FROM output WHERE id = ? AND workspace_id = ?`, out.id, out.workspace_id);
@@ -393,6 +401,11 @@ async function renderJob(c: JobCtx) {
   } catch (error) {
     rmSync(absPath(tempKey), { force: true }); rmSync(absPath(tempSidecarKey), { force: true });
     if (tempSrtKey) rmSync(absPath(tempSrtKey), { force: true });
+    if (uploaded) {
+      await removeObject(key).catch(() => {});
+      await removeObject(sidecarKey).catch(() => {});
+      if (srtKey) await removeObject(srtKey).catch(() => {});
+    }
     rmSync(absPath(key), { force: true }); rmSync(absPath(sidecarKey), { force: true });
     if (srtKey) rmSync(absPath(srtKey), { force: true });
     if (assetId) await run(`DELETE FROM asset WHERE id = ?`, assetId);
@@ -438,10 +451,10 @@ async function packageJob(c: JobCtx) {
     `SELECT a.storage_key, a.filename, a.sha256, a.bytes FROM output o JOIN asset a ON a.id = o.asset_id WHERE o.project_id = ? AND o.status = 'ready'`, proj.id,
   );
   for (const r of ready) {
-    add(`renders/${r.filename}`, new Uint8Array(readFileSync(absPath(r.storage_key))), undefined, true);
+    add(`renders/${r.filename}`, new Uint8Array(readFileSync(await localCopy(r.storage_key))), undefined, true);
     record[record.length - 1].sha256 = r.sha256;
-    const sidecarPath = `${absPath(r.storage_key)}.provenance.json`;
-    if (existsSync(sidecarPath)) add(`renders/${r.filename}.provenance.json`, new Uint8Array(readFileSync(sidecarPath)), PROVENANCE_LABEL);
+    const sidecarPath = await localCopy(`${r.storage_key}.provenance.json`).catch(() => "");
+    if (sidecarPath && existsSync(sidecarPath)) add(`renders/${r.filename}.provenance.json`, new Uint8Array(readFileSync(sidecarPath)), PROVENANCE_LABEL);
   }
 
   c.beat(0.8, "Writing the record sheet");

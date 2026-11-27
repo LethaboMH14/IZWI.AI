@@ -502,8 +502,18 @@ CREATE TRIGGER consent_ledger_no_delete BEFORE DELETE ON consent_ledger FOR EACH
   return sql;
 }
 
-export const SCHEMA_VERSION = 8;
-export const MIGRATIONS: Migration[] = [{ version: SCHEMA_VERSION, name: "Postgres baseline schema", sql: pgBaseline() }];
+export const MIGRATIONS: Migration[] = [
+  { version: 8, name: "Postgres baseline schema", sql: pgBaseline() },
+  {
+    version: 9,
+    name: "browser-to-bucket multipart uploads (hosted storage)",
+    sql: `ALTER TABLE upload_session ADD COLUMN staging_key TEXT;
+ALTER TABLE upload_session ADD COLUMN multipart_id TEXT;
+ALTER TABLE upload_session ADD COLUMN bytes BIGINT CHECK (bytes IS NULL OR bytes >= 0);
+ALTER TABLE upload_session ADD COLUMN finished_at BIGINT;`,
+  },
+];
+export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 
 export async function appliedVersion(): Promise<number> {
   const found = await one<{ exists: boolean }>(`SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists`);
@@ -512,15 +522,17 @@ export async function appliedVersion(): Promise<number> {
 }
 
 export async function migrateApp(log: (s: string) => void = console.log): Promise<void> {
-  let applied = false;
+  const applied: string[] = [];
   await tx(async () => {
     await lockKey("migrate");
     await execScript(`CREATE TABLE IF NOT EXISTS schema_migrations (version BIGINT PRIMARY KEY, name TEXT NOT NULL, applied_at BIGINT NOT NULL)`);
-    if ((await appliedVersion()) >= SCHEMA_VERSION) return;
-    const migration = MIGRATIONS[0];
-    await execScript(migration.sql);
-    await run(`INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`, migration.version, migration.name, now());
-    applied = true;
+    const current = await appliedVersion();
+    for (const migration of MIGRATIONS) {
+      if (migration.version <= current) continue;
+      await execScript(migration.sql);
+      await run(`INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`, migration.version, migration.name, now());
+      applied.push(`${migration.version}: ${migration.name}`);
+    }
   });
-  if (applied) log(`applied migration ${SCHEMA_VERSION}: Postgres baseline schema`);
+  for (const a of applied) log(`applied migration ${a}`);
 }

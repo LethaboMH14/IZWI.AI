@@ -1,9 +1,8 @@
 // Everything the studio screen needs about one project, read in one go. All rows are from this workspace only.
-import { existsSync, readFileSync } from "node:fs";
 import { all, one, parse } from "./db";
 import { projectOf, type Ctx } from "./guard";
 import { projectJobs } from "./jobs";
-import { absPath } from "./storage";
+import { readText } from "./storage";
 import { gateFor } from "./rights";
 import { PUBLIC_URL } from "./env";
 
@@ -17,7 +16,7 @@ export async function projectState(ctx: Ctx, projectId: string, options: { lite?
   let peaks: number[] = [];
   if (!options.lite) {
     const peaksAsset = pick("peaks");
-    if (peaksAsset && existsSync(absPath(peaksAsset.storage_key))) peaks = parse<number[]>(readFileSync(absPath(peaksAsset.storage_key), "utf8"), []);
+    if (peaksAsset) peaks = parse<number[]>(await readText(peaksAsset.storage_key), []);
   }
   const pub = (a?: A) => a && { id: a.id, filename: a.filename, mime: a.mime, bytes: a.bytes, sha256: a.sha256, durationMs: a.duration_ms, width: a.width, height: a.height, meta: parse<Record<string, unknown>>(a.meta, {}) };
 
@@ -102,8 +101,8 @@ export async function projectList(ctx: Ctx) {
     const src = await one<{ duration_ms: number | null; filename: string }>(`SELECT duration_ms, filename FROM asset WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, p.id);
     const peaksAsset = await one<{ storage_key: string }>(`SELECT storage_key FROM asset WHERE project_id = ? AND kind = 'peaks' ORDER BY created_at DESC LIMIT 1`, p.id);
     let peaks: number[] = [];
-    if (peaksAsset && existsSync(absPath(peaksAsset.storage_key))) {
-      const full = parse<number[]>(readFileSync(absPath(peaksAsset.storage_key), "utf8"), []);
+    if (peaksAsset) {
+      const full = parse<number[]>(await readText(peaksAsset.storage_key), []);
       const step = Math.max(1, Math.floor(full.length / 120));
       peaks = full.filter((_, i) => i % step === 0).slice(0, 120);
     }
