@@ -16,7 +16,7 @@ describe("assistant plan approval", () => {
     const steps: Step[] = [{ kind: "action", action: "keepClip", args: { clipId: "clip_stale" }, pre: { clips: [{ id: "clip_stale", updatedAt: 1 }], lines: [], consent: null }, preview: [] }];
     const id = (await planner.savePlan(ctx, "project_plan", "keep clip", "assistant:test/model", steps));
     (await db.run(`UPDATE clip SET updated_at = 2 WHERE id = 'clip_stale'`));
-    expect(() => planner.approvePlan(ctx, id)).toThrow("This changed since the assistant suggested it");
+    await expect(planner.approvePlan(ctx, id)).rejects.toThrow("This changed since the assistant suggested it");
     expect((await db.one<{ status: string }>(`SELECT status FROM clip WHERE id = 'clip_stale'`))?.status).toBe("suggested");
     expect((await db.one<{ status: string }>(`SELECT status FROM plan_run WHERE id = ?`, id))?.status).toBe("proposed");
   });
@@ -24,7 +24,7 @@ describe("assistant plan approval", () => {
   it("rejects dependencies outside the plan unless already succeeded in the project", async () => {
     const steps: Step[] = [{ kind: "job", verb: "Cut", what: "Cut", tool: "IZWI", runs: "device", runnable: true, stepId: "cut", dependsOn: ["job_foreign"] }];
     const id = (await planner.savePlan(ctx, "project_plan", "cut", "assistant:test/model", steps));
-    expect(() => planner.approvePlan(ctx, id)).toThrow("This changed since the assistant suggested it");
+    await expect(planner.approvePlan(ctx, id)).rejects.toThrow("This changed since the assistant suggested it");
     expect((await db.one<{ n: number }>(`SELECT COUNT(*) n FROM job WHERE project_id = 'project_plan'`))?.n).toBe(0);
   });
 
@@ -46,7 +46,7 @@ describe("assistant plan approval", () => {
     (await db.run(`INSERT INTO clip (id, workspace_id, project_id, title, start_ms, end_ms, reason, origin, status, created_at, updated_at) VALUES ('clip_tamper', ?, 'project_plan', 'Clip', 0, 4000, 'reason', 'manual', 'suggested', 1, 1)`, ctx.workspaceId));
     const id = (await planner.savePlan(ctx, "project_plan", "keep", "assistant:test/model", [{ kind: "action", action: "keepClip", args: { clipId: "clip_tamper" }, pre: { clips: [{ id: "clip_tamper", updatedAt: 1 }], lines: [], consent: null } }] as unknown as Step[]));
     (await db.run(`UPDATE plan_run SET steps = ? WHERE id = ?`, JSON.stringify([{ kind: "action", action: "keepClip", args: { clipId: "clip_tamper" }, pre: { clips: [], lines: [], consent: null } }]), id));
-    expect(() => planner.approvePlan(ctx, id)).toThrow(expect.objectContaining({ status: 409 }));
+    await expect(planner.approvePlan(ctx, id)).rejects.toThrow(expect.objectContaining({ status: 409 }));
     expect((await db.one<{ status: string }>(`SELECT status FROM clip WHERE id = 'clip_tamper'`))?.status).toBe("suggested");
   });
 
@@ -72,7 +72,7 @@ describe("assistant plan approval", () => {
     const snapshot = (await actions.previewGlossaryChanges(ctx.workspaceId, input));
     const stale = (await planner.savePlan(ctx, "project_plan", "glossary", "assistant:test/model", [{ kind: "action", action: "addGlossaryTerm", args: input, pre: { clips: [], lines: snapshot.map(({ id: lineId, textHash }) => ({ id: lineId, textHash })), consent: null } }] as unknown as Step[]));
     (await addLine("glossary_c", secondProject, "misheard"));
-    expect(() => planner.approvePlan(ctx, stale)).toThrow("This changed since the assistant suggested it");
+    await expect(planner.approvePlan(ctx, stale)).rejects.toThrow("This changed since the assistant suggested it");
     expect((await db.one<{ text: string }>(`SELECT text FROM caption_line WHERE id = 'line_glossary_c'`))?.text).toContain("misheard");
   });
 });

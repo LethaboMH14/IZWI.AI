@@ -321,7 +321,7 @@ describe("approval: proposals are inert until a person approves, and only their 
     ];
     const id = (await planner.savePlan(fx.ctx, fx.project, "p", "assistant:t/m", steps));
     (await db.run(`UPDATE clip SET updated_at = 2 WHERE id = ?`, fx.clipB));
-    expect(() => planner.approvePlan(fx.ctx, id)).toThrow(expect.objectContaining({ status: 409 }));
+    await expect(planner.approvePlan(fx.ctx, id)).rejects.toThrow(expect.objectContaining({ status: 409 }));
     expect((await db.all(`SELECT status FROM clip WHERE project_id = ?`, fx.project))).toEqual([{ status: "suggested" }, { status: "suggested" }]);
     expect((await db.one<{ status: string }>(`SELECT status FROM plan_run WHERE id = ?`, id))?.status).toBe("proposed");
     expect((await count(`SELECT COUNT(*) n FROM job WHERE project_id = ?`, fx.project))).toBe(0);
@@ -332,7 +332,7 @@ describe("approval: proposals are inert until a person approves, and only their 
     const hash = createHash("sha256").update("Clip").digest("hex");
     const id = (await planner.savePlan(fx.ctx, fx.project, "p", "assistant:t/m", [{ kind: "action", action: "dropClip", args: { clipId: fx.clipA }, pre: { clips: [{ id: fx.clipA, updatedAt: 1, textHash: hash }], lines: [], consent: null }, preview: [] }]));
     (await db.run(`UPDATE clip SET title = 'Edited' WHERE id = ?`, fx.clipA));
-    expect(() => planner.approvePlan(fx.ctx, id)).toThrow(expect.objectContaining({ status: 409 }));
+    await expect(planner.approvePlan(fx.ctx, id)).rejects.toThrow(expect.objectContaining({ status: 409 }));
     expect((await db.one<{ status: string }>(`SELECT status FROM clip WHERE id = ?`, fx.clipA))?.status).toBe("suggested");
   });
 
@@ -356,7 +356,7 @@ describe("approval: proposals are inert until a person approves, and only their 
   it("FIXED: an assistant Hear approved after a transcript appeared is refused with 409, not silently approved", async () => {
     const fx = (await fixture()); (await withTranscript(fx, ["now there is a transcript"]));
     const id = (await planner.savePlan(fx.ctx, fx.project, "p", "assistant:t/m", [{ kind: "job", verb: "Hear", what: "Hear", tool: "IZWI", runs: "This device", runnable: true, assistant: true, stepId: "j0", dependsOn: [] }]));
-    expect(() => planner.approvePlan(fx.ctx, id)).toThrow(expect.objectContaining({ status: 409 }));
+    await expect(planner.approvePlan(fx.ctx, id)).rejects.toThrow(expect.objectContaining({ status: 409 }));
     expect((await db.one<{ status: string }>(`SELECT status FROM plan_run WHERE id = ?`, id))?.status).toBe("proposed");
   });
 
@@ -693,8 +693,8 @@ describe("isolation: foreign ids answer 404 and cost nothing", () => {
     const thread = (await send(fx)).meta!.threadId;
     (await db.run(`INSERT INTO project (id, workspace_id, title, kind, created_by, created_at, updated_at) VALUES ('proj_second_${fx.ws}', ?, 'Two', 'podcast', ?, 0, 0)`, fx.ws, fx.user));
     expect((await rawPost(`proj_second_${fx.ws}`, JSON.stringify({ providerId: fx.providerId, text: "hi", threadId: thread }))).status).toBe(404);
-    (await db.run(`INSERT OR IGNORE INTO "user" (id) VALUES ('user_colleague')`));
-    (await db.run(`INSERT OR IGNORE INTO member (id, organizationId, userId, role) VALUES ('mem_col_${fx.ws}', ?, 'user_colleague', 'member')`, fx.ws));
+    (await db.run(`INSERT INTO "user" (id) VALUES ('user_colleague') ON CONFLICT DO NOTHING`));
+    (await db.run(`INSERT INTO member (id, "organizationId", "userId", role) VALUES ('mem_col_${fx.ws}', ?, 'user_colleague', 'member') ON CONFLICT DO NOTHING`, fx.ws));
     hoisted.session = { user: { id: "user_colleague", name: "Col", email: "c@example.test" }, session: { activeOrganizationId: fx.ws } };
     expect((await rawPost(fx.project, JSON.stringify({ providerId: fx.providerId, text: "hi", threadId: thread }))).status).toBe(404);
   });

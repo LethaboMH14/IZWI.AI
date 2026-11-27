@@ -94,7 +94,7 @@ describe("approvePlan", () => {
     const steps = planner.describe([{ verb: "Hear" }, { verb: "Cut", count: 3 }], { hasSource: true, hasTranscript: false, sourceLanguage: null, kept: 0, translator: null });
     const id = (await planner.savePlan(ctx, "prj_empty", "clips", "IZWI rules", steps));
     const before = (await db.one<{ n: number }>(`SELECT COUNT(*) n FROM job`))!.n;
-    expect(() => planner.approvePlan(ctx, id)).toThrow(/Upload a recording first/);
+    await expect(planner.approvePlan(ctx, id)).rejects.toThrow(/Upload a recording first/);
     expect((await db.one<{ n: number }>(`SELECT COUNT(*) n FROM job`))!.n).toBe(before);
     expect((await db.one<{ status: string }>(`SELECT status FROM plan_run WHERE id = ?`, id))!.status).toBe("proposed");
   });

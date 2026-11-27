@@ -29,14 +29,14 @@ describe("Lane B/D backend contracts", () => {
   });
 
   it("rejects stale clip timestamps without changing the clip and accepts current timestamps", async () => {
-    expect(() => actions.updateClip(ctx, "clip_bd", { startMs: 100, endMs: 2100, expectUpdatedAt: 122 })).toThrow(expect.objectContaining({ status: 409 }));
+    await expect(actions.updateClip(ctx, "clip_bd", { startMs: 100, endMs: 2100, expectUpdatedAt: 122 })).rejects.toThrow(expect.objectContaining({ status: 409 }));
     expect((await db.one<{ start_ms: number; updated_at: number }>(`SELECT start_ms,updated_at FROM clip WHERE id='clip_bd'`))).toEqual({ start_ms: 0, updated_at: 123 });
     (await actions.updateClip(ctx, "clip_bd", { startMs: 100, endMs: 2100, expectUpdatedAt: 123 }));
     expect((await db.one<{ start_ms: number }>(`SELECT start_ms FROM clip WHERE id='clip_bd'`))?.start_ms).toBe(100);
   });
 
   it("rejects stale caption text and allows a matching expectation", async () => {
-    expect(() => actions.updateLine(ctx, "line_bd", { text: "Changed line", expectText: "Old line" }, ctx.userName)).toThrow(expect.objectContaining({ status: 409 }));
+    await expect(actions.updateLine(ctx, "line_bd", { text: "Changed line", expectText: "Old line" }, ctx.userName)).rejects.toThrow(expect.objectContaining({ status: 409 }));
     expect((await db.one<{ text: string }>(`SELECT text FROM caption_line WHERE id='line_bd'`))?.text).toBe("Original line");
     (await actions.updateLine(ctx, "line_bd", { text: "Changed line", expectText: "Original line" }, ctx.userName));
     expect((await db.one<{ text: string }>(`SELECT text FROM caption_line WHERE id='line_bd'`))?.text).toBe("Changed line");
