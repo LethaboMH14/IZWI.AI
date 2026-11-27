@@ -11,14 +11,14 @@ let ctx: ReturnType<typeof seedWorkspace>;
 
 beforeAll(async () => {
   db = await openTestDb();
-  ctx = seedWorkspace(db, "org_a", "usr_a", "prj_a");
+  ctx = await seedWorkspace(db, "org_a", "usr_a", "prj_a");
   db.run(
     `INSERT INTO asset (id, workspace_id, project_id, kind, storage_key, filename, mime, bytes, created_at) VALUES ('ast_src', 'org_a', 'prj_a', 'source', 'k/src.mp4', 'ep.mp4', 'video/mp4', 1, 0)`,
   );
   planner = await import("../src/server/planner");
   pipeline = await import("../src/server/pipeline");
 }, 60_000);
-afterAll(() => closeTestDb(db));
+afterAll(() => await closeTestDb(db));
 
 const job = (id: string) => db.one<JobRow>(`SELECT * FROM job WHERE id = ?`, id)!;
 const noop = { beat: () => {}, signal: new AbortController().signal };
@@ -89,8 +89,8 @@ describe("Hear → Cut → Publish on an empty project", () => {
 });
 
 describe("approvePlan", () => {
-  it("rolls back every job when one step cannot be queued", () => {
-    seedWorkspace(db, "org_a", "usr_a", "prj_empty");
+  it("rolls back every job when one step cannot be queued", async () => {
+    await seedWorkspace(db, "org_a", "usr_a", "prj_empty");
     const steps = planner.describe([{ verb: "Hear" }, { verb: "Cut", count: 3 }], { hasSource: true, hasTranscript: false, sourceLanguage: null, kept: 0, translator: null });
     const id = planner.savePlan(ctx, "prj_empty", "clips", "IZWI rules", steps);
     const before = db.one<{ n: number }>(`SELECT COUNT(*) n FROM job`)!.n;

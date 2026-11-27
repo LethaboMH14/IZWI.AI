@@ -20,7 +20,7 @@ let storage: typeof import("../src/server/storage");
 
 beforeAll(async () => {
   db = await openTestDb();
-  ctx = seedWorkspace(db, "org_stale", "usr_stale", "prj_stale");
+  ctx = await seedWorkspace(db, "org_stale", "usr_stale", "prj_stale");
   actions = await import("../src/server/actions");
   pipeline = await import("../src/server/pipeline");
   storage = await import("../src/server/storage");
@@ -31,7 +31,7 @@ beforeAll(async () => {
   writeFileSync(storage.absPath(srcKey), "source bytes");
   db.run(`INSERT INTO asset (id,workspace_id,project_id,kind,storage_key,filename,mime,bytes,duration_ms,meta,created_at) VALUES ('src_stale','org_stale','prj_stale','source',?,'source.mp4','video/mp4',12,4000,?,0)`, srcKey, JSON.stringify({ durationMs: 4000, hasAudio: true, hasVideo: false, format: "mp4" }));
 }, 60_000);
-afterAll(() => closeTestDb(db));
+afterAll(() => await closeTestDb(db));
 
 describe("render clip snapshots", () => {
   it("discards a render when the clip changes mid-render and removes temporary files", async () => {

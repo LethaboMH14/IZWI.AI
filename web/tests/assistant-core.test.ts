@@ -11,7 +11,7 @@ beforeAll(async () => {
   redact = assistant.redactForMayLog;
   canaryFilter = (await import("../src/app/api/projects/[id]/assistant/route")).canaryFilter;
 }, 60_000);
-afterAll(() => closeTestDb(db));
+afterAll(() => await closeTestDb(db));
 
 describe("assistant privacy and stream checks", () => {
   it("redacts South African identifiers, email, phone and project people before may_log", () => {
@@ -30,8 +30,8 @@ describe("assistant privacy and stream checks", () => {
     expect(() => filter.push("abc123 unsafe")).toThrow("CANARY");
   });
 
-  it("keeps assistant rows scoped to a project and project cascade removes them", () => {
-    const ctx = seedWorkspace(db, "org_core", "user_core", "project_core");
+  it("keeps assistant rows scoped to a project and project cascade removes them", async () => {
+    const ctx = await seedWorkspace(db, "org_core", "user_core", "project_core");
     db.run(`INSERT INTO assistant_thread (id, workspace_id, project_id, created_by, created_at) VALUES ('thread_core', ?, 'project_core', ?, 1)`, ctx.workspaceId, ctx.userId);
     db.run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, created_at) VALUES ('message_core', 'thread_core', ?, 'project_core', 'user', 'safe', 'provider', 'Local', 'model', 'private', 0, '[]', 'complete', 'request', 1)`, ctx.workspaceId);
     db.run(`DELETE FROM project WHERE id = 'project_core'`);

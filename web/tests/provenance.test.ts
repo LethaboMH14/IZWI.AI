@@ -15,12 +15,12 @@ let pipeline: typeof import("../src/server/pipeline");
 
 beforeAll(async () => {
   db = await openTestDb();
-  seedWorkspace(db, "org_prov", "usr_prov", "prj_prov");
+  await seedWorkspace(db, "org_prov", "usr_prov", "prj_prov");
   ledger = await import("../src/server/ledger");
   provenance = await import("../src/server/provenance");
   pipeline = await import("../src/server/pipeline");
 }, 60_000);
-afterAll(() => closeTestDb(db));
+afterAll(() => await closeTestDb(db));
 
 const envelope = (media = Buffer.from("sample mp4")) => ({
   output_id: "out_test", project_id: "prj_test", created_at: 1,

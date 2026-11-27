@@ -11,11 +11,11 @@ beforeAll(async () => {
   db = await openTestDb();
   ({ scanProjectBatch, injectionScore } = await import("../src/server/injection"));
 }, 60_000);
-afterAll(() => closeTestDb(db));
+afterAll(() => await closeTestDb(db));
 
 describe("transcript injection scan batches", () => {
   it("uses a scripted scorer, stores hashes and yields after at most 40 lines", async () => {
-    const ctx = seedWorkspace(db, "org_injection", "user_injection", "project_injection");
+    const ctx = await seedWorkspace(db, "org_injection", "user_injection", "project_injection");
     db.run(
       `INSERT INTO caption_track (id, workspace_id, project_id, language, kind, status, engine, created_at, updated_at)
        VALUES ('track_injection', ?, 'project_injection', 'en', 'source', 'draft', 'test', 1, 1)`,

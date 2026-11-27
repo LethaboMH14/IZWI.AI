@@ -8,7 +8,7 @@ let state: typeof import("../src/server/state");
 
 beforeAll(async () => {
   db = await openTestDb();
-  ctx = seedWorkspace(db, "org_bd", "usr_bd", "prj_bd");
+  ctx = await seedWorkspace(db, "org_bd", "usr_bd", "prj_bd");
   actions = await import("../src/server/actions");
   state = await import("../src/server/state");
   db.run(`INSERT INTO clip (id,workspace_id,project_id,title,start_ms,end_ms,reason,origin,status,version,created_at,updated_at) VALUES ('clip_bd','org_bd','prj_bd','Clip',0,2000,'test','manual','kept',2,0,123)`);
@@ -17,7 +17,7 @@ beforeAll(async () => {
   db.run(`INSERT INTO declaration (id,workspace_id,project_id,user_id,statement,created_at) VALUES ('decl_bd','org_bd','prj_bd','usr_bd','Test declaration',1)`);
   db.run(`INSERT INTO asset (id,workspace_id,project_id,kind,storage_key,filename,mime,bytes,meta,created_at) VALUES ('asset_src_bd','org_bd','prj_bd','source','a','a.mp4','video/mp4',100,'{}',0),('asset_peaks_bd','org_bd','prj_bd','peaks','b','peaks.json','application/json',7,'{}',0),('asset_render_bd','org_bd','prj_bd','render','c','c.mp4','video/mp4',23,'{}',0)`);
 }, 60_000);
-afterAll(() => closeTestDb(db));
+afterAll(() => await closeTestDb(db));
 
 describe("Lane B/D backend contracts", () => {
   it("returns clip version timestamps and workspace/project storage totals; lite omits peaks", () => {

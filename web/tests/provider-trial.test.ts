@@ -9,15 +9,15 @@ let trial: typeof import("../src/server/provider-trial");
 
 beforeAll(async () => {
   db = await openTestDb();
-  seedWorkspace(db, provider.workspace_id, "owner-a", "project-a");
-  seedWorkspace(db, "workspace-b", "owner-b", "project-b");
+  await seedWorkspace(db, provider.workspace_id, "owner-a", "project-a");
+  await seedWorkspace(db, "workspace-b", "owner-b", "project-b");
   trial = await import("../src/server/provider-trial");
 });
 afterEach(() => {
   vi.unstubAllEnvs();
   db.run("DELETE FROM usage_event");
 });
-afterAll(() => closeTestDb(db));
+afterAll(() => await closeTestDb(db));
 
 function configure(capMicros: number, maxMicrosPerRequest: number, maxRequests: number) {
   vi.stubEnv("IZWI_PROVIDER_TRIAL", "1");

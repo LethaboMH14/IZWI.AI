@@ -7,8 +7,8 @@ import type { Step } from "../src/server/planner";
 let db: Db;
 let planner: typeof import("../src/server/planner");
 let ctx: Ctx;
-beforeAll(async () => { db = await openTestDb(); ctx = seedWorkspace(db, "org_plan", "user_plan", "project_plan"); planner = await import("../src/server/planner"); }, 60_000);
-afterAll(() => closeTestDb(db));
+beforeAll(async () => { db = await openTestDb(); ctx = await seedWorkspace(db, "org_plan", "user_plan", "project_plan"); planner = await import("../src/server/planner"); }, 60_000);
+afterAll(() => await closeTestDb(db));
 
 describe("assistant plan approval", () => {
   it("rejects a stale clip snapshot before running any action", () => {
@@ -28,8 +28,8 @@ describe("assistant plan approval", () => {
     expect(db.one<{ n: number }>(`SELECT COUNT(*) n FROM job WHERE project_id = 'project_plan'`)?.n).toBe(0);
   });
 
-  it("does not resolve a plan owned by another workspace", () => {
-    const other = seedWorkspace(db, "org_other", "user_other", "project_other");
+  it("does not resolve a plan owned by another workspace", async () => {
+    const other = await seedWorkspace(db, "org_other", "user_other", "project_other");
     const id = planner.savePlan(other, "project_other", "publish", "assistant:test/model", [{ kind: "job", verb: "Publish", what: "Publish", tool: "IZWI", runs: "device", runnable: true }]);
     expect(planner.approvePlan(ctx, id)).toBeNull();
   });

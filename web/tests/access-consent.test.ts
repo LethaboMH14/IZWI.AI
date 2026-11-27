@@ -7,7 +7,7 @@ let ledger: typeof import("../src/server/ledger");
 let ctx: ReturnType<typeof seedWorkspace>;
 const token = "abcdefghijklmnopqrstuvwx";
 beforeAll(async () => {
- db = await openTestDb(); ctx = seedWorkspace(db,"wa","ua","pa"); seedWorkspace(db,"wb","ub","pb");
+ db = await openTestDb(); ctx = await seedWorkspace(db,"wa","ua","pa"); await seedWorkspace(db,"wb","ub","pb");
  guard = await import("../src/server/guard"); pub = await import("../src/server/public"); ledger = await import("../src/server/ledger");
  const crypto = await import("../src/server/crypto");
  db.run(`INSERT INTO person (id,workspace_id,project_id,name,role,created_at) VALUES ('person','wa','pa','Thandi','guest',0)`);
@@ -20,7 +20,7 @@ beforeAll(async () => {
  db.run(`INSERT INTO share_link (id,workspace_id,project_id,purpose,target_id,token_hash,expires_at,created_by,created_at) VALUES ('link2','wa','pa','consent','consent2',?,?, 'ua',0)`,crypto.hashToken("zyxwvutsrqponmlkjihgfedc"),Date.now()+60000);
  for (const [id,status,posted] of [["held","blocked",null],["ready","ready",null],["posted","ready",1]] as const) db.run(`INSERT INTO output (id,workspace_id,project_id,clip_id,preset,status,posted_at,created_by,created_at,updated_at) VALUES (?, 'wa','pa','clip','test',?,?, 'ua',0,0)`,id,status,posted);
 },60000);
-afterAll(() => closeTestDb(db));
+afterAll(() => await closeTestDb(db));
 it("scopes projects to the workspace and enforces allowed roles", () => {
  expect(guard.projectOf(ctx,"pa").id).toBe("pa");
  expect(() => guard.projectOf(ctx,"pb")).toThrow(expect.objectContaining({status:404}));

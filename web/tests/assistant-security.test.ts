@@ -50,7 +50,7 @@ beforeAll(async () => {
   mockB = await mod.startMock();
   for (const level of ["info", "error", "warn", "log"] as const) vi.spyOn(console, level).mockImplementation((...a: unknown[]) => { logs.push(a.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(" ")); });
 }, 60_000);
-afterAll(async () => { vi.restoreAllMocks(); await mockA.close(); await mockB.close(); closeTestDb(db); });
+afterAll(async () => { vi.restoreAllMocks(); await mockA.close(); await mockB.close(); await closeTestDb(db); });
 beforeEach(() => { mockA.reset(); mockB.reset(); });
 afterEach(() => { delete process.env.IZWI_ASSISTANT_DAILY_TOKENS; hoisted.session = null; });
 
@@ -69,10 +69,10 @@ function luhnSaId(prefix12: string) {
   throw new Error("no check digit");
 }
 
-function fixture(o: { kind?: string; model?: string; mock?: Mock; key?: string | null; personName?: string } = {}): Fx {
+async function fixture(o: { kind?: string; model?: string; mock?: Mock; key?: string | null; personName?: string } = {}): Promise<Fx> {
   const k = ++n;
   const ws = `org_sec${k}`, user = `user_sec${k}`, project = `proj_sec${k}`;
-  const ctx = seedWorkspace(db, ws, user, project);
+  const ctx = await seedWorkspace(db, ws, user, project);
   const clipA = `clip_${k}_a`, clipB = `clip_${k}_b`, person = `per_${k}`, providerId = `prov_${k}`;
   for (const [id, s] of [[clipA, 0], [clipB, 5000]] as const) {
     db.run(`INSERT INTO clip (id, workspace_id, project_id, title, start_ms, end_ms, reason, origin, status, created_at, updated_at) VALUES (?, ?, ?, 'Clip', ?, ?, 'r', 'manual', 'suggested', 1, 1)`, id, ws, project, s, s + 4000);
@@ -485,7 +485,7 @@ describe("limits", () => {
     expect(second.status).toBe(429);
     expect(Number(second.headers.get("Retry-After"))).toBeGreaterThan(0);
     expect(chatCalls(mockA)).toHaveLength(1);
-    ac.abort(); await reader.cancel().catch(() => {});
+    ac.abort(); (await reader.cancel()).catch(() => {});
     for (let i = 0; i < 40 && count(`SELECT COUNT(*) n FROM assistant_lease WHERE user_id = ?`, fx.user) > 0; i++) await new Promise((r) => setTimeout(r, 100));
     expect(count(`SELECT COUNT(*) n FROM assistant_lease WHERE user_id = ?`, fx.user)).toBe(0);
     db.run(`UPDATE provider SET model = 'normal:free' WHERE id = ?`, fx.providerId);
@@ -566,11 +566,11 @@ describe("voice admission", () => {
   it("admits at most one open voice job per user and cancels a queued job on client abort", async () => {
     const { enqueueVoice } = await import("../src/server/jobs");
     const fx = fixture(); signIn(fx);
-    const pending = enqueueVoice({ workspaceId: fx.ws, projectId: fx.project, createdBy: fx.user, idempotencyKey: "pending", input: {} })!;
+    const pending = (await enqueueVoice({ workspaceId: fx.ws, projectId: fx.project, createdBy: fx.user, idempotencyKey: "pending", input: {} }))!;
     const blockedForm = new FormData(); blockedForm.append("audio", new Blob(["audio"], { type: "audio/wav" }), "voice.wav");
     const blocked = await voiceRoute.POST(new Request(`http://localhost/api/projects/${fx.project}/assistant/transcribe`, { method: "POST", headers: { origin: "http://localhost" }, body: blockedForm }), { params: Promise.resolve({ id: fx.project }) });
     expect(blocked.status).toBe(429);
-    const { cancelQueued } = await import("../src/server/jobs"); cancelQueued(pending.id, fx.ws);
+    const { cancelQueued } = await import("../src/server/jobs"); await cancelQueued(pending.id, fx.ws);
 
     const controller = new AbortController();
     const form = new FormData(); form.append("audio", new Blob(["audio"], { type: "audio/wav" }), "voice.wav");
