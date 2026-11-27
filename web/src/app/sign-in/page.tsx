@@ -19,7 +19,7 @@ function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
-  const [mode, setMode] = useState<"in" | "create">(params.get("mode") === "create" ? "create" : "in");
+  const [mode, setMode] = useState<"in" | "create">(params.get("mode") === "create" || params.get("new") === "1" ? "create" : "in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

@@ -16,11 +16,11 @@ const FAMILY: Record<string, string> = { display: "var(--z-font-display)", ui: "
 
 export default function DesignSystemPage() {
   return (
-    <main style={{ background: "var(--z-shell-page)", minHeight: "100dvh", padding: 32, display: "grid", gap: 24, fontFamily: "var(--z-font-ui)" }}>
-      <section aria-label="Type" style={{ background: "var(--z-ivory-0)", borderRadius: 12, padding: 24, color: "var(--z-ink)" }}>
+    <main style={{ background: "var(--z-shell-page)", minHeight: "100dvh", padding: "clamp(12px, 4vw, 32px)", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 24, fontFamily: "var(--z-font-ui)" }}>
+      <section aria-label="Type" style={{ background: "var(--z-ivory-0)", borderRadius: 12, padding: "clamp(14px, 3vw, 24px)", minWidth: 0, color: "var(--z-ink)" }}>
         <h1 style={{ margin: "0 0 16px", font: "650 22px/1.2 var(--z-font-display)", letterSpacing: 0 }}>IZWI AI design system</h1>
         {RAMP.map((r) => (
-          <div key={r.name} style={{ display: "grid", gridTemplateColumns: "260px 1fr", alignItems: "baseline", gap: 16, padding: "8px 0", borderTop: "1px solid var(--z-ivory-line)" }}>
+          <div key={r.name} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", alignItems: "baseline", gap: 16, padding: "8px 0", borderTop: "1px solid var(--z-ivory-line)" }}>
             <span style={{ fontSize: 12, color: "var(--z-ink-muted)", fontFamily: "var(--z-font-mono)" }}>{r.name}</span>
             <span style={{ fontFamily: FAMILY[r.cls], fontSize: r.size, fontWeight: r.cls === "display" ? 650 : 400, fontVariantNumeric: "tabular-nums" }}>{r.text}</span>
           </div>

@@ -17,5 +17,6 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
   }
-  return <StudioShell id={id} initial={initial} />;
+  // The old studio, kept for reference: on an ivory working surface like every other working panel.
+  return <div className="z-classic"><StudioShell id={id} initial={initial} /></div>;
 }

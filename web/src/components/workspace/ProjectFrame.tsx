@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { CaretDown, Export } from "@phosphor-icons/react";
+import { CaretDown, Coins, Export, FilmSlate, ShieldCheck, Translate } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { stageCounts, type StageId } from "@/lib/stage-counts";
 import { DropdownMenu, type MenuItem } from "@/components/z";
@@ -14,6 +14,7 @@ import { useProject } from "./ProjectProvider";
 const STAGE_PATH: Record<StageId, string> = { create: "", localise: "/localise", protect: "/protect", publish: "/publish", earn: "/earn" };
 // Old studio links used hashes (#create, #publish, ...); they now land on the matching route.
 const LEGACY_HASH: Record<string, string> = { canvas: "/spatial", create: "", localise: "/localise", protect: "/protect", publish: "/publish", earn: "/earn" };
+const STAGE_ICON = { create: FilmSlate, localise: Translate, protect: ShieldCheck, publish: Export, earn: Coins } as const;
 
 type ListItem = { id: string; title: string };
 
@@ -80,15 +81,19 @@ export function ProjectFrame({ children }: { children: React.ReactNode }) {
         <Link href={`${base}/publish`} className="z-btn z-btn-primary z-btn-sm z-hide-phone" style={{ textDecoration: "none" }}><Export size={16} aria-hidden="true" />Export</Link>
       </HeaderActions>
       <nav className="z-stagebar" aria-label="Stages">
-        {counts.map((c, i) => (
-          <span key={c.id} style={{ display: "contents" }}>
-            {i > 0 && <span className="z-stage-sep" aria-hidden="true" />}
-            <Link href={`${base}${STAGE_PATH[c.id]}`} className="z-stage" aria-current={active(c.id) ? "page" : undefined} title={c.detail}>
-              {c.label}
-              {c.count && <span className="z-stage-count" data-tone={c.tone}>{c.count}</span>}
-            </Link>
-          </span>
-        ))}
+        {counts.map((c, i) => {
+          const Icon = STAGE_ICON[c.id];
+          return (
+            <span key={c.id} style={{ display: "contents" }}>
+              {i > 0 && <span className="z-stage-sep" aria-hidden="true" />}
+              <Link href={`${base}${STAGE_PATH[c.id]}`} className="z-stage" aria-current={active(c.id) ? "page" : undefined} title={c.detail}>
+                <Icon size={16} aria-hidden="true" />
+                {c.label}
+                {c.count && <span className="z-stage-count" data-tone={c.tone}>{c.count}</span>}
+              </Link>
+            </span>
+          );
+        })}
       </nav>
       <div className="z-stagebody">{children}</div>
     </div>
