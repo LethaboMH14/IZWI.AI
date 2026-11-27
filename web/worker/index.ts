@@ -1,4 +1,4 @@
-// The worker: claims one job at a time, runs it, records the result. Start with `npm run worker`.
+﻿// The worker: claims one job at a time, runs it, records the result. Start with `npm run worker`.
 // One job at a time keeps the machine responsive; set IZWI_WORKER_CONCURRENCY later for a server.
 import os from "node:os";
 import { loadLocalEnv } from "../src/server/env";
@@ -14,7 +14,7 @@ async function main() {
   const { appliedVersion, SCHEMA_VERSION } = await import("../src/server/migrations");
   const { purgeOldAssistantMessages } = await import("../src/server/assistant-store");
 
-  if (appliedVersion() < SCHEMA_VERSION) {
+  if (await appliedVersion() < SCHEMA_VERSION) {
     console.error("The database needs migrating. Run: npm run db:migrate");
     process.exit(1);
   }
@@ -24,54 +24,75 @@ async function main() {
   let current: { id: string; ctrl: AbortController } | null = null;
   let stopping = false;
 
-  const beatWorker = () =>
-    run(
+  let beatRunning = false;
+  const beatWorker = async () => {
+    if (beatRunning) return;
+    beatRunning = true;
+    try { await run(
       `INSERT INTO worker_beat (worker_id, info, seen_at) VALUES (?, ?, ?) ON CONFLICT(worker_id) DO UPDATE SET info = excluded.info, seen_at = excluded.seen_at`,
       workerId, JSON.stringify({ pid: process.pid, host: os.hostname(), tools: versions, job: current?.id ?? null, cpus: os.cpus().length, memGb: Math.round(os.totalmem() / 1e9) }), now(),
-    );
-  beatWorker();
-  const beatTimer = setInterval(beatWorker, 5000);
-  try { purgeOldAssistantMessages(); } catch (e) { console.error("assistant retention purge failed", e instanceof Error ? e.name : "unknown"); }
-  const retentionTimer = setInterval(() => {
-    try { purgeOldAssistantMessages(); } catch (e) { console.error("assistant retention purge failed", e instanceof Error ? e.name : "unknown"); }
+    ); } catch (e) { console.error("worker heartbeat failed", e instanceof Error ? e.name : "unknown"); }
+    finally { beatRunning = false; }
+  };
+  void beatWorker();
+  const beatTimer = setInterval(() => { void beatWorker(); }, 5000);
+  try { await purgeOldAssistantMessages(); } catch (e) { console.error("assistant retention purge failed", e instanceof Error ? e.name : "unknown"); }
+  let purgeRunning = false;
+  const retentionTimer = setInterval(async () => {
+    if (purgeRunning) return;
+    purgeRunning = true;
+    try { await purgeOldAssistantMessages(); } catch (e) { console.error("assistant retention purge failed", e instanceof Error ? e.name : "unknown"); }
+    finally { purgeRunning = false; }
   }, 60 * 60_000);
 
   const stop = () => {
     if (stopping) return;
     stopping = true;
-    console.log("worker stopping…");
+    console.log("worker stoppingâ€¦");
     current?.ctrl.abort();
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
-  console.log(`worker ${workerId} ready · ffmpeg ${versions.ffmpeg ?? "missing"} · whisper ${versions.whisper ?? "missing"}`);
+  console.log(`worker ${workerId} ready Â· ffmpeg ${versions.ffmpeg ?? "missing"} Â· whisper ${versions.whisper ?? "missing"}`);
 
   while (!stopping) {
-    sweep();
-    const job = claim(workerId, LEASE);
+    await sweep();
+    const job = await claim(workerId, LEASE);
     if (!job) {
       await new Promise((r) => setTimeout(r, 1000));
       continue;
     }
     const usesWhisper = job.type === "transcribe" || (job.type as string) === "voice_transcribe";
-    if (usesWhisper && !acquireWhisperLease(job.id)) {
-      deferWhisperJob(job.id, workerId);
+    if (usesWhisper && !(await acquireWhisperLease(job.id))) {
+      await deferWhisperJob(job.id, workerId);
       continue;
     }
     const ctrl = new AbortController();
     current = { id: job.id, ctrl };
     let last = 0;
-    const beat = (p?: number, stage?: string) => {
+    const beat = async (p?: number, stage?: string) => {
       const t = Date.now();
       if (p !== undefined && t - last < 600) return;
       last = t;
-      heartbeat(job.id, workerId, LEASE, p, stage);
-      if (isCancelled(job.id)) ctrl.abort();
+      await heartbeat(job.id, workerId, LEASE, p, stage);
+      if (await isCancelled(job.id)) ctrl.abort();
     };
-    const keepAlive = setInterval(() => beat(), 10_000);
-    const whisperKeepAlive = usesWhisper ? setInterval(() => { if (!renewWhisperLease(job.id)) ctrl.abort(); }, 30_000) : null;
+    let keepAliveRunning = false;
+    const keepAlive = setInterval(async () => {
+      if (keepAliveRunning) return;
+      keepAliveRunning = true;
+      try { await beat(); } catch (e) { console.error("job heartbeat failed", e instanceof Error ? e.name : "unknown"); }
+      finally { keepAliveRunning = false; }
+    }, 10_000);
+    let whisperRenewRunning = false;
+    const whisperKeepAlive = usesWhisper ? setInterval(async () => {
+      if (whisperRenewRunning) return;
+      whisperRenewRunning = true;
+      try { if (!(await renewWhisperLease(job.id))) ctrl.abort(); } catch { ctrl.abort(); }
+      finally { whisperRenewRunning = false; }
+    }, 30_000) : null;
     const started = Date.now();
-    console.log(`→ ${job.type} ${job.id}`);
+    console.log(`â†’ ${job.type} ${job.id}`);
     try {
       const input = parse<Record<string, unknown>>(job.input, {});
       const out = (job.type as string) === "injection_scan"
@@ -83,32 +104,32 @@ async function main() {
           createdBy: job.created_by,
         })
         : await handle({ job, input, beat, signal: ctrl.signal });
-      succeed(job.id, workerId, out);
-      console.log(`✓ ${job.type} ${job.id} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+      await succeed(job.id, workerId, out);
+      console.log(`âœ“ ${job.type} ${job.id} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
     } catch (e) {
       const msg = (e as Error).message || "Unknown error";
-      if (isCancelled(job.id)) console.log(`× ${job.type} cancelled`);
-      else if (stopping) failJob(job.id, workerId, "The worker stopped during this step. It will run again.", true);
+      if (await isCancelled(job.id)) console.log(`Ã— ${job.type} cancelled`);
+      else if (stopping) await failJob(job.id, workerId, "The worker stopped during this step. It will run again.", true);
       else if (e instanceof Blocked) {
-        block(job.id, workerId, msg);
-        console.log(`‖ ${job.type} blocked: ${msg}`);
+        await block(job.id, workerId, msg);
+        console.log(`â€– ${job.type} blocked: ${msg}`);
       } else {
-        const applied = failJob(job.id, workerId, msg, (e as { retryable?: boolean }).retryable === true);
-        if (applied && one<{ status: string }>(`SELECT status FROM job WHERE id = ?`, job.id)?.status === "failed") {
-          onFailed(job, msg);
+        const applied = await failJob(job.id, workerId, msg, (e as { retryable?: boolean }).retryable === true);
+        if (applied && (await one<{ status: string }>(`SELECT status FROM job WHERE id = ?`, job.id))?.status === "failed") {
+          await onFailed(job, msg);
         }
-        console.log(`✗ ${job.type} ${job.id}: ${msg}`);
+        console.log(`âœ— ${job.type} ${job.id}: ${msg}`);
       }
     } finally {
       clearInterval(keepAlive);
       if (whisperKeepAlive) clearInterval(whisperKeepAlive);
-      if (usesWhisper) releaseWhisperLease(job.id);
+      if (usesWhisper) await releaseWhisperLease(job.id);
       current = null;
     }
   }
   clearInterval(beatTimer);
   clearInterval(retentionTimer);
-  run(`DELETE FROM worker_beat WHERE worker_id = ?`, workerId);
+  await run(`DELETE FROM worker_beat WHERE worker_id = ?`, workerId);
   process.exit(0);
 }
 

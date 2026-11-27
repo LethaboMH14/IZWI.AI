@@ -1,15 +1,15 @@
-// Forward-only, versioned schema. Each migration runs in a transaction and is recorded once.
+﻿// Forward-only, versioned schema. Each migration runs in a transaction and is recorded once.
 // Auth tables (user, session, account, verification, organization, member, invitation) are created by better-auth first.
-import { db, now } from "./db";
+import { execScript, lockKey, one, now, run, tx } from "./db";
 
-type Migration = { version: number; name: string } & ({ sql: string } | { apply: () => void });
+type Migration = { version: number; name: string; sql: string };
 
 const STUDIO_PRICE_MIGRATION = "listing asking price";
 const SECURITY_MIGRATION = "security hardening: rate limits, workspace-scoped idempotency, consent ledger";
 const ADD_ASKING_PRICE = "ALTER TABLE listing ADD COLUMN asking_price_cents INTEGER CHECK (asking_price_cents BETWEEN 1 AND 100000000)";
 const ADD_STORY_SCRIPT = "ALTER TABLE project ADD COLUMN script TEXT NOT NULL DEFAULT ''";
 
-export const MIGRATIONS: Migration[] = [
+const HISTORIC_MIGRATIONS = [
   {
     version: 1,
     name: "core workspace, media, captions, rights, outputs, providers, audit",
@@ -351,7 +351,7 @@ CREATE TRIGGER consent_ledger_no_delete BEFORE DELETE ON consent_ledger BEGIN SE
   {
     version: 4,
     name: "reconcile security and studio migration histories",
-    apply: reconcileStudioHistory,
+    sql: "",
   },
   {
     version: 5,
@@ -479,44 +479,48 @@ CREATE INDEX model_route_provider ON model_route(provider_id);
   },
 ];
 
-function reconcileStudioHistory() {
-  const historical = db.prepare("SELECT name FROM schema_migrations WHERE version = 2").get() as { name: string } | undefined;
-  if (historical?.name === STUDIO_PRICE_MIGRATION) {
-    const security = MIGRATIONS.find((migration) => migration.name === SECURITY_MIGRATION);
-    if (!security || !("sql" in security)) throw new Error("Missing security migration.");
-    db.exec(security.sql);
-  } else if (historical?.name !== SECURITY_MIGRATION) {
-    throw new Error("Unrecognised app migration 2. Restore a known backup before upgrading.");
-  }
-
-  const hasColumn = (table: "listing" | "project", column: string) =>
-    Boolean(db.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?").get(table, column));
-  if (!hasColumn("listing", "asking_price_cents")) db.exec(ADD_ASKING_PRICE);
-  if (!hasColumn("project", "script")) db.exec(ADD_STORY_SCRIPT);
+// Fold every historic DDL migration in order into a fresh-Postgres baseline.
+// Version 4 only reconciled divergent SQLite histories; its final columns are included here.
+function pgBaseline(): string {
+  let sql = HISTORIC_MIGRATIONS.filter((m) => m.version !== 4).map((m) => m.sql).join("\n");
+  sql += `\n${ADD_ASKING_PRICE};\n${ADD_STORY_SCRIPT};\n`;
+  sql = sql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/gi, "BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY")
+    .replace(/INTEGER PRIMARY KEY CHECK \(id = 1\)/gi, "BIGINT PRIMARY KEY CHECK (id = 1)")
+    .replace(/INTEGER PRIMARY KEY/gi, "BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY")
+    .replace(/\bINTEGER\b/gi, "BIGINT");
+  sql = sql.replace(/\s+CHECK \(json_valid\([a-z_]+\)\)/gi, "")
+    .replace(/\s+CHECK \(?[a-z_]+ IS NULL OR json_valid\([a-z_]+\)\)?/gi, "")
+    .replace(/CREATE TRIGGER consent_ledger_no_update[\s\S]*?END;\s*CREATE TRIGGER consent_ledger_no_delete[\s\S]*?END;/i, "");
+  sql += `\nCREATE UNIQUE INDEX job_idempotency_key_unique ON job(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX job_one_active_voice_transcribe ON job(created_by) WHERE type = 'voice_transcribe' AND status IN ('queued','running');
+CREATE UNIQUE INDEX consent_ledger_prev_hash_unique ON consent_ledger(prev_hash);
+CREATE OR REPLACE FUNCTION reject_consent_ledger_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'consent_ledger is append-only'; END;
+$$;
+CREATE TRIGGER consent_ledger_no_update BEFORE UPDATE ON consent_ledger FOR EACH ROW EXECUTE FUNCTION reject_consent_ledger_change();
+CREATE TRIGGER consent_ledger_no_delete BEFORE DELETE ON consent_ledger FOR EACH ROW EXECUTE FUNCTION reject_consent_ledger_change();`;
+  return sql;
 }
 
-export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
+export const SCHEMA_VERSION = 8;
+export const MIGRATIONS: Migration[] = [{ version: SCHEMA_VERSION, name: "Postgres baseline schema", sql: pgBaseline() }];
 
-function ensureTable() {
-  db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at INTEGER NOT NULL)`);
+export async function appliedVersion(): Promise<number> {
+  const found = await one<{ exists: boolean }>(`SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists`);
+  if (!found?.exists) return 0;
+  return (await one<{ v: number }>(`SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations`))?.v ?? 0;
 }
 
-export function appliedVersion(): number {
-  ensureTable();
-  const r = db.prepare(`SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations`).get() as { v: number };
-  return r.v;
-}
-
-export function migrateApp(log: (s: string) => void = console.log) {
-  ensureTable();
-  for (const m of MIGRATIONS) {
-    const applied = db.transaction(() => {
-      if (m.version <= appliedVersion()) return false;
-      if ("sql" in m) db.exec(m.sql);
-      else m.apply();
-      db.prepare(`INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`).run(m.version, m.name, now());
-      return true;
-    }).immediate();
-    if (applied) log(`applied migration ${m.version}: ${m.name}`);
-  }
+export async function migrateApp(log: (s: string) => void = console.log): Promise<void> {
+  let applied = false;
+  await tx(async () => {
+    await lockKey("migrate");
+    await execScript(`CREATE TABLE IF NOT EXISTS schema_migrations (version BIGINT PRIMARY KEY, name TEXT NOT NULL, applied_at BIGINT NOT NULL)`);
+    if ((await appliedVersion()) >= SCHEMA_VERSION) return;
+    const migration = MIGRATIONS[0];
+    await execScript(migration.sql);
+    await run(`INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`, migration.version, migration.name, now());
+    applied = true;
+  });
+  if (applied) log(`applied migration ${SCHEMA_VERSION}: Postgres baseline schema`);
 }

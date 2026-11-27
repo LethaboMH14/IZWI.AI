@@ -116,8 +116,41 @@ export function toPg(sql: string): string {
 
 const txStore = new AsyncLocalStorage<Handle>();
 
+// SQLite-style named parameters ($id, @id) with one plain-object argument become positional $n.
+const isPlain = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && Object.getPrototypeOf(v) === Object.prototype;
+
+export function namedToPg(sql: string, values: Record<string, unknown>): { text: string; params: unknown[] } {
+  const order: string[] = [];
+  let out = "";
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i];
+    if (c === "'" || c === '"') {
+      const end = sql.indexOf(c, i + 1);
+      const stop = end < 0 ? sql.length : end;
+      out += sql.slice(i, stop + 1);
+      i = stop;
+      continue;
+    }
+    const m = (c === "$" || c === "@") ? /^[A-Za-z_]\w*/.exec(sql.slice(i + 1)) : null;
+    if (m) {
+      if (!(m[0] in values)) throw new Error(`Missing named parameter ${c}${m[0]}`);
+      let k = order.indexOf(m[0]);
+      if (k < 0) k = order.push(m[0]) - 1;
+      out += `$${k + 1}`;
+      i += m[0].length;
+    } else out += c;
+  }
+  return { text: out, params: order.map((k) => values[k]) };
+}
+
 async function q(sql: string, params: unknown[]): Promise<Result> {
-  const text = toPg(sql);
+  let text: string;
+  if (params.length === 1 && isPlain(params[0])) {
+    const n = namedToPg(sql, params[0]);
+    text = n.text;
+    params = n.params;
+  } else text = toPg(sql);
   const inTx = txStore.getStore();
   // pg sends JS booleans and undefined awkwardly; the schema stores flags as 0/1.
   const p = params.map((v) => (v === undefined ? null : typeof v === "boolean" ? (v ? 1 : 0) : v));

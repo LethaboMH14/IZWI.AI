@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await pageCtx();
-  const ws = one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
+  const ws = await one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
   return (
     <AppShell workspace={ws?.name ?? "Workspace"} user={{ name: ctx.userName, email: ctx.email }}>
       {children}

@@ -13,20 +13,20 @@ beforeAll(async () => {
   await seedWorkspace(db, "workspace-b", "owner-b", "project-b");
   trial = await import("../src/server/provider-trial");
 });
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllEnvs();
-  db.run("DELETE FROM usage_event");
+  (await db.run("DELETE FROM usage_event"));
 });
-afterAll(() => await closeTestDb(db));
+afterAll(async () => await closeTestDb(db));
 
 function configure(capMicros: number, maxMicrosPerRequest: number, maxRequests: number) {
   vi.stubEnv("IZWI_PROVIDER_TRIAL", "1");
   vi.stubEnv("IZWI_PROVIDER_TRIAL_RULES", JSON.stringify([{ baseUrl: base, model: provider.model, capMicros, maxMicrosPerRequest, maxRequests }]));
 }
 
-it("leaves ordinary local use unmetered when the trial is off", () => {
+it("leaves ordinary local use unmetered when the trial is off", async () => {
   vi.stubEnv("IZWI_PROVIDER_TRIAL", "0");
-  expect(trial.reserveTrialCall(provider, endpoint)).toBeNull();
+  expect((await trial.reserveTrialCall(provider, endpoint))).toBeNull();
 });
 
 it("requires a configured exact provider, model and endpoint", () => {
@@ -38,13 +38,13 @@ it("requires a configured exact provider, model and endpoint", () => {
   expect(() => trial.reserveTrialCall(provider, base)).toThrow(/outside/);
 });
 
-it("reserves before dispatch and enforces the same spending cap across workspaces", () => {
+it("reserves before dispatch and enforces the same spending cap across workspaces", async () => {
   configure(100, 40, 5);
-  const receipt = trial.reserveTrialCall(provider, endpoint);
-  trial.recordTrialTokens(receipt, 40, 10);
-  trial.reserveTrialCall({ ...provider, workspace_id: "workspace-b" }, endpoint);
+  const receipt = (await trial.reserveTrialCall(provider, endpoint));
+  (await trial.recordTrialTokens(receipt, 40, 10));
+  (await trial.reserveTrialCall({ ...provider, workspace_id: "workspace-b" }, endpoint));
   expect(() => trial.reserveTrialCall(provider, endpoint)).toThrow(/cap has been reached/);
-  expect(db.all("SELECT unit, amount FROM usage_event ORDER BY unit, amount")).toEqual([
+  expect((await db.all("SELECT unit, amount FROM usage_event ORDER BY unit, amount"))).toEqual([
     { unit: "trial_input_tokens", amount: 40 },
     { unit: "trial_output_tokens", amount: 10 },
     { unit: "trial_reserved_usd_micros", amount: 40 },
@@ -52,8 +52,8 @@ it("reserves before dispatch and enforces the same spending cap across workspace
   ]);
 });
 
-it("enforces request limits on a free route", () => {
+it("enforces request limits on a free route", async () => {
   configure(0, 0, 1);
-  expect(trial.reserveTrialCall(provider, endpoint)).toBeTruthy();
+  expect((await trial.reserveTrialCall(provider, endpoint))).toBeTruthy();
   expect(() => trial.reserveTrialCall(provider, endpoint)).toThrow(/cap has been reached/);
 });

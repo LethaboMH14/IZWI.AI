@@ -3,7 +3,7 @@
 // The signing key is derived from IZWI_MASTER_KEY (HKDF), so no new secret is needed; rotating the master key
 // starts a new signing key, and entries keep the public key they were signed with.
 import { createHash, createPrivateKey, createPublicKey, hkdfSync, sign, verify, type KeyObject } from "node:crypto";
-import { db, one } from "./db";
+import { all, lockKey, one, run, tx } from "./db";
 import { masterKey } from "./env";
 
 export const GENESIS = "0".repeat(64);
@@ -37,35 +37,35 @@ export function canonical(v: unknown): string {
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const entryHash = (prev: string, recordHash: string, ts: number) => sha256(`${prev}|${recordHash}|${ts}`);
 
-export function appendConsent(rec: LedgerRecord): { seq: number; hash: string } {
+export async function appendConsent(rec: LedgerRecord): Promise<{ seq: number; hash: string }> {
   const { priv, pubHex } = ledgerKeys();
-  // IMMEDIATE: take the write lock before reading the head, so two answers cannot both chain onto the same entry.
-  return db.transaction(() => {
-    const head = one<{ hash: string }>(`SELECT hash FROM consent_ledger ORDER BY seq DESC LIMIT 1`);
+  return tx(async () => {
+    // The chain is global (one head for every workspace), so every append waits for the one before it to commit.
+    await lockKey("consent-ledger");
+    const head = await one<{ hash: string }>(`SELECT hash FROM consent_ledger ORDER BY seq DESC LIMIT 1`);
     const prev = head?.hash ?? GENESIS;
     const ts = Date.now();
     const record = { ...rec, key: pubHex };
     const hash = entryHash(prev, sha256(canonical(record)), ts);
     const sig = sign(null, Buffer.from(hash, "hex"), priv).toString("base64");
-    const r = db
-      .prepare(`INSERT INTO consent_ledger (workspace_id, consent_id, record, prev_hash, hash, sig, ts) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(rec.workspaceId, rec.consentId, canonical(record), prev, hash, sig, ts);
-    return { seq: Number(r.lastInsertRowid), hash };
-  }).immediate();
+    const inserted = await one<{ seq: number }>(`INSERT INTO consent_ledger (workspace_id, consent_id, record, prev_hash, hash, sig, ts) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING seq`, rec.workspaceId, rec.consentId, canonical(record), prev, hash, sig, ts);
+    return { seq: inserted!.seq, hash };
+  });
 }
 
-export function ledgerHead() {
-  const h = one<{ seq: number; hash: string; ts: number }>(`SELECT seq, hash, ts FROM consent_ledger ORDER BY seq DESC LIMIT 1`);
+export async function ledgerHead() {
+  const h = await one<{ seq: number; hash: string; ts: number }>(`SELECT seq, hash, ts FROM consent_ledger ORDER BY seq DESC LIMIT 1`);
   return h ? { entries: h.seq, hash: h.hash, at: h.ts } : { entries: 0, hash: GENESIS, at: null };
 }
 
-export function latestEntryFor(consentId: string) {
-  return one<{ seq: number; hash: string }>(`SELECT seq, hash FROM consent_ledger WHERE consent_id = ? ORDER BY seq DESC LIMIT 1`, consentId) ?? null;
+export async function latestEntryFor(consentId: string) {
+  return (await one<{ seq: number; hash: string }>(`SELECT seq, hash FROM consent_ledger WHERE consent_id = ? ORDER BY seq DESC LIMIT 1`, consentId)) ?? null;
 }
 
 // Walks the whole chain. Returns the first broken entry, or ok with the head. Signatures must come from a trusted key
 // (the current one, plus earlier ones after a master-key rotation); a key written into the record alone proves nothing.
-export function verifyLedger(trusted: Set<string>, rows: Row[] = db.prepare(`SELECT * FROM consent_ledger ORDER BY seq`).all() as Row[]) {
+export async function verifyLedger(trusted: Set<string>, rows?: Row[]) {
+  rows ??= await all<Row>(`SELECT * FROM consent_ledger ORDER BY seq`);
   let prev = GENESIS;
   for (const r of rows) {
     const record = JSON.parse(r.record) as LedgerRecord & { key: string };

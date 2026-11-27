@@ -49,7 +49,7 @@ export async function recordInjectionScans(
   for (const line of lines) {
     const score = await scoreText(line.text);
     if (!Number.isFinite(score) || score < 0 || score > 1) throw new Error("The injection classifier returned an invalid score.");
-    run(
+    await run(
       `INSERT INTO line_injection_scan (line_id, text_hash, model_rev, score, status, scanned_at)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(line_id) DO UPDATE SET text_hash = excluded.text_hash, model_rev = excluded.model_rev,
@@ -74,13 +74,13 @@ export async function scanProjectBatch(input: {
   scoreText?: InjectionScorer;
 }) {
   const afterIdx = input.afterIdx ?? -1;
-  const track = one<{ id: string }>(
+  const track = await one<{ id: string }>(
     `SELECT id FROM caption_track WHERE id = ? AND workspace_id = ? AND project_id = ? AND kind = 'source'`,
     input.trackId, input.workspaceId, input.projectId,
   );
   if (!track) return { scanned: 0, more: false, afterIdx };
 
-  const rows = all<InjectionLine>(
+  const rows = await all<InjectionLine>(
     `SELECT id, idx, text FROM caption_line WHERE track_id = ? AND idx > ? ORDER BY idx LIMIT ?`,
     input.trackId, afterIdx, INJECTION_BATCH_SIZE + 1,
   );
@@ -91,7 +91,7 @@ export async function scanProjectBatch(input: {
   const more = rows.length > INJECTION_BATCH_SIZE;
 
   if (more) {
-    enqueue({
+    await enqueue({
       workspaceId: input.workspaceId,
       projectId: input.projectId,
       type: "injection_scan" as unknown as JobType,

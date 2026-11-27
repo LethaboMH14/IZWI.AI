@@ -7,7 +7,7 @@ type P = { token: string };
 const ip = clientIp;
 
 export const GET = route<P>(async (req, { token }) => {
-  limit(`consent-read:${ip(req)}`, LIMIT.publicRead);
-  return consentData(token);
+  await limit(`consent-read:${ip(req)}`, LIMIT.publicRead);
+  return await consentData(token);
 });
-export const POST = route<P>(async (req, { token }) => consentAction(token, await body(req, ConsentIn), ip(req), req.headers.get("user-agent") ?? ""));
+export const POST = route<P>(async (req, { token }) => await consentAction(token, await body(req, ConsentIn), ip(req), req.headers.get("user-agent") ?? ""));

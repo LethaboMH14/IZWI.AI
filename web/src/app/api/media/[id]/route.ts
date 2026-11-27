@@ -17,12 +17,12 @@ export const GET = route<{ id: string }>(async (req, { id }) => {
   const slug = url.searchParams.get("l");
   let asset: Asset | undefined;
   if (token || slug) {
-    const ok = assetAllowedForToken(id, token, slug);
-    if (ok) asset = one<Asset>(`SELECT id, storage_key, mime, filename FROM asset WHERE id = ?`, ok.id);
+    const ok = await assetAllowedForToken(id, token, slug);
+    if (ok) asset = await one<Asset>(`SELECT id, storage_key, mime, filename FROM asset WHERE id = ?`, ok.id);
   }
   if (!asset) {
     const ctx = await requireCtx();
-    asset = one<Asset>(`SELECT id, storage_key, mime, filename FROM asset WHERE id = ? AND workspace_id = ?`, id, ctx.workspaceId);
+    asset = await one<Asset>(`SELECT id, storage_key, mime, filename FROM asset WHERE id = ? AND workspace_id = ?`, id, ctx.workspaceId);
   }
   if (!asset) fail(404, "Not found.");
   const file = absPath(asset.storage_key);

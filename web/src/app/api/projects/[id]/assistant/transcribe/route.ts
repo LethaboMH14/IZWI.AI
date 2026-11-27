@@ -24,10 +24,10 @@ async function cappedForm(req: Request) {
 export const POST = route<{ id: string }>(async (req, { id }) => {
   // Same kill switch as the chat route: off means 404 before the session or the upload is read.
   if (!assistantEnabled()) throw new HttpError(404, "Not found.");
-  const ctx = await requireCtx(); const project = projectOf(ctx, id);
-  try { limit(`voice:${ctx.workspaceId}:${ctx.userId}`, LIMIT.voice); }
+  const ctx = await requireCtx(); const project = await projectOf(ctx, id);
+  try { await limit(`voice:${ctx.workspaceId}:${ctx.userId}`, LIMIT.voice); }
   catch (e) { if (e instanceof RateLimitError) return Response.json({ error: e.message, retryAfter: e.retryAfterSec }, { status: 429, headers: { "Retry-After": String(e.retryAfterSec) } }); throw e; }
-  if (all<{ id: string }>(`SELECT id FROM job WHERE created_by = ? AND type = 'voice_transcribe' AND status IN ('queued','running') LIMIT 1`, ctx.userId).length) return Response.json({ error: "A voice transcription is already open.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } });
+  if ((await all<{ id: string }>(`SELECT id FROM job WHERE created_by = ? AND type = 'voice_transcribe' AND status IN ('queued','running') LIMIT 1`, ctx.userId)).length) return Response.json({ error: "A voice transcription is already open.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } });
   if (!/^multipart\/form-data\b/i.test(req.headers.get("content-type") ?? "")) throw new HttpError(415, "Send audio as multipart form data.");
   const form = await cappedForm(req);
   const fields = [...form.entries()];
@@ -41,23 +41,23 @@ export const POST = route<{ id: string }>(async (req, { id }) => {
   await mkdir(tempDir, { recursive: true });
   const sourcePath = path.join(tempDir, "audio.upload");
   await writeFile(sourcePath, Buffer.from(await file.arrayBuffer()));
-  const job = enqueueVoice({ workspaceId: ctx.workspaceId, projectId: project.id, idempotencyKey: `voice:${requestId}`, input: { sourcePath, tempDir }, createdBy: ctx.userId });
+  const job = await enqueueVoice({ workspaceId: ctx.workspaceId, projectId: project.id, idempotencyKey: `voice:${requestId}`, input: { sourcePath, tempDir }, createdBy: ctx.userId });
   if (!job) { await rm(tempDir, { recursive: true, force: true }); return Response.json({ error: "A voice transcription is already open.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } }); }
   const until = Date.now() + 60_000;
   let started = false;
-  const onAbort = () => { if (!started && cancelQueued(job.id, ctx.workspaceId)) void rm(tempDir, { recursive: true, force: true }); };
+  const onAbort = async () => { if (!started && await cancelQueued(job.id, ctx.workspaceId)) void rm(tempDir, { recursive: true, force: true }); };
   req.signal.addEventListener("abort", onAbort, { once: true });
   try {
     while (Date.now() < until) {
-      if (req.signal.aborted) { cancelQueued(job.id, ctx.workspaceId); throw new HttpError(499, "The request was cancelled."); }
-      const row = one<{ status: string; output: string | null; error: string | null }>(`SELECT status, output, error FROM job WHERE id = ? AND workspace_id = ?`, job.id, ctx.workspaceId);
+      if (req.signal.aborted) { await cancelQueued(job.id, ctx.workspaceId); throw new HttpError(499, "The request was cancelled."); }
+      const row = await one<{ status: string; output: string | null; error: string | null }>(`SELECT status, output, error FROM job WHERE id = ? AND workspace_id = ?`, job.id, ctx.workspaceId);
       if (!row) throw new HttpError(404, "Voice job not found.");
       if (row.status === "running" || row.status === "succeeded" || row.status === "failed") started = true;
       if (row.status === "succeeded") return parse(row.output, { text: "" });
       if (["failed", "blocked", "cancelled"].includes(row.status)) throw new HttpError(422, row.error ?? "Audio transcription failed.");
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    if (cancelQueued(job.id, ctx.workspaceId)) await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    if (await cancelQueued(job.id, ctx.workspaceId)) await rm(tempDir, { recursive: true, force: true }).catch(() => {});
     return Response.json({ error: "Whisper is busy. Try again shortly.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } });
   } finally { req.signal.removeEventListener("abort", onAbort); }
 });

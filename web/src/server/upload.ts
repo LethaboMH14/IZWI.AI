@@ -31,7 +31,7 @@ async function caller(req: Request) {
   const s = await auth.api.getSession({ headers: req.headers });
   const ws = (s?.session as { activeOrganizationId?: string | null } | undefined)?.activeOrganizationId;
   if (!s || !ws) return null;
-  const m = one(`SELECT 1 FROM member WHERE organizationId = ? AND userId = ?`, ws, s.user.id);
+  const m = await one(`SELECT 1 FROM member WHERE organizationId = ? AND userId = ?`, ws, s.user.id);
   return m ? { userId: s.user.id, workspaceId: ws } : null;
 }
 
@@ -55,7 +55,7 @@ export const tus: Server = (g.__izwiTus ??= new Server({
     const who = await caller(req);
     if (!who) throw deny(401, "Sign in to upload.");
     if (req.method !== "POST" && uploadId) {
-      const s = one<{ workspace_id: string }>(`SELECT workspace_id FROM upload_session WHERE upload_id = ?`, uploadId);
+      const s = await one<{ workspace_id: string }>(`SELECT workspace_id FROM upload_session WHERE upload_id = ?`, uploadId);
       if (!s || s.workspace_id !== who.workspaceId) throw deny(404, "Upload not found.");
     }
   },
@@ -65,20 +65,20 @@ export const tus: Server = (g.__izwiTus ??= new Server({
     const projectId = upload.metadata?.projectId ?? "";
     const filename = (upload.metadata?.filename ?? "").slice(0, 200);
     try {
-      hit(`upload:${who.workspaceId}:${who.userId}`, LIMIT.uploadCreate.max, LIMIT.uploadCreate.windowMs);
+      await hit(`upload:${who.workspaceId}:${who.userId}`, LIMIT.uploadCreate.max, LIMIT.uploadCreate.windowMs);
     } catch (e) {
       if (e instanceof RateLimitError) throw deny(429, e.message);
       throw e;
     }
-    const p = one(`SELECT id FROM project WHERE id = ? AND workspace_id = ?`, projectId, who.workspaceId);
+    const p = await one(`SELECT id FROM project WHERE id = ? AND workspace_id = ?`, projectId, who.workspaceId);
     if (!p) throw deny(404, "Project not found.");
     // The browser's filetype is ignored: the extension must be on the list, and the bytes are checked when the upload ends.
     if (!filename || !uploadExt(filename)) throw deny(415, "Choose a video or audio file (MP4, MOV, WebM, MKV, AVI, 3GP, MP3, M4A, AAC, WAV, OGG, Opus or FLAC).");
-    run(`INSERT INTO upload_session (upload_id, workspace_id, project_id, user_id, filename, created_at) VALUES (?, ?, ?, ?, ?, ?)`, upload.id, who.workspaceId, projectId, who.userId, filename, now());
+    await run(`INSERT INTO upload_session (upload_id, workspace_id, project_id, user_id, filename, created_at) VALUES (?, ?, ?, ?, ?, ?)`, upload.id, who.workspaceId, projectId, who.userId, filename, now());
     return { metadata: upload.metadata };
   },
   async onUploadFinish(_req, upload) {
-    const s = one<{ workspace_id: string; project_id: string; user_id: string; filename: string }>(`SELECT * FROM upload_session WHERE upload_id = ?`, upload.id);
+    const s = await one<{ workspace_id: string; project_id: string; user_id: string; filename: string }>(`SELECT * FROM upload_session WHERE upload_id = ?`, upload.id);
     if (!s) throw deny(404, "Upload not found.");
     const tmp = path.join(TUS_DIR, upload.id);
     const drop = () => {
@@ -86,14 +86,14 @@ export const tus: Server = (g.__izwiTus ??= new Server({
       rmSync(`${tmp}.json`, { force: true });
     };
     // The project may have been deleted while the bytes were arriving.
-    if (!one(`SELECT 1 FROM project WHERE id = ? AND workspace_id = ?`, s.project_id, s.workspace_id)) {
+    if (!await one(`SELECT 1 FROM project WHERE id = ? AND workspace_id = ?`, s.project_id, s.workspace_id)) {
       drop();
       throw deny(404, "Project not found.");
     }
     const type = verifiedType(s.filename, readHead(tmp));
     if (!type) {
       drop();
-      audit({ workspaceId: s.workspace_id, userId: s.user_id, actor: "user", action: "upload.refused", target: s.project_id, meta: { reason: "content does not match its extension" } });
+      await audit({ workspaceId: s.workspace_id, userId: s.user_id, actor: "user", action: "upload.refused", target: s.project_id, meta: { reason: "content does not match its extension" } });
       throw deny(415, "This file's contents are not the audio or video its name says. Export it again from your editor and upload that.");
     }
     const assetId = newId("ast");
@@ -101,13 +101,13 @@ export const tus: Server = (g.__izwiTus ??= new Server({
     ensureDirFor(absPath(key));
     renameSync(tmp, absPath(key));
     rmSync(`${tmp}.json`, { force: true });
-    run(
+    await run(
       `INSERT INTO asset (id, workspace_id, project_id, kind, storage_key, filename, mime, bytes, created_at) VALUES (?, ?, ?, 'source', ?, ?, ?, ?, ?)`,
       assetId, s.workspace_id, s.project_id, key, s.filename, type.mime, upload.size ?? 0, now(),
     );
-    run(`UPDATE project SET updated_at = ? WHERE id = ?`, now(), s.project_id);
-    enqueue({ workspaceId: s.workspace_id, projectId: s.project_id, type: "probe", input: { assetId }, idempotencyKey: `probe:${assetId}`, createdBy: s.user_id });
-    audit({ workspaceId: s.workspace_id, userId: s.user_id, actor: "user", action: "upload.finished", target: assetId, meta: { bytes: upload.size } });
+    await run(`UPDATE project SET updated_at = ? WHERE id = ?`, now(), s.project_id);
+    await enqueue({ workspaceId: s.workspace_id, projectId: s.project_id, type: "probe", input: { assetId }, idempotencyKey: `probe:${assetId}`, createdBy: s.user_id });
+    await audit({ workspaceId: s.workspace_id, userId: s.user_id, actor: "user", action: "upload.finished", target: assetId, meta: { bytes: upload.size } });
     return {};
   },
 }));

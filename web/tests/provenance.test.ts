@@ -20,7 +20,7 @@ beforeAll(async () => {
   provenance = await import("../src/server/provenance");
   pipeline = await import("../src/server/pipeline");
 }, 60_000);
-afterAll(() => await closeTestDb(db));
+afterAll(async () => await closeTestDb(db));
 
 const envelope = (media = Buffer.from("sample mp4")) => ({
   output_id: "out_test", project_id: "prj_test", created_at: 1,
@@ -56,32 +56,32 @@ describe("IZWI signed provenance (not C2PA)", () => {
     const fs = await import("node:fs");
     const { storageKey, absPath, ensureDirFor } = await import("../src/server/storage");
     const now = Date.now();
-    db.run(`INSERT INTO person (id,workspace_id,project_id,name,role,whole_recording,created_at) VALUES ('person_prov','org_prov','prj_prov','Guest Secret','guest',1,0)`);
-    db.run(`INSERT INTO consent (id,workspace_id,project_id,person_id,scope,status,statement,requested_by,requested_at,updated_at) VALUES ('consent_prov','org_prov','prj_prov','person_prov','appearance','granted','Permission','usr_prov',0,0)`);
-    db.run(`INSERT INTO declaration (id,workspace_id,project_id,user_id,statement,created_at) VALUES ('decl_prov','org_prov','prj_prov','usr_prov','Creator statement',10)`);
-    db.run(`INSERT INTO clip (id,workspace_id,project_id,title,start_ms,end_ms,reason,origin,status,created_at,updated_at) VALUES ('clip_prov','org_prov','prj_prov','Test clip',0,1000,'test','manual','kept',0,0)`);
+    (await db.run(`INSERT INTO person (id,workspace_id,project_id,name,role,whole_recording,created_at) VALUES ('person_prov','org_prov','prj_prov','Guest Secret','guest',1,0)`));
+    (await db.run(`INSERT INTO consent (id,workspace_id,project_id,person_id,scope,status,statement,requested_by,requested_at,updated_at) VALUES ('consent_prov','org_prov','prj_prov','person_prov','appearance','granted','Permission','usr_prov',0,0)`));
+    (await db.run(`INSERT INTO declaration (id,workspace_id,project_id,user_id,statement,created_at) VALUES ('decl_prov','org_prov','prj_prov','usr_prov','Creator statement',10)`));
+    (await db.run(`INSERT INTO clip (id,workspace_id,project_id,title,start_ms,end_ms,reason,origin,status,created_at,updated_at) VALUES ('clip_prov','org_prov','prj_prov','Test clip',0,1000,'test','manual','kept',0,0)`));
     const append = (decision: "granted" | "revoked", at: number) => ledger.appendConsent({ consentId: "consent_prov", workspaceId: "org_prov", projectId: "prj_prov", personId: "person_prov", scope: "appearance", decision, respondedName: "Guest Secret", at });
-    append("granted", now - 3);
+    (await append("granted", now - 3));
     const sourceKey = storageKey("org_prov", "prj_prov", "source.mp4");
     ensureDirFor(absPath(sourceKey)); fs.writeFileSync(absPath(sourceKey), "source");
-    db.run(`INSERT INTO asset (id,workspace_id,project_id,kind,storage_key,filename,mime,bytes,duration_ms,meta,created_at) VALUES ('source_prov','org_prov','prj_prov','source',?,'source.mp4','video/mp4',6,2000,?,0)`, sourceKey, JSON.stringify({ durationMs: 2000, hasAudio: true, hasVideo: false, format: "mp4" }));
+    (await db.run(`INSERT INTO asset (id,workspace_id,project_id,kind,storage_key,filename,mime,bytes,duration_ms,meta,created_at) VALUES ('source_prov','org_prov','prj_prov','source',?,'source.mp4','video/mp4',6,2000,?,0)`, sourceKey, JSON.stringify({ durationMs: 2000, hasAudio: true, hasVideo: false, format: "mp4" })));
     const job = await import("../src/server/jobs");
-    const j = job.enqueue({ workspaceId: "org_prov", projectId: "prj_prov", type: "render", input: { outputId: "out_prov" } });
-    db.run(`UPDATE job SET status='running',worker_id='worker_prov',attempts=1,lease_until=? WHERE id=?`, now + 60_000, j.id);
-    db.run(`INSERT INTO output (id,workspace_id,project_id,clip_id,preset,status,job_id,created_by,created_at,updated_at) VALUES ('out_prov','org_prov','prj_prov','clip_prov','small','queued',?,'usr_prov',0,0)`, j.id);
+    const j = (await job.enqueue({ workspaceId: "org_prov", projectId: "prj_prov", type: "render", input: { outputId: "out_prov" } }));
+    (await db.run(`UPDATE job SET status='running',worker_id='worker_prov',attempts=1,lease_until=? WHERE id=?`, now + 60_000, j.id));
+    (await db.run(`INSERT INTO output (id,workspace_id,project_id,clip_id,preset,status,job_id,created_by,created_at,updated_at) VALUES ('out_prov','org_prov','prj_prov','clip_prov','small','queued',?,'usr_prov',0,0)`, j.id));
     const renderModule = await import("../src/server/render");
     vi.mocked(renderModule.renderClip).mockImplementationOnce(async ({ out }: { out: string }) => {
       writeFileSync(out, Buffer.from("rendered MP4"));
     });
     const originalWrite = provenance.writeProvenance;
-    vi.spyOn(provenance, "writeProvenance").mockImplementationOnce((...args) => {
-      const result = originalWrite(...args);
-      append("revoked", now - 2); append("granted", now - 1);
+    vi.spyOn(provenance, "writeProvenance").mockImplementationOnce((async (...args: Parameters<typeof originalWrite>) => {
+      const result = await originalWrite(...args);
+      (await append("revoked", now - 2)); (await append("granted", now - 1));
       return result;
-    });
+    }) as never);
     const resultJob = { ...j, status: "running" as const, worker_id: "worker_prov", attempts: 1, lease_until: now + 60_000 };
     await expect(pipeline.handle({ job: resultJob, input: { outputId: "out_prov" }, beat: () => {}, signal: new AbortController().signal })).rejects.toThrow(/Consent changed during rendering/);
-    expect(db.one<{ status: string; note: string }>(`SELECT status,note FROM output WHERE id='out_prov'`)).toMatchObject({ status: "failed", note: expect.stringMatching(/Consent changed/) });
+    expect((await db.one<{ status: string; note: string }>(`SELECT status,note FROM output WHERE id='out_prov'`))).toMatchObject({ status: "failed", note: expect.stringMatching(/Consent changed/) });
     for (const file of ["render-out_prov-1-worker_prov.mp4", "render-out_prov-1-worker_prov.mp4.tmp", "render-out_prov-1-worker_prov.mp4.provenance.json", "render-out_prov-1-worker_prov.mp4.provenance.json.tmp"]) {
       expect(existsSync(absPath(storageKey("org_prov", "prj_prov", file)))).toBe(false);
     }

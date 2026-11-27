@@ -26,20 +26,20 @@ export const GET = route<{ id: string }>(async (_req, { id }) => {
   requireAssistant();
   idSchema.parse(id);
   const ctx = await requireCtx();
-  projectOf(ctx, id);
-  const providers = all<ProviderRow>(`SELECT * FROM provider WHERE workspace_id = ? AND last_test_ok = 1 ORDER BY created_at`, ctx.workspaceId)
+  await projectOf(ctx, id);
+  const providers = (await all<ProviderRow>(`SELECT * FROM provider WHERE workspace_id = ? AND last_test_ok = 1 ORDER BY created_at`, ctx.workspaceId))
     .filter((p) => parse<string[]>(p.roles, []).includes("chat"))
     .map((p) => ({ id: p.id, label: p.label, kind: p.kind, model: p.model, privacy: privacyOf(p), ready: true }));
-  const thread = one<{ id: string }>(`SELECT id FROM assistant_thread WHERE project_id = ? AND workspace_id = ? AND created_by = ? ORDER BY created_at DESC LIMIT 1`, id, ctx.workspaceId, ctx.userId);
-  const messages = thread ? all(`SELECT id, role, text, provider_label, model, privacy, redacted, excluded_lines, proposals, created_at FROM assistant_message WHERE thread_id = ? ORDER BY created_at`, thread.id).map((m: Record<string, unknown>) => ({ id: m.id, role: m.role, text: m.text, provider: { label: m.provider_label, model: m.model, privacy: m.privacy }, redacted: m.redacted, excludedLines: m.excluded_lines, proposals: withStatus(parse<Proposal[]>(m.proposals, []), ctx.workspaceId), createdAt: m.created_at })) : [];
+  const thread = await one<{ id: string }>(`SELECT id FROM assistant_thread WHERE project_id = ? AND workspace_id = ? AND created_by = ? ORDER BY created_at DESC LIMIT 1`, id, ctx.workspaceId, ctx.userId);
+  const messages = thread ? await Promise.all((await all(`SELECT id, role, text, provider_label, model, privacy, redacted, excluded_lines, proposals, created_at FROM assistant_message WHERE thread_id = ? ORDER BY created_at`, thread.id)).map(async (m: Record<string, unknown>) => ({ id: m.id, role: m.role, text: m.text, provider: { label: m.provider_label, model: m.model, privacy: m.privacy }, redacted: m.redacted, excludedLines: m.excluded_lines, proposals: await withStatus(parse<Proposal[]>(m.proposals, []), ctx.workspaceId), createdAt: m.created_at }))) : [];
   const dayKey = Math.floor(now() / LIMIT.assistantDay.windowMs) * LIMIT.assistantDay.windowMs;
-  const used = one<{ count: number }>(`SELECT count FROM rate_limit WHERE key = ? AND window_start = ?`, `assistant-day:${ctx.workspaceId}:${ctx.userId}`.slice(0, 200), dayKey)?.count ?? 0;
+  const used = (await one<{ count: number }>(`SELECT count FROM rate_limit WHERE key = ? AND window_start = ?`, `assistant-day:${ctx.workspaceId}:${ctx.userId}`.slice(0, 200), dayKey))?.count ?? 0;
   return { providers, thread: thread ? { id: thread.id, messages } : null, limits: { perMinute: LIMIT.assistant.max, perDay: LIMIT.assistantDay.max, usedToday: used } };
 });
 
 // Stored cards carry the plan's current status, so an approved or dismissed card never offers its buttons again.
-function withStatus(proposals: Proposal[], workspaceId: string) {
-  return proposals.map((p) => ({ ...p, status: one<{ status: string }>(`SELECT status FROM plan_run WHERE id = ? AND workspace_id = ?`, p.planId, workspaceId)?.status ?? "missing" }));
+async function withStatus(proposals: Proposal[], workspaceId: string) {
+  return Promise.all(proposals.map(async (p) => ({ ...p, status: (await one<{ status: string }>(`SELECT status FROM plan_run WHERE id = ? AND workspace_id = ?`, p.planId, workspaceId))?.status ?? "missing" })));
 }
 
 // Text-only tool results, as the lines the creator should see. Everything else (proposals) renders as cards.
@@ -80,7 +80,7 @@ export function canaryFilter(canary: string, secrets: string[] = []) {
 export function meteredFetch(current: () => BudgetReceipt | null, fetcher: typeof fetch = sdkFetch, onViolation: () => void = () => {}): typeof fetch {
   return async (input, init) => {
     const request = input instanceof Request ? input : null;
-    const body = init?.body !== undefined ? init.body : request?.body ? await request.clone().arrayBuffer() : null;
+    const body = init?.body !== undefined ? init.body : request?.body ? (await request.clone()).arrayBuffer() : null;
     let bytes = 0;
     if (typeof body === "string") bytes = Buffer.byteLength(body, "utf8");
     else if (body instanceof ArrayBuffer) bytes = body.byteLength;
@@ -107,43 +107,43 @@ export const POST = route<{ id: string }>(async (req, { id }) => {
   try { payload = JSON.parse(raw); } catch { throw new HttpError(400, "Send a JSON body."); }
   const input = Input.parse(payload);
   const ctx = await requireCtx();
-  projectOf(ctx, id);
+  await projectOf(ctx, id);
   try {
-    limit(`assistant:${ctx.workspaceId}:${ctx.userId}`, LIMIT.assistant);
-    limit(`assistant-day:${ctx.workspaceId}:${ctx.userId}`, LIMIT.assistantDay);
+    await limit(`assistant:${ctx.workspaceId}:${ctx.userId}`, LIMIT.assistant);
+    await limit(`assistant-day:${ctx.workspaceId}:${ctx.userId}`, LIMIT.assistantDay);
   } catch (e) {
     if (e instanceof RateLimitError) return Response.json({ error: e.message, retryAfter: e.retryAfterSec }, { status: 429, headers: { "Retry-After": String(e.retryAfterSec) } });
     throw e;
   }
-  const provider = one<ProviderRow>(`SELECT * FROM provider WHERE id = ? AND workspace_id = ? AND last_test_ok = 1`, input.providerId, ctx.workspaceId);
+  const provider = await one<ProviderRow>(`SELECT * FROM provider WHERE id = ? AND workspace_id = ? AND last_test_ok = 1`, input.providerId, ctx.workspaceId);
   if (!provider || !parse<string[]>(provider.roles, []).includes("chat")) throw new HttpError(404, "Provider not found.");
   if (!provider.model) throw new HttpError(409, "Choose a model for this provider first.");
   const privacy = privacyOf(provider);
   const thread = input.threadId
-    ? one<{ id: string }>(`SELECT id FROM assistant_thread WHERE id = ? AND project_id = ? AND workspace_id = ? AND created_by = ?`, input.threadId, id, ctx.workspaceId, ctx.userId)
+    ? await one<{ id: string }>(`SELECT id FROM assistant_thread WHERE id = ? AND project_id = ? AND workspace_id = ? AND created_by = ?`, input.threadId, id, ctx.workspaceId, ctx.userId)
     : undefined;
   if (input.threadId && !thread) throw new HttpError(404, "Thread not found.");
   const threadId = thread?.id ?? newId("ath");
-  if (!thread) run(`INSERT INTO assistant_thread (id, workspace_id, project_id, created_by, created_at) VALUES (?, ?, ?, ?, ?)`, threadId, ctx.workspaceId, id, ctx.userId, now());
-  if (!acquireLease(ctx.userId, ctx.workspaceId)) return Response.json({ error: "Another assistant response is still open.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } });
+  if (!thread) await run(`INSERT INTO assistant_thread (id, workspace_id, project_id, created_by, created_at) VALUES (?, ?, ?, ?, ?)`, threadId, ctx.workspaceId, id, ctx.userId, now());
+  if (!await acquireLease(ctx.userId, ctx.workspaceId)) return Response.json({ error: "Another assistant response is still open.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } });
   try {
-    return startTurn(req, id, ctx, input, provider, privacy, threadId);
+    return await startTurn(req, id, ctx, input, provider, privacy, threadId);
   } catch (e) {
     // Setup failed before the stream took ownership of the lease; release it now instead of waiting for expiry.
-    releaseLease(ctx.userId, ctx.workspaceId);
+    await releaseLease(ctx.userId, ctx.workspaceId);
     throw e;
   }
 });
 
-function startTurn(
+async function startTurn(
   req: Request, id: string, ctx: Awaited<ReturnType<typeof requireCtx>>, input: z.infer<typeof Input>,
   provider: ProviderRow, privacy: ReturnType<typeof privacyOf>, threadId: string,
 ) {
   const requestId = randomUUID();
   const startedAt = now();
-  const context = buildAssistantContext(ctx, id, privacy);
-  const oldMessages = all<{ role: string; text: string }>(`SELECT role, text FROM assistant_message WHERE thread_id = ? ORDER BY created_at DESC LIMIT 20`, threadId).reverse();
-  const names = all<{ name: string }>(`SELECT name FROM person WHERE project_id = ? AND workspace_id = ?`, id, ctx.workspaceId).map((p) => p.name);
+  const context = await buildAssistantContext(ctx, id, privacy);
+  const oldMessages = (await all<{ role: string; text: string }>(`SELECT role, text FROM assistant_message WHERE thread_id = ? ORDER BY created_at DESC LIMIT 20`, threadId)).reverse();
+  const names = (await all<{ name: string }>(`SELECT name FROM person WHERE project_id = ? AND workspace_id = ?`, id, ctx.workspaceId)).map((p) => p.name);
   let redacted = context.redacted;
   const conversation = oldMessages.map((m) => {
     if (privacy !== "may_log") return { role: m.role as "user" | "assistant", content: m.text };
@@ -154,7 +154,7 @@ function startTurn(
   const messages = [...conversation, { role: "user" as const, content: userText.text }];
   const proposals: Parameters<typeof persistProposals>[2] = [];
   const decodedToolInputs: unknown[] = [];
-  const tools = assistantTools(ctx, id, proposals, context.sourceHasTranscript, decodedToolInputs);
+  const tools = await assistantTools(ctx, id, proposals, context.sourceHasTranscript, decodedToolInputs);
   const key = provider.key_sealed ? unseal(provider.key_sealed) : "";
   const headers: Record<string, string> = provider.kind === "openrouter" ? { "HTTP-Referer": PUBLIC_URL, "X-Title": "IZWI AI" } : {};
   const receipts = new Map<number, BudgetReceipt>();
@@ -167,7 +167,7 @@ function startTurn(
   const modelAbort = new AbortController();
   const disconnect = () => modelAbort.abort();
   req.signal.addEventListener("abort", disconnect, { once: true });
-  const renew = setInterval(() => { if (!renewLease(ctx.userId, ctx.workspaceId)) modelAbort.abort(); }, 20_000);
+  const renew = setInterval(async () => { if (!await renewLease(ctx.userId, ctx.workspaceId)) modelAbort.abort(); }, 20_000);
   const stream = createUIMessageStream({ execute: async ({ writer }) => {
     writer.write({ type: "data-meta", data: { threadId, messageId: newId("asm"), provider: { label: provider.label, model: provider.model, privacy }, redacted, excludedLines: context.excludedLines } } as never);
     const filter = canaryFilter(context.canary, [key]);
@@ -198,23 +198,23 @@ function startTurn(
           // R10'': reserve one input token per allowed UTF-8 body byte; meteredFetch checks the SDK's actual serialized body before network I/O.
           const bytes = Buffer.byteLength(JSON.stringify({ model: provider.model, system: context.system, messages: stepMessages, tools: toolSchemas, maxOutputTokens: 800 })) + 2048;
           try {
-            const receipt = reserveAttempt({ workspaceId: ctx.workspaceId, userId: ctx.userId, providerId: provider.id, model: provider.model!, provider, serializedRequestBytes: bytes, maxOutputTokens: 800 });
+            const receipt = await reserveAttempt({ workspaceId: ctx.workspaceId, userId: ctx.userId, providerId: provider.id, model: provider.model!, provider, serializedRequestBytes: bytes, maxOutputTokens: 800 });
             receipts.set(attempts, receipt);
             activeReceipt = receipt;
           }
           catch (e) { throw new BudgetError(e instanceof Error ? e.message : "Assistant budget unavailable."); }
           return {};
         },
-        onStepEnd: ({ usage }) => {
+        onStepEnd: async ({ usage }) => {
           const receipt = receipts.get(attempts);
           const hasCompleteUsage = Number.isSafeInteger(usage.inputTokens) && Number.isSafeInteger(usage.outputTokens);
           if (hasCompleteUsage && receipt) {
             if (tokensIn !== null) tokensIn += usage.inputTokens!;
             if (tokensOut !== null) tokensOut += usage.outputTokens!;
-            settleAttempt(receipt, { input: usage.inputTokens!, output: usage.outputTokens! });
+            await settleAttempt(receipt, { input: usage.inputTokens!, output: usage.outputTokens! });
           } else {
             tokensIn = null; tokensOut = null;
-            if (receipt) settleAttempt(receipt, null);
+            if (receipt) await settleAttempt(receipt, null);
           }
           if (activeReceipt === receipt) activeReceipt = null;
         },
@@ -246,9 +246,9 @@ function startTurn(
       writer.write({ type: "text-end", id: textId } as never);
       const finalText = modelText + extra;
       let saved: Proposal[] = [];
-      tx(() => {
-        saved = persistProposals(ctx, id, proposals, provider, threadId);
-        saveAssistantTurn({ threadId, projectId: id, workspaceId: ctx.workspaceId, provider, text: input.text, assistantText: finalText, redacted, excludedLines: context.excludedLines, proposals: saved, requestId, tokensIn, tokensOut });
+      await tx(async () => {
+        saved = await persistProposals(ctx, id, proposals, provider, threadId);
+        await saveAssistantTurn({ threadId, projectId: id, workspaceId: ctx.workspaceId, provider, text: input.text, assistantText: finalText, redacted, excludedLines: context.excludedLines, proposals: saved, requestId, tokensIn, tokensOut });
       });
       writer.write({ type: "data-proposals", data: { proposals: saved } } as never);
       outcome = "ok";
@@ -259,10 +259,10 @@ function startTurn(
       outcome = code === "timeout" ? "aborted" : code === "provider" ? "error" : code;
       writer.write({ type: "data-error", data: { code, message: canary ? "The response was stopped by a safety check." : budget ? "The workspace assistant budget is unavailable." : "The assistant could not finish this response." } } as never);
     } finally {
-      for (const receipt of receipts.values()) if (!receipt.settled) { try { settleAttempt(receipt, null); } catch {} }
+      for (const receipt of receipts.values()) if (!receipt.settled) { try { await settleAttempt(receipt, null); } catch {} }
       clearInterval(renew);
       req.signal.removeEventListener("abort", disconnect);
-      releaseLease(ctx.userId, ctx.workspaceId);
+      await releaseLease(ctx.userId, ctx.workspaceId);
       console.info(JSON.stringify({ requestId, providerId: provider.id, model: provider.model, privacy, attempts, tokensIn, tokensOut, redacted, outcome, durationMs: now() - startedAt }));
     }
   }, onError: () => "The assistant could not finish this response." });

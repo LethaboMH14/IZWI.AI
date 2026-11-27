@@ -11,7 +11,7 @@ beforeAll(async () => {
   redact = assistant.redactForMayLog;
   canaryFilter = (await import("../src/app/api/projects/[id]/assistant/route")).canaryFilter;
 }, 60_000);
-afterAll(() => await closeTestDb(db));
+afterAll(async () => await closeTestDb(db));
 
 describe("assistant privacy and stream checks", () => {
   it("redacts South African identifiers, email, phone and project people before may_log", () => {
@@ -32,9 +32,9 @@ describe("assistant privacy and stream checks", () => {
 
   it("keeps assistant rows scoped to a project and project cascade removes them", async () => {
     const ctx = await seedWorkspace(db, "org_core", "user_core", "project_core");
-    db.run(`INSERT INTO assistant_thread (id, workspace_id, project_id, created_by, created_at) VALUES ('thread_core', ?, 'project_core', ?, 1)`, ctx.workspaceId, ctx.userId);
-    db.run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, created_at) VALUES ('message_core', 'thread_core', ?, 'project_core', 'user', 'safe', 'provider', 'Local', 'model', 'private', 0, '[]', 'complete', 'request', 1)`, ctx.workspaceId);
-    db.run(`DELETE FROM project WHERE id = 'project_core'`);
-    expect(db.one(`SELECT id FROM assistant_message WHERE id = 'message_core'`)).toBeUndefined();
+    (await db.run(`INSERT INTO assistant_thread (id, workspace_id, project_id, created_by, created_at) VALUES ('thread_core', ?, 'project_core', ?, 1)`, ctx.workspaceId, ctx.userId));
+    (await db.run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, created_at) VALUES ('message_core', 'thread_core', ?, 'project_core', 'user', 'safe', 'provider', 'Local', 'model', 'private', 0, '[]', 'complete', 'request', 1)`, ctx.workspaceId));
+    (await db.run(`DELETE FROM project WHERE id = 'project_core'`));
+    expect((await db.one(`SELECT id FROM assistant_message WHERE id = 'message_core'`))).toBeUndefined();
   });
 });
