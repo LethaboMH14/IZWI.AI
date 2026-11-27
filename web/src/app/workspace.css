@@ -147,6 +147,9 @@
   }
   .z-tabbar .z-rail-item { width: auto; min-width: 64px; min-height: 44px; justify-content: center; }
   .z-viewswitch a { padding: 6px 8px; }
+  .z-phone-hide { display: none; }
+  .z-switcher { flex: 1 1 0; min-width: 56px; padding: 0 var(--z-s3); }
+  .z-savestate { font-size: 0; gap: 0; }
 }
 @media (pointer: coarse) {
   .z-rail-item, .z-stage { min-height: 44px; }

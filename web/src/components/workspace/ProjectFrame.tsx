@@ -54,15 +54,15 @@ export function ProjectFrame({ children }: { children: React.ReactNode }) {
   const title = useProject((s) => s.state.project.title);
   const state = useProject((s) => s.state);
   const path = usePathname();
-  const router = useRouter();
   const base = `/app/p/${id}`;
   const counts = useMemo(() => stageCounts(state), [state]);
   const spatial = path.startsWith(`${base}/spatial`);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
-    if (hash in LEGACY_HASH) router.replace(`${base}${LEGACY_HASH[hash]}`);
-  }, [base, router]);
+    // A plain replace: the client router skipped hash-only entry URLs in the production walkthrough.
+    if (hash in LEGACY_HASH) window.location.replace(`${base}${LEGACY_HASH[hash]}`);
+  }, [base]);
 
   const active = (stage: StageId) => (stage === "create" ? path === base || path === `${base}/spatial` : path.startsWith(`${base}${STAGE_PATH[stage]}`));
 
@@ -71,8 +71,8 @@ export function ProjectFrame({ children }: { children: React.ReactNode }) {
       <HeaderSlot>
         <ProjectSwitcher id={id} title={title} />
         <nav className="z-viewswitch" aria-label="View">
-          <Link href={base} aria-current={!spatial && path === base ? "page" : undefined}>Flat Studio</Link>
-          <Link href={`${base}/spatial`} aria-current={spatial ? "page" : undefined}>Spatial Canvas</Link>
+          <Link href={base} aria-current={!spatial && path === base ? "page" : undefined}>Flat<span className="z-phone-hide"> Studio</span></Link>
+          <Link href={`${base}/spatial`} aria-current={spatial ? "page" : undefined}>Spatial<span className="z-phone-hide"> Canvas</span></Link>
         </nav>
       </HeaderSlot>
       <HeaderActions>

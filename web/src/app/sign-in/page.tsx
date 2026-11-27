@@ -98,7 +98,8 @@ function SignInForm() {
             <button type="button" role="tab" aria-selected={create} className={create ? "on" : ""} onClick={() => switchMode("create")}>Create account</button>
           </div>
 
-          <form onSubmit={submit} noValidate>
+          {/* method="post": a submit before hydration must never put the password in the URL. */}
+          <form onSubmit={submit} method="post" noValidate>
             {create && (
               <label className="field">
                 <span>Your name</span>

@@ -7,8 +7,7 @@ function World() {
   const { camera, invalidate } = useThree();
   const orbit = useRef(false), pointer = useRef(0), start = useRef(0);
   const perf = useRef<{ begin: number; last: number; frames: number[]; heap?: number; losses: number; done: boolean } | null>(null);
-  const texture = useMemo(() => { const t = new THREE.TextureLoader().load('/scene/night-skyline.jpg', () => invalidate()); t.colorSpace = THREE.SRGBColorSpace; return t; }, [invalidate]);
-  useEffect(() => () => texture.dispose(), [texture]);
+  // The skyline is the static image behind this transparent canvas; the scene adds the floor, light and parallax.
   useEffect(() => {
     const p = (e: PointerEvent) => { const bounds = (document.querySelector('.izwi-backdrop')?.parentElement)?.getBoundingClientRect(); if (!bounds || !bounds.width) return; pointer.current = Math.max(-1, Math.min(1, (e.clientX - bounds.left) / bounds.width * 2 - 1)); invalidate(); };
     const o = (e: Event) => { orbit.current = Boolean((e as CustomEvent<boolean>).detail); start.current = performance.now(); invalidate(); };
@@ -31,8 +30,7 @@ function World() {
     if (orbit.current) invalidate();
   });
   const dust = useMemo(() => new Float32Array(Array.from({length: 72}, (_, i) => i % 3 === 0 ? Math.sin(i*13)*8 : i % 3 === 1 ? 1 + (i%11)*.23 : -2 - (i%7))), []);
-  return <><color attach="background" args={['#130e0a']} /><fog attach="fog" args={['#26180e', 8, 35]} /><ambientLight intensity={0.45}/><pointLight color="#ffb552" intensity={35} position={[-5,5,1]}/><pointLight color="#e58c39" intensity={24} position={[6,3,-3]}/>
-    <mesh position={[0,4,-12]} rotation={[0,Math.PI,0]}><cylinderGeometry args={[18,18,9,48,1,true,-.65,1.3]}/><meshBasicMaterial map={texture} side={THREE.DoubleSide}/></mesh>
+  return <><fog attach="fog" args={['#26180e', 8, 35]} /><ambientLight intensity={0.45}/><pointLight color="#ffb552" intensity={35} position={[-5,5,1]}/><pointLight color="#e58c39" intensity={24} position={[6,3,-3]}/>
     <mesh rotation={[-Math.PI/2,0,0]} position={[0,-.03,-5]}><planeGeometry args={[80,80]}/><meshStandardMaterial color="#17120e" metalness={0.65} roughness={0.48}/></mesh>
     <gridHelper args={[50,50,'#7c4f25','#49331d']} position={[0,0,-8]} material-transparent material-opacity={0.15}/>
     <points><bufferGeometry><bufferAttribute attach="attributes-position" args={[dust,3]}/></bufferGeometry><pointsMaterial color="#e3a14b" size={0.035} transparent opacity={0.35}/></points></>;
