@@ -1,0 +1,19 @@
+# Option A in docs/DEMO-TUNNEL.md: only the guest consent page and what it loads are public. The studio stays on the laptop.
+# This allowlist is what keeps the studio private. Validate it before running: cloudflared tunnel ingress validate
+tunnel: <tunnel-uuid>
+credentials-file: 'C:\Users\<operator>\.cloudflared\<tunnel-uuid>.json'
+
+ingress:
+  - hostname: consent.<team-zone>
+    path: ^/c/[A-Za-z0-9_-]{20,64}$
+    service: http://127.0.0.1:3187
+  - hostname: consent.<team-zone>
+    path: ^/api/public/consent/[A-Za-z0-9_-]{20,64}$
+    service: http://127.0.0.1:3187
+  - hostname: consent.<team-zone>
+    path: ^/api/media/[a-z]+_[A-Za-z0-9]+$
+    service: http://127.0.0.1:3187
+  - hostname: consent.<team-zone>
+    path: ^/_next/static/
+    service: http://127.0.0.1:3187
+  - service: http_status:404

@@ -31,21 +31,29 @@ export function route<P = Record<string, string>>(handler: (req: Request, params
 // Writes must prove they come from our own pages: a matching Origin, or, when a browser leaves Origin out,
 // Sec-Fetch-Site: same-origin. A request with neither is refused, so a missing header is never a way round the check.
 export function checkOrigin(req: Request) {
-  const requestOrigin = new URL(req.url).origin;
+  const hosted = process.env.IZWI_HOSTED === "1";
   const allowed = new Set([new URL(PUBLIC_URL).origin, STUDIO_URL]);
-  if (process.env.IZWI_HOSTED !== "1") allowed.add(requestOrigin);
-  if (process.env.IZWI_HOSTED === "1" && !allowed.has(requestOrigin)) {
-    throw new HttpError(403, "Request host is not configured.");
-  }
+  // A hosted install only answers writes addressed to a configured hostname, and the Origin must be that same one.
+  const addressed = hosted ? configuredOrigin(req, allowed) : new URL(req.url).origin;
+  allowed.add(addressed);
   const origin = req.headers.get("origin");
   if (origin) {
-    if (!allowed.has(origin) || (process.env.IZWI_HOSTED === "1" && origin !== requestOrigin)) {
+    if (!allowed.has(origin) || (hosted && origin !== addressed)) {
       throw new HttpError(403, "Cross-site request refused.");
     }
     return;
   }
   if (req.headers.get("sec-fetch-site") === "same-origin") return;
   throw new HttpError(403, "Cross-site request refused.");
+}
+
+// Next.js builds req.url from the address the server listens on, not from the Host header, so behind a tunnel it never
+// names the public hostname. A browser sets Host itself, so a page on another site cannot choose it.
+function configuredOrigin(req: Request, configured: Set<string>) {
+  const host = req.headers.get("host")?.toLowerCase();
+  const match = [...configured].find((o) => new URL(o).host === host);
+  if (!match) throw new HttpError(403, "Request host is not configured.");
+  return match;
 }
 
 export function toResponse(e: unknown) {
