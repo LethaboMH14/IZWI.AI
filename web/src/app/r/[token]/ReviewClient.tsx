@@ -136,7 +136,7 @@ export function ReviewClient({ token, data }: { token: string; data: ReviewData 
       <div className="gx"><main className="gx-wrap">
         <div className="gx-top"><Mark small /></div>
         <section className="gx-card gx-result" role="status">
-          <h1 style={{ fontSize: "2rem" }}>Sent to {data.creator}</h1>
+          <h1 style={{ fontSize: "var(--z-type-xl)" }}>Sent to {data.creator}</h1>
           <p>{sent === "approve" ? "You told them it looks good." : "You told them it needs changes."} They will see it in their project{note.trim() ? ", with your note" : ""}.</p>
           <p className="fine">This cannot be taken back from here. If you change your mind, use the same link again to send a new answer, until it expires on {day(data.expiresAt)}.</p>
           <button className="btn btn-quiet btn-sm" type="button" onClick={() => { setSent(null); setNote(""); }}>Send another answer</button>
