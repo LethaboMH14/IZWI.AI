@@ -3,7 +3,7 @@
 
 A proposed creative operating system for South African independent creators and small studios. Team Sonar's concept connects media creation, language review, creator records, distribution and earning opportunities in one workspace.
 
-**Status: planning and design handoff, not a working application.** No authentication service, billing integration, AI pipeline or production deployment has been implemented in this repository. Mockups illustrate intended behaviour; prices, budgets and pilot metrics are proposals.
+**Status: hackathon build.** The studio in `web/` works on real data: sign-in and workspaces, uploads, local transcription, clips, caption review, consent links, held and released renders, signed provenance and bring-your-own AI keys. Billing, payouts, publishing to social platforms and dubbing are not built. Mockups illustrate intended behaviour; prices, budgets and pilot metrics are proposals. [CRITERIA.md](CRITERIA.md) records what has evidence.
 
 ## Start here
 1. [Handoff and current decisions](docs/HANDOFF.md)
@@ -13,7 +13,7 @@ A proposed creative operating system for South African independent creators and 
 5. [Design rules](docs/design/DESIGN-SYSTEM.md) and [poster brief](docs/design/POSTER-BRIEF.md)
 6. [All deliverables and version history](assets/README.md)
 7. [Platform plan](docs/PLATFORM-PLAN.md): the full brief built from open-source parts (proposal)
-8. [Frontend design prototype](docs/design/FRONTEND.md) in `web/` (sample data, nothing wired), with mockups in `design/mockups/`
+8. [The application](web/README.md) and its [frontend design notes](docs/design/FRONTEND.md), with mockups in `design/mockups/`
 
 ## Current deliverables
 - [Latest full-solution poster PNG](assets/current/poster/izwi-ai-full-solution.png)
@@ -33,7 +33,7 @@ cd IZWI.AI
 python3 scripts/verify_handoff.py
 python3 scripts/financial_model.py
 ```
-These scripts use Python's standard library. For an existing checkout, run `git pull --ff-only` first. See [development setup](docs/engineering/DEVELOPMENT.md) for the implementation sequence. `web/` holds a design prototype only (`cd web && npm install && npm run dev`); there is no working application yet.
+These scripts use Python's standard library. For an existing checkout, run `git pull --ff-only` first. To run the application, follow [web/README.md](web/README.md).
 
 ## Scope
 First vertical slice: upload → suggest/edit clips → review multilingual captions → export → prepare distribution.

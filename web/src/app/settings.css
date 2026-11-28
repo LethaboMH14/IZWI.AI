@@ -65,6 +65,9 @@
 .st-roles label:has(input:checked) { border-color: var(--ink); background: var(--tint-2); }
 .st-roles label:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--tint); }
 .st-roles input { accent-color: var(--amber); width: 18px; height: 18px; }
+/* A single tick box in a field sits beside its words; the text box sizing must not stretch it. */
+.st-form .field > span:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; }
+.st-form .field input[type="checkbox"] { width: 18px; height: 18px; padding: 0; flex: none; accent-color: var(--amber); }
 
 /* Extensions */
 .st-ext { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin: 1rem 0; }

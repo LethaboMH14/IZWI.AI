@@ -23,11 +23,13 @@ function RenderCard({ clip, state, refresh, go }: { clip: Clip } & TabProps) {
   const [preset, setPreset] = useState<string>("vertical");
   const [language, setLanguage] = useState("");
   const [burn, setBurn] = useState(true);
-  const [held, setHeld] = useState<string | null>(null);
+  const [heldId, setHeldId] = useState<string | null>(null);
+  // Read from the project, so the notice follows the render: a new reason replaces it and a release removes it.
+  const held = state.outputs.find((o) => o.id === heldId && o.status === "blocked");
   const render = async () => {
-    setHeld(null);
-    const r = await act<{ blocked: boolean; reason: string | null }>("render", "POST", `/api/projects/${state.project.id}/outputs`, { clipId: clip.id, preset, language: language || null, burn });
-    if (r?.blocked) setHeld(r.reason ?? "This render is held.");
+    setHeldId(null);
+    const r = await act<{ id: string; blocked: boolean }>("render", "POST", `/api/projects/${state.project.id}/outputs`, { clipId: clip.id, preset, language: language || null, burn });
+    if (r?.blocked) setHeldId(r.id);
   };
   const track = state.tracks.find((t) => t.language === language);
   return (
@@ -48,13 +50,13 @@ function RenderCard({ clip, state, refresh, go }: { clip: Clip } & TabProps) {
         </select>
         {language && <label className="st-check"><input type="checkbox" checked={burn} onChange={(e) => setBurn(e.target.checked)} /> Burn captions into the video</label>}
       </div>
-      {track && track.status !== "approved" && <p className="fine">Captions must be approved line by line before they render. This render will wait for you in Localise.</p>}
+      {track && track.kind === "translation" && track.status !== "approved" && <p className="fine">A translation must be approved line by line before it renders. This render will wait for you in Localise.</p>}
       <p className="st-summary" aria-live="polite"><b>New render:</b> {presetLabel(preset)} · {language ? `${langName(language)} caption track` : "No captions"} · Burn-in {language && burn ? "on" : "off"}</p>
       <div className="st-row"><button type="button" className="btn" disabled={busy === "render"} onClick={render}>Render</button></div>
       <Err error={error} />
       {held && (
         <div className="st-row" role="alert">
-          <p className="st-err">Held: {held}</p>
+          <p className="st-err">Held: {held.note ?? "This render is held."}</p>
           <button type="button" className="btn btn-sm btn-gold" onClick={() => go("protect")}>Go to Protect</button>
         </div>
       )}

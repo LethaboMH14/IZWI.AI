@@ -2,7 +2,6 @@
 // Public and plain on purpose: one server component, existing tokens, no new dependencies. The live rows (CSP mode,
 // kill switches, ledger head) are read on every request, so the page cannot claim a control the server isn't running.
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Mark } from "@/components/Mark";
 import { cspEnforced } from "@/server/headers";
 import { assistantEnabled } from "@/server/flags";
@@ -62,8 +61,9 @@ function rows(): Row[] {
     },
     {
       control: "Redaction before a provider that may log",
-      what: "For a provider marked “may log”, SA ID numbers, email addresses, phone numbers and the project's people's names are replaced before anything is sent. The reply says how many.",
-      status: "implemented",
+      what: "When the studio assistant uses a provider marked “may log”, SA ID numbers, email addresses, phone numbers and the project's people's names are replaced before anything is sent. The reply says how many.",
+      status: "partial",
+      note: "Assistant only. Translation and planning send the text as written, so use a private provider for sensitive recordings.",
       evidence: ["web/src/server/assistant.ts", "web/tests/assistant-security.test.ts"],
     },
     {
@@ -113,8 +113,8 @@ function rows(): Row[] {
       control: "Workspace isolation",
       what: "Every query is scoped to the signed-in workspace; another workspace's ids answer 404 and cost nothing.",
       status: "partial",
-      note: "Tested at the database and assistant-route level, not yet for every HTTP route.",
-      evidence: ["web/tests/security-db.test.ts", "web/tests/assistant-security.test.ts"],
+      note: "Every API route, resumable uploads included, is tested with another workspace's ids. The server-rendered pages use the same lookup but have no test of their own.",
+      evidence: ["web/tests/api-routes.test.ts", "web/tests/security-db.test.ts", "web/tests/assistant-security.test.ts"],
     },
     {
       control: "Dependency and secret scans",
@@ -141,7 +141,7 @@ export default async function TrustPage() {
   return (
     <main className="trust">
       <header className="trust-top">
-        <Link href="/" aria-label="IZWI home"><Mark /></Link>
+        <Mark />
       </header>
       <section className="trust-intro">
         <h1>What IZWI protects, and how you can check</h1>

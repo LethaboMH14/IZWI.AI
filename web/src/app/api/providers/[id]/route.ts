@@ -2,7 +2,7 @@ import { body, fail, route } from "@/server/http";
 import { z } from "zod";
 import { requireCtx, requireRole } from "@/server/guard";
 import { now, one, run } from "@/server/db";
-import { canMarkFreeTier, checkBaseUrl, testProvider, type ProviderRow } from "@/server/providers";
+import { canMarkFreeTier, requireBaseUrl, testProvider, type ProviderRow } from "@/server/providers";
 import { audit } from "@/server/audit";
 import { publicProvider } from "@/server/providers";
 import { limit, LIMIT } from "@/server/ratelimit";
@@ -29,11 +29,14 @@ export const PATCH = route<P>(async (req, { id }) => {
   const x = await body(req, PatchIn);
   if (x.freeTier !== undefined && !canMarkFreeTier(ctx.role)) requireRole(ctx, ["owner"]);
   if (p.kind === "ollama") requireRole(ctx, ["owner"]);
+  const baseUrl = x.baseUrl === undefined ? p.base_url : requireBaseUrl(x.baseUrl, p.kind);
+  // A stored key belongs to the address it was entered for. A new address needs the key typed again.
+  const moved = baseUrl !== p.base_url;
   await run(`UPDATE provider SET label = ?, base_url = ?, model = ?, key_sealed = ?, key_hint = ?, roles = ?, free_tier = ?,
        last_test_at = NULL, last_test_ok = NULL, last_test_note = NULL WHERE id = ? AND workspace_id = ?`,
-    x.label ?? p.label, x.baseUrl === undefined ? p.base_url : checkBaseUrl(x.baseUrl, p.kind),
-    x.model === undefined ? p.model : x.model, x.key ? seal(x.key) : p.key_sealed,
-    x.key ? keyHint(x.key) : p.key_hint, JSON.stringify(x.roles ?? JSON.parse(p.roles) as string[]), x.freeTier === undefined ? p.free_tier ?? 0 : x.freeTier ? 1 : 0, p.id, ctx.workspaceId);
+    x.label ?? p.label, baseUrl,
+    x.model === undefined ? p.model : x.model, x.key ? seal(x.key) : moved ? null : p.key_sealed,
+    x.key ? keyHint(x.key) : moved ? null : p.key_hint, JSON.stringify(x.roles ?? JSON.parse(p.roles) as string[]), x.freeTier === undefined ? p.free_tier ?? 0 : x.freeTier ? 1 : 0, p.id, ctx.workspaceId);
   await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "provider.updated", target: p.id, meta: { kind: p.kind } });
   return publicProvider(await mine(ctx.workspaceId, p.id));
 });

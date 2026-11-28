@@ -1,22 +1,17 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, Fingerprint } from "@phosphor-icons/react";
 import { Mark } from "@/components/Mark";
 import { CaptionPlayer } from "@/components/CaptionPlayer";
 import { authClient } from "@/lib/auth-client";
+import { safeNext } from "@/lib/safe-next";
 import "../entry.css";
 
 const MIN_PASSWORD = 10;
 
-// Only send people to a path on this site. "//evil.com" and "/\evil.com" are not paths on this site.
-function safeNext(raw: string | null) {
-  return raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : "/app";
-}
-
 function SignInForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
   const [mode, setMode] = useState<"in" | "create">(params.get("mode") === "create" ? "create" : "in");
@@ -32,10 +27,8 @@ function SignInForm() {
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
   const ready = emailOk && password.length >= (create ? MIN_PASSWORD : 1) && (!create || name.trim().length > 0);
 
-  const finish = () => {
-    router.push(next);
-    router.refresh();
-  };
+  // One full page load: the server sees the new session, and a page with a one-time effect (an invite) runs once.
+  const finish = () => window.location.assign(next);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +91,8 @@ function SignInForm() {
             <button type="button" role="tab" aria-selected={create} className={create ? "on" : ""} onClick={() => switchMode("create")}>Create account</button>
           </div>
 
-          <form onSubmit={submit} noValidate>
+          {/* method="post": a submit before hydration must never put the password in the URL. */}
+          <form onSubmit={submit} method="post" noValidate>
             {create && (
               <label className="field">
                 <span>Your name</span>

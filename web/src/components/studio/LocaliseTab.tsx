@@ -145,7 +145,7 @@ export function LocaliseTab({ state, refresh }: TabProps) {
 
       <section className="st-card" aria-labelledby="lc-add">
         <h2 id="lc-add">Add a language</h2>
-        <p className="fine">A translation is always a draft. No caption is used in a render until a person has approved every line. Listed means an open model names the language; it does not mean IZWI has tested its quality.</p>
+        <p className="fine">A translation is always a draft. No translation is used in a render until a person has approved every line. Listed means an open model names the language; it does not mean IZWI has tested its quality.</p>
         {regions.map(([region, langs]) => (
           <div key={region} role="group" aria-label={region} style={{ display: "grid", gap: "0.4rem" }}>
             <span className="st-meta"><b>{region}</b></span>

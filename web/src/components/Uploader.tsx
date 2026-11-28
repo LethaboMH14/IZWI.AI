@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import * as tus from "tus-js-client";
 import { S3Upload } from "@/lib/s3-upload";
+import { tusOptions, UPLOAD_RETRY_DELAYS } from "@/lib/tus-options";
 import { ArrowClockwise, CheckCircle, FileVideo, Pause, Play, UploadSimple, WifiSlash } from "@phosphor-icons/react";
 import { bytes } from "@/lib/format";
 import "@/app/entry.css";
@@ -110,15 +111,7 @@ export function Uploader({ projectId, onDone, hint, file: initialFile, showNext 
       },
     };
     const s3 = process.env.NEXT_PUBLIC_IZWI_UPLOAD === "s3";
-    const u = s3 ? new S3Upload(f, { projectId, retryDelays: [0, 3000, 10000, 30000], ...callbacks }) : new tus.Upload(f, {
-      endpoint: "/api/upload",
-      chunkSize: 8 * MB,
-      retryDelays: [0, 3000, 10000, 30000],
-      metadata: { projectId, filename: f.name, filetype: f.type || "application/octet-stream" },
-      // The default fingerprint is the file; add the story so the same file in two stories never shares an upload.
-      fingerprint: async (file, options) => `${await tus.defaultOptions.fingerprint(file, options)}::${projectId}`,
-      removeFingerprintOnSuccess: true,
-    });
+    const u = s3 ? new S3Upload(f, { projectId, retryDelays: UPLOAD_RETRY_DELAYS, ...callbacks }) : new tus.Upload(f, tusOptions(projectId, f, callbacks));
     up.current = u;
     try {
       const prev = await u.findPreviousUploads();
