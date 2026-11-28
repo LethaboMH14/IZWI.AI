@@ -6,10 +6,10 @@ const RAMP = [
   { name: "display · Fraunces 40", cls: "display", size: 40, text: "Start before you are ready" },
   { name: "title-l · Fraunces 28", cls: "display", size: 28, text: "Tighter opening" },
   { name: "title-s · Fraunces 20", cls: "display", size: 20, text: "IZWI Editing Agent" },
-  { name: "body · Instrument Sans 14", cls: "ui", size: 14, text: "You have to start before you are ready." },
-  { name: "ui · Instrument Sans 14", cls: "ui", size: 14, text: "Request consent · Render vertical · Apply edit" },
-  { name: "meta · Instrument Sans 12", cls: "ui", size: 12, text: "sim_jozi-stories-ep04.mp4 · 1280×720 · 1.4 MB" },
-  { name: "micro · Instrument Sans 12", cls: "ui", size: 12, text: "Story Room · Rights map · Outputs" },
+  { name: "body · Helvetica 14", cls: "ui", size: 14, text: "You have to start before you are ready." },
+  { name: "ui · Helvetica 14", cls: "ui", size: 14, text: "Request consent · Render vertical · Apply edit" },
+  { name: "meta · Helvetica 12", cls: "ui", size: 12, text: "sim_jozi-stories-ep04.mp4 · 1280×720 · 1.4 MB" },
+  { name: "micro · Helvetica 12", cls: "ui", size: 12, text: "Story Room · Rights map · Outputs" },
   { name: "time · Geist Mono 12", cls: "mono", size: 12, text: "00:14 / 00:48 · 00:12 – 00:48 (36s)" },
 ];
 const FAMILY: Record<string, string> = { display: "var(--z-font-display)", ui: "var(--z-font-ui)", mono: "var(--z-font-mono)" };

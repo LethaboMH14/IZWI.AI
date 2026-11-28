@@ -20,7 +20,7 @@
   --moss: #4f6b3a;
   --moss-tint: #e2ebd8;
   --display: var(--font-fraunces), Georgia, serif;
-  --text: var(--font-ui), "Segoe UI", sans-serif;
+  --text: "Neue Helvetica", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --serif: var(--font-fraunces), Georgia, serif;
   --mono: var(--font-time), ui-monospace, monospace;
   --r-s: 10px;

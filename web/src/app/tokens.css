@@ -70,7 +70,8 @@
 
   /* Type. The families are set by next/font in app/layout.tsx */
   --z-font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
-  --z-font-ui: var(--font-ui), "Segoe UI", system-ui, sans-serif;
+  /* Neutral Helvetica stack. Neue Helvetica is a licensed font, so it is named here, not shipped. */
+  --z-font-ui: "Neue Helvetica", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --z-font-mono: var(--font-time), ui-monospace, "Cascadia Mono", monospace;
   /* Editor roles on the six-step product scale (12/14/16/20/28/40). Sizes moved to the nearest step from the
      26 Nov values (11→12, 13→14, 18→20, 22→20, 32→28); needs Lethabo's sign-off. */

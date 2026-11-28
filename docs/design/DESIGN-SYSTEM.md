@@ -55,7 +55,7 @@ Status is never colour alone: each state also has a word, an icon or a pattern (
   - the agent panel title;
   - the proposal title;
   - big durations in a proposal.
-- **UI:** Instrument Sans (OFL), chosen by a 12–14 px specimen beside grounding A (see §9).
+- **UI:** Neue Helvetica, through a Helvetica stack (`"Neue Helvetica", "Helvetica Neue", Helvetica, Arial`). **Proposed 28 Nov 2026, pending Lethabo's approval:** replaces Instrument Sans (OFL, §9). Neue Helvetica is a licensed Monotype font, so it is not shipped; it shows where installed and Arial shows elsewhere.
 - **Mono:** Geist Mono (OFL), tabular, for every timecode, duration and count shown in a column.
 - No italics anywhere in the chrome. All faces are self-hosted through next/font, with no external font links.
 
