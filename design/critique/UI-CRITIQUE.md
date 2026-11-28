@@ -37,9 +37,9 @@ The signed-off editor tokens specify compact Instrument Sans UI (11–14 px), Fr
 
 Stories at 375 px presents one story card amid a mostly empty page (`before/stories-375.png`). Public landing repeats rounded card treatments for market, process, feature and pricing sections (`before/landing-375.png`). In tool screens, ivory panels already provide strong grouping; adding nested cards and nested outlines inside them creates too many boxes. Reserve card borders for independently actionable items; use rows and section dividers for related facts. Keep existing functions and content.
 
-### P1 — Price formatting is inconsistent at narrow widths
+### P1 — The decorative voice strand competes with the sample
 
-The 375 px landing render shows the Agency figure as “R1 499” while Creator and Studio use compact amounts (`before/landing-375.png`). The current amount is visually broken by the grid at `web/src/app/globals.css` lines 211–218 and the agency value source should be checked before adjustment. Keep the stated concept-preview status and never imply a confirmed subscription price. Align amount formatting and reserve a stable amount column.
+At 375 px, the strand crosses behind the hero sample and continues as high-contrast orange and charcoal strokes around the floating status pills (`before/landing-375.png`). Its full-section canvas and fallback line are defined in `web/src/app/globals.css` lines 167–169, with the rendering in `web/src/components/Strand.tsx`. Keep it as a brand detail, but reduce its contrast and movement on narrow screens so the portrait, action and status labels lead. The Agency amount is correctly grouped as `R1 499`; retain South African currency formatting and the adjacent proposed-price disclosure.
 
 ### P2 — Shared navigation consumes scarce phone space
 
@@ -51,7 +51,22 @@ The landing page labels the product a “Concept preview” only in its final fo
 
 ## Style inventory and proposed direction
 
-The CSS currently mixes tokenized editor styles (`--z-text-*`, `--z-s*`, `--z-r-*`) with legacy root-relative values and one-off pixel values. `globals.css` alone uses the root 16 px base, 0.66–1.3 rem utility text, multiple clamp-based display sizes, pill radii and large responsive spacing clamps; the studio styles use a separate compact scale. A full value-frequency inventory is deferred to the implementation pass so its output can be compared against the final token set rather than falsely calling every deliberate display value an inconsistency.
+The CSS mixes tokenized editor styles (`--z-text-*`, `--z-s*`, `--z-r-*`) with legacy root-relative values and one-off pixel values. A declaration scan across `web/src/app/**/*.css` and `web/src/components/**/*.css` found:
+
+| Property | Declarations | Distinct literal values |
+|---|---:|---:|
+| font size | 381 | 93 |
+| font weight | 135 | 6 |
+| line height | 45 | 20 |
+| letter spacing | 30 | 12 |
+| gap | 385 | 74 |
+| padding | 370 | 207 |
+| margin | 138 | 62 |
+| border radius | 317 | 33 |
+| box shadow | 80 | 38 |
+| backdrop filter | 5 | 4 |
+
+This literal-value inventory counts token aliases as values and does not expand shorthands. The most repeated font sizes include `0.85rem` (26), `0.9rem` (25), `0.92rem` (23), `var(--z-text-meta)` (24), and `var(--z-text-ui)` (20). Repeated gaps include `var(--z-s4)` (42), `0.5rem` (40), `0.6rem` (29), and `0.4rem` (25). Border radii include `var(--r-m)` (56), `999px` (42), and `var(--r-s)` (29). `globals.css` uses a 16 px root with root-relative utility text and several clamp-based display sizes; the studio styles use a separate compact scale. This spread supports centralizing semantic tokens while preserving deliberate display exceptions.
 
 Proposed direction:
 
@@ -64,3 +79,9 @@ Proposed direction:
 ## Limits
 
 These screenshots are a visual and route-load baseline, not proof that every control works. The browser emitted a React hydration attribute mismatch during one capture, and Three.js emitted a deprecated `THREE.Clock` warning; investigate both during functional QA. A complete keyboard-only, screen-reader and cross-browser audit remains necessary before claiming accessibility or broad browser compatibility. Existing design approval files referenced by the repository live outside this worktree and were not modified.
+
+## Post-fix evidence
+
+After the CSS and landing-copy changes, 46 captures cover the same 23 routes at 1440 and 375 px in `design/critique/after/`. Every route returned its expected status; only the intentional invalid route returned 404. The matrix found no document-level horizontal overflow. At 375 px, Flat Studio now presents the preview, four tabs, assistant status and scene rows in one column; its Transcript tab displayed five fixture rows, Captions displayed the review state and Notes displayed its empty state. These interactions ran against explicitly synthetic local fixtures. A synthetic member opened Stories and did not receive a “New story” action.
+
+The phone smoke check was targeted rather than exhaustive. It did not exercise every button, menu, keyboard shortcut, screen reader, browser engine, or real provider response. An isolated run with `IZWI_FLAG_ASSISTANT=1` returned 200 for the assistant route and showed the composer disabled with “No assistant provider is ready”; no provider key or external call was used. That confirms the flag-on empty-provider state only. The 404 page and remaining owner/member/guest actions still need a dedicated functional pass before claiming full frontend QA coverage.

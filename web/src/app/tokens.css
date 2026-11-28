@@ -81,6 +81,14 @@
   --z-text-title-l: 28px;
   --z-text-figure: 32px;
 
+  /* Shared product scale for non-editor screens; the editor keeps the tighter roles above. */
+  --z-type-xs: 12px;
+  --z-type-sm: 14px;
+  --z-type-base: 16px;
+  --z-type-lg: 20px;
+  --z-type-xl: 28px;
+  --z-type-display: 40px;
+
   /* Space, shape, depth */
   --z-s1: 2px;
   --z-s2: 4px;
@@ -91,10 +99,13 @@
   --z-s7: 20px;
   --z-s8: 24px;
   --z-s9: 32px;
+  --z-s10: 48px;
+  --z-s11: 64px;
   --z-r-panel: 12px;
   --z-r-card: 10px;
   --z-r-control: 8px;
   --z-r-clip: 6px;
+  --z-r-nested: 4px;
   --z-shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.25);
   --z-shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.35);
   --z-focus: var(--z-focus-ring);

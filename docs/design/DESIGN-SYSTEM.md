@@ -72,7 +72,10 @@ Status is never colour alone: each state also has a word, an icon or a pattern (
 | figure | 32/34 | Fraunces 650 | 36s → 34s |
 | time | 12/16 | mono 500 | timecodes, durations |
 
+Public and account screens share a compact semantic scale defined in `tokens.css`: 12, 14, 16, 20, 28 and 40 px. The 16 px role is the minimum for long-form public form copy; 40 px is the normal page heading. Landing hero headings may grow to 80 px on large screens and 64 px on phones. Marketing sections use 20–40 px. Avoid introducing another one-off size when a role fits.
+
 ## 4. Space, shape, depth
+Public and account layouts may use 48 and 64 px as section spacing; keep them out of dense editor chrome.
 - **Spacing:** a 4 px base: 2, 4, 6, 8, 12, 16, 20, 24, 32.
 - **Rows:** dense list rows are 32 px; transcript rows are at least 40 px.
 - **Touch:** targets are at least 44 px on touch devices.

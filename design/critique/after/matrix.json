@@ -1,0 +1,370 @@
+[
+  {
+    "name": "landing",
+    "width": 1440,
+    "status": 200,
+    "url": "/",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "landing",
+    "width": 375,
+    "status": 200,
+    "url": "/",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "sign-in",
+    "width": 1440,
+    "status": 200,
+    "url": "/sign-in",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "sign-in",
+    "width": 375,
+    "status": 200,
+    "url": "/sign-in",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "sign-in-create",
+    "width": 1440,
+    "status": 200,
+    "url": "/sign-in?mode=create",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "sign-in-create",
+    "width": 375,
+    "status": 200,
+    "url": "/sign-in?mode=create",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "stories",
+    "width": 1440,
+    "status": 200,
+    "url": "/app",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "flat-studio",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/p/sim_episode_04",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "spatial-canvas",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/spatial",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "story-room",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/room",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "localise",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/localise",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "protect",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/protect",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "publish",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/publish",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "earn",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/earn",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "classic-studio",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/classic",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "run-on",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/engine",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "team",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/team",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "extensions",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/extensions",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "analytics",
+    "width": 1440,
+    "status": 200,
+    "url": "/app/analytics",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "trust",
+    "width": 1440,
+    "status": 200,
+    "url": "/trust",
+    "title": "Trust · IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "design",
+    "width": 1440,
+    "status": 200,
+    "url": "/design",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "design-system",
+    "width": 1440,
+    "status": 200,
+    "url": "/design/system",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "guest-consent",
+    "width": 1440,
+    "status": 200,
+    "url": "/c/jjY6cDqVxMYjCYACRvxFG2rfh01HH40y",
+    "title": "A request for your permission | IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "review",
+    "width": 1440,
+    "status": 200,
+    "url": "/r/XUqqix7gbyNvO3GwUoGLr6WVv4OKZOTe",
+    "title": "Review a project | IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "listing",
+    "width": 1440,
+    "status": 200,
+    "url": "/l/sim-jozi-story",
+    "title": "One phone and a borrowed mic | Licence this clip | IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "404",
+    "width": 1440,
+    "status": 404,
+    "url": "/this-route-does-not-exist",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "stories",
+    "width": 375,
+    "status": 200,
+    "url": "/app",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "flat-studio",
+    "width": 375,
+    "status": 200,
+    "url": "/app/p/sim_episode_04",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "spatial-canvas",
+    "width": 375,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/spatial",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "story-room",
+    "width": 375,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/room",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "localise",
+    "width": 375,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/localise",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "protect",
+    "width": 375,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/protect",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "publish",
+    "width": 375,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/publish",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "earn",
+    "width": 375,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/earn",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "classic-studio",
+    "width": 375,
+    "status": 200,
+    "url": "/app/p/sim_episode_04/classic",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "run-on",
+    "width": 375,
+    "status": 200,
+    "url": "/app/engine",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "team",
+    "width": 375,
+    "status": 200,
+    "url": "/app/team",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "extensions",
+    "width": 375,
+    "status": 200,
+    "url": "/app/extensions",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "analytics",
+    "width": 375,
+    "status": 200,
+    "url": "/app/analytics",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "trust",
+    "width": 375,
+    "status": 200,
+    "url": "/trust",
+    "title": "Trust · IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "design",
+    "width": 375,
+    "status": 200,
+    "url": "/design",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "design-system",
+    "width": 375,
+    "status": 200,
+    "url": "/design/system",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "guest-consent",
+    "width": 375,
+    "status": 200,
+    "url": "/c/jjY6cDqVxMYjCYACRvxFG2rfh01HH40y",
+    "title": "A request for your permission | IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "review",
+    "width": 375,
+    "status": 200,
+    "url": "/r/XUqqix7gbyNvO3GwUoGLr6WVv4OKZOTe",
+    "title": "Review a project | IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "listing",
+    "width": 375,
+    "status": 200,
+    "url": "/l/sim-jozi-story",
+    "title": "One phone and a borrowed mic | Licence this clip | IZWI AI",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "404",
+    "width": 375,
+    "status": 404,
+    "url": "/this-route-does-not-exist",
+    "title": "IZWI AI",
+    "horizontalOverflow": false
+  }
+]

@@ -21,6 +21,12 @@
 .fs-agent { grid-area: agent; min-height: 0; overflow: auto; border-radius: var(--z-r-panel); background: var(--z-ivory-1); }
 .fs-timeline { grid-area: timeline; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--z-r-panel); background: var(--z-ivory-3); }
 
+/* When the feature flag is off, don't spend an entire desktop column on a one-line empty state. */
+@media (min-width: 1281px) {
+  .fs:has(.fs-agent .ag-note) { grid-template-columns: var(--z-panel-w) minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "project editor text" "project timeline timeline"; }
+  .fs:has(.fs-agent .ag-note) .fs-agent { display: none; }
+}
+
 .fs-editor { grid-area: editor; }
 .fs-text { grid-area: text; }
 .fs-editor {
@@ -197,6 +203,35 @@
 .fs-phone .fs-scene-range { color: var(--z-ink-muted); }
 .fs-phone .fs-lines { max-height: 60vh; }
 
+/* Keep the editor usable at narrow widths even before the client switches to the phone composition. */
+@media (max-width: 767px) {
+  .fs:not(.fs-phone) {
+    height: auto; min-height: 0; overflow: visible; padding: var(--z-s5) var(--z-s5) calc(88px + env(safe-area-inset-bottom));
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(320px, 48vh) minmax(220px, 36vh);
+    grid-template-areas: "editor" "text" "timeline";
+  }
+  .fs:not(.fs-phone) .fs-project,
+  .fs:not(.fs-phone) .fs-agent,
+  .fs:not(.fs-phone) .fs-toggles,
+  .fs:not(.fs-phone) .fs-scrim { display: none !important; }
+  .fs:not(.fs-phone) .fs-editor { min-width: 0; overflow: visible; padding: 0; background: transparent; }
+  .fs:not(.fs-phone) .fs-preview { min-width: 0; width: 100%; }
+  .fs:not(.fs-phone) .fs-text { min-width: 0; min-height: 320px; overflow: hidden; }
+  .fs:not(.fs-phone) .fs-text-in,
+  .fs:not(.fs-phone) .fs-text-in .z-tabs,
+  .fs:not(.fs-phone) .fs-text-in .z-tabs-panel { width: 100%; min-width: 0; }
+  .fs:not(.fs-phone) .fs-timeline { min-width: 0; max-width: 100%; overflow: auto; }
+  .fs:not(.fs-phone) .fs-timeline > .tl { min-width: 620px; }
+  .fs-phone { min-width: 0; width: 100%; padding-bottom: calc(var(--z-s9) + env(safe-area-inset-bottom)); }
+  .fs-phone > .fs-preview,
+  .fs-phone > .fs-scene-header,
+  .fs-phone > .z-tabs { min-width: 0; width: 100%; }
+  .fs-phone .fs-line { min-width: 0; grid-template-columns: 48px minmax(0, 1fr); }
+  .fs-phone .fs-line-body,
+  .fs-phone .fs-line-text { min-width: 0; overflow-wrap: anywhere; }
+  .fs-phone .fs-lines { width: 100%; max-width: 100%; overflow-x: hidden; }
+}
+
 /* Drawers. The panel's close button exists only where the panel is a drawer; wider, there is nothing to close. */
 .fs .fs-project-head button { display: none; }
 @media (max-width: 1280px) {
@@ -207,6 +242,11 @@
   .fs-project { position: absolute; z-index: 30; top: var(--z-s4); bottom: var(--z-s4); left: var(--z-s4); width: var(--z-panel-w); visibility: hidden; transform: translateX(-110%); transition: transform var(--z-t-panel) var(--z-ease), visibility 0s linear var(--z-t-panel); box-shadow: var(--z-shadow-pop); }
   .fs[data-project-open="true"] .fs-project { visibility: visible; transform: none; transition-delay: 0s; }
   .fs[data-project-open="true"] .fs-scrim, .fs[data-agent-open="true"] .fs-scrim { display: block; position: absolute; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.4); border-radius: var(--z-r-panel); }
+}
+@media (min-width: 768px) and (max-width: 1280px) {
+  .fs:has(.fs-agent .ag-note) { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "toggles toggles" "editor text" "timeline timeline"; }
+  .fs:has(.fs-agent .ag-note) .fs-agent,
+  .fs:has(.fs-agent .ag-note) .fs-toggle-agent { display: none; }
 }
 @media (max-width: 1024px) {
   .fs { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "toggles toggles" "editor text" "timeline timeline"; }

@@ -56,6 +56,7 @@ export default function Landing() {
             into <em>many.</em>
           </h1>
           <p className="lede">Bring a podcast, a film, a lesson or a song. Leave with clips, captions in the languages your audience speaks, and a record of who agreed to what.</p>
+          <p className="hero-status">Concept preview · Features are introduced in stages</p>
           <div className="hero-actions">
             <Link href="/sign-in?mode=create" className="btn btn-lg">Try IZWI AI <ArrowRight weight="bold" /></Link>
             <a href="#speak" className="link">Play the sample episode <ArrowUpRight /></a>
