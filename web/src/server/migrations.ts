@@ -588,6 +588,19 @@ ALTER TABLE upload_session ADD COLUMN finished_at BIGINT;`,
   approved_at BIGINT
 );`,
   },
+  {
+    version: 16,
+    name: "opt-in seasonal look proposals",
+    sql: `ALTER TABLE user_preferences ADD COLUMN seasonal_looks INTEGER NOT NULL DEFAULT 0 CHECK (seasonal_looks IN (0,1));
+CREATE TABLE seasonal_proposal (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  seasonal_id TEXT NOT NULL,
+  result TEXT NOT NULL CHECK (result IN ('accepted','dismissed')),
+  created_at BIGINT NOT NULL
+);`,
+  },
 ];
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 

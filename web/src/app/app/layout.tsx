@@ -2,7 +2,7 @@
 import { AppShell } from "@/components/AppShell";
 import { pageCtx } from "@/server/guard";
 import { one } from "@/server/db";
-import { connectionsEnabled, homeTipsEnabled, languagesEnabled, preferencesEnabled } from "@/server/flags";
+import { connectionsEnabled, homeTipsEnabled, languagesEnabled, preferencesEnabled, seasonalLooksEnabled } from "@/server/flags";
 import { DEFAULT_PREFERENCES, readUserPreferences } from "@/server/preferences";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +11,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ctx = await pageCtx();
   const [ws, appearance] = await Promise.all([
     one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId),
-    preferencesEnabled() ? readUserPreferences(ctx.userId) : Promise.resolve({ ...DEFAULT_PREFERENCES }),
+    preferencesEnabled() || seasonalLooksEnabled() ? readUserPreferences(ctx.userId) : Promise.resolve({ ...DEFAULT_PREFERENCES }),
   ]);
-  const settingsVisible = connectionsEnabled() || preferencesEnabled() || languagesEnabled() || homeTipsEnabled();
+  const settingsVisible = connectionsEnabled() || preferencesEnabled() || languagesEnabled() || homeTipsEnabled() || seasonalLooksEnabled();
   return (
     <AppShell workspace={ws?.name ?? "Workspace"} user={{ name: ctx.userName, email: ctx.email }} settingsVisible={settingsVisible} appearance={appearance}>
       {children}

@@ -13,6 +13,10 @@ import { StarterTemplateLibrary } from "@/components/studio/StarterTemplateLibra
 import { homeTipsEnabled } from "@/server/flags";
 import { readCreatorNiche } from "@/server/niche";
 import { HomeInspiration } from "@/components/home/HomeInspiration";
+import { seasonalLooksEnabled } from "@/server/flags";
+import { seasonalLooksOptedIn } from "@/server/seasonal";
+import { seasonalSuggestion } from "@/lib/seasonal-calendar";
+import { SeasonalSuggestion } from "@/components/home/SeasonalSuggestion";
 import "../entry.css";
 import "../stories.css";
 
@@ -24,6 +28,7 @@ export default async function Home() {
   const ws = await one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
   const greeting = languagesEnabled() ? greetingFor(await readCreatorLanguages(ctx.userId)) : null;
   const creatorNiche = homeTipsEnabled() ? await readCreatorNiche(ctx.userId) : null;
+  const seasonalIdea = seasonalLooksEnabled() && await seasonalLooksOptedIn(ctx.userId) ? seasonalSuggestion() : null;
   const cards: StoryCard[] = rows.map((p) => ({
     id: p.id,
     title: p.title,
@@ -40,6 +45,7 @@ export default async function Home() {
       <StoriesBoard cards={cards} workspace={ws?.name ?? "Workspace"} greeting={greeting ? `${greeting.text}, ${ctx.userName}` : null} newStory={<NewStory empty={cards.length === 0} />} />
       {starterTemplatesEnabled() && <StarterTemplateLibrary instance="home" compact />}
       {creatorNiche && <HomeInspiration initialNiche={creatorNiche} />}
+      {seasonalIdea && <SeasonalSuggestion idea={seasonalIdea} />}
     </div>
   );
 }

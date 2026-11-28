@@ -43,3 +43,7 @@ export function homeTipsEnabled(): boolean {
 export function designStageEnabled(): boolean {
   return process.env.IZWI_FLAG_DESIGN === "1";
 }
+
+export function seasonalLooksEnabled(): boolean {
+  return process.env.IZWI_FLAG_SEASONAL_LOOKS === "1";
+}
