@@ -5,7 +5,7 @@ import { tool } from "ai";
 import { all, newId, now, one, run } from "./db";
 import { HttpError } from "./http";
 import { clock } from "../lib/format";
-import type { Ctx } from "./guard";
+import { managesConsent, type Ctx } from "./guard";
 import type { Privacy, ProviderRow } from "./providers";
 import { privacyOf } from "./providers";
 import { StepSchema } from "./planner";
@@ -13,6 +13,7 @@ import { savePlan } from "./planner";
 import { previewGlossaryChanges } from "./actions";
 import { ConsentScopeSchema } from "./consent-scope";
 import { audit } from "./audit";
+import { injectionEnabled } from "./injection";
 
 const INJECTION_SCORE = 0.7;
 const hashText = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -75,6 +76,8 @@ export async function buildAssistantContext(ctx: Ctx, projectId: string, privacy
       const textHash = hashText(line.text);
       const scan = await one<{ text_hash: string; score: number }>(`SELECT text_hash, score FROM line_injection_scan WHERE line_id = ?`, line.id);
       if (scan?.text_hash === textHash && scan.score > INJECTION_SCORE) { excludedLines++; continue; }
+      // Edited after its check: held back until the new text has been checked too.
+      if (scan && scan.text_hash !== textHash && injectionEnabled()) { excludedLines++; continue; }
       const row = `[${line.idx}] ${line.text}`;
       const remaining = 4000 - usedChars;
       if (remaining <= 0) continue;
@@ -160,7 +163,8 @@ export async function assistantTools(ctx: Ctx, projectId: string, proposals: Arr
     keepClip: makeAction("keepClip", z.object({ clipId, reason: reasonField }), (_v, c) => `Keep “${c.title}” (${span(c.start_ms, c.end_ms)})`),
     dropClip: makeAction("dropClip", z.object({ clipId, reason: reasonField }), (_v, c) => `Drop “${c.title}” (${span(c.start_ms, c.end_ms)})`),
     trimClip: makeAction("trimClip", z.object({ clipId, startMs: z.number().int().nonnegative(), endMs: z.number().int().positive(), reason: reasonField }), (_v, c) => `Trim “${c.title}”`),
-    requestConsent: action("requestConsent", z.object({ personId: z.string().min(1).max(120), scope: ConsentScopeSchema }).strict(), (v) => `Request ${v.scope} consent`),
+    // Not offered to a member, who could not approve it.
+    ...(managesConsent(ctx) ? { requestConsent: action("requestConsent", z.object({ personId: z.string().min(1).max(120), scope: ConsentScopeSchema }).strict(), (v) => `Request ${v.scope} consent`) } : {}),
     addGlossaryTerm: action("addGlossaryTerm", z.object({ term: z.string().min(1).max(60), heard: z.string().max(60).optional() }), (v) => `Add glossary term ${v.term}`),
     draftTitles: tool({ description: "Suggest text titles only; do not propose edits.", inputSchema: z.object({ titles: z.array(z.string().max(120)).max(8) }).strict(), execute: async ({ titles }) => { decodedInputs.push({ titles }); return { titles }; } }),
     draftCaptionPost: tool({ description: "Draft caption and post text only; do not publish.", inputSchema: z.object({ caption: z.string().max(1500), post: z.string().max(1500) }).strict(), execute: async ({ caption, post }) => { decodedInputs.push({ caption, post }); return { caption, post }; } }),

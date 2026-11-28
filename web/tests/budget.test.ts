@@ -57,6 +57,19 @@ describe("assistant budget reservations and leases", () => {
     expect(priceFor("openai/gpt-oss-20b")).toEqual({ in: 139, out: 555 });
     vi.unstubAllEnvs();
   });
+  it("budgets Meta's paid model from its published price, within the Rand cap", async () => {
+    const ws = await workspace("budget-meta");
+    const provider = { kind: "meta" as const, base_url: "https://api.meta.ai/v1" };
+    const args = { workspaceId: ws, userId: "u", providerId: "p", model: "muse-spark-1.1", provider, serializedRequestBytes: 40_000, maxOutputTokens: 800 };
+    vi.stubEnv("IZWI_USD_ZAR", "17.3787");
+    expect(priceFor("muse-spark-1.1", provider)).toEqual({ in: 2173, out: 7386 });
+    // The default cap is zero cents, so a paid model stays off until the operator sets one.
+    await expect(reserveAttempt(args)).rejects.toBeInstanceOf(BudgetError);
+    vi.stubEnv("IZWI_ASSISTANT_DAILY_CENTS", "100");
+    expect((await reserveAttempt(args)).reservedCents).toBe(93);
+    await expect(reserveAttempt(args)).rejects.toBeInstanceOf(BudgetError);
+    vi.unstubAllEnvs();
+  });
   it("allows one assistant stream per user and reclaims an expired lease", async () => {
     const ws = await workspace("budget-lease");
     const user = "user_budget-lease";

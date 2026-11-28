@@ -9,6 +9,7 @@ import { BlockedAddressError, type GuardedInit } from "./ssrf";
 import { sdkFetch } from "./sdk-fetch";
 import { PUBLIC_URL } from "./env";
 import { recordTrialTokens, reserveTrialCall, TrialPolicyError, trialEnabled } from "./provider-trial";
+import { HttpError } from "./http";
 
 export type ProviderKind = "openai_compat" | "madlad_endpoint" | "asr_endpoint" | "openrouter" | "groq" | "gemini" | "aimlapi" | "ollama" | "meta";
 export type ProviderRow = {
@@ -47,6 +48,7 @@ export type ModelPrice = { in: number; out: number; source: string; asOf: string
 export const PRICE_PER_MTOK: Record<string, ModelPrice> = {
   "openai/gpt-oss-120b": { in: 0.15, out: 0.60, source: "https://console.groq.com/docs/models", asOf: "2026-11-26", currency: "USD" },
   "openai/gpt-oss-20b": { in: 0.075, out: 0.30, source: "https://console.groq.com/docs/models", asOf: "2026-11-26", currency: "USD" },
+  "muse-spark-1.1": { in: 1.25, out: 4.25, source: "https://dev.meta.ai/docs/pricing-rate-limits", asOf: "2026-11-28", currency: "USD" },
 };
 
 export const publicProvider = (p: ProviderRow) => ({
@@ -159,6 +161,16 @@ export function checkBaseUrl(raw: string, kind?: ProviderKind): string {
   if (/^169\.254\./.test(h) || h === "metadata.google.internal" || h === "[fd00:ec2::254]") throw new ProviderError("That address is not allowed.");
   if (process.env.IZWI_HOSTED === "1" && /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\])/.test(h)) throw new ProviderError("Private addresses are not allowed on a hosted install.");
   return u.toString().replace(/\/$/, "");
+}
+
+/** checkBaseUrl for a route: a refused address is the person's to fix, so they see why instead of a server error. */
+export function requireBaseUrl(raw: string, kind?: ProviderKind): string {
+  try {
+    return checkBaseUrl(raw, kind);
+  } catch (e) {
+    if (e instanceof ProviderError) throw new HttpError(400, e.message);
+    throw e;
+  }
 }
 
 // The key is unsealed here, inside the request that needs it, and never stored decrypted.
@@ -274,6 +286,8 @@ export async function testProvider(p: ProviderRow): Promise<{ ok: boolean; note:
     }
     const { response: res } = await call(p, p.base_url, { method: "GET", headers: authHeader(p), signal: AbortSignal.timeout(20_000) });
     await res.body?.cancel();
+    // A speech endpoint may well answer 405 to a GET. A refused key or a missing address is not a pass.
+    if ([401, 403, 404].includes(res.status)) throw statusError(p, res.status);
     return { ok: res.status < 500, note: `Endpoint answered ${res.status}.` };
   } catch (e) {
     return { ok: false, note: e instanceof ProviderError ? e.message : "The test did not finish." };
@@ -313,6 +327,9 @@ export async function translateLines(p: ProviderRow, lines: { i: number; t: stri
     }
     const ratio = t.length / Math.max(1, l.t.length);
     if (ratio < 0.35 || ratio > 3) flags.set(l.i, "Length looks wrong for a translation. Check this line.");
+    // A model that gives the source text back has not translated it. Very short lines (names, "Sharp sharp") may match.
+    const words = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+    if (words(l.t).length >= 3 && words(t).join(" ") === words(l.t).join(" ")) flags.set(l.i, "Same as the original: it may not have been translated.");
     for (const k of keep) if (l.t.includes(k) && !t.includes(k)) flags.set(l.i, `“${k}” should stay as written.`);
   }
   return { result, flags, usage: { input, output } };

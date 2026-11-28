@@ -53,6 +53,28 @@ export async function reserveTrialCall(input: { base_url: string; model: string 
 
 type Receipt = NonNullable<Awaited<ReturnType<typeof reserveTrialCall>>>;
 
+/**
+ * A fetch that charges each model request against the hosted trial before it is sent, for callers that bring their own
+ * HTTP client (the assistant streams through the AI SDK). Outside trial mode it only calls through.
+ */
+export function trialFetch(
+  provider: Parameters<typeof reserveTrialCall>[0], fetcher: typeof fetch,
+  on: { reserved?: (receipt: Receipt) => void; refused?: () => void } = {},
+): typeof fetch {
+  return async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    let receipt: Awaited<ReturnType<typeof reserveTrialCall>>;
+    try {
+      receipt = await reserveTrialCall(provider, url);
+    } catch (e) {
+      on.refused?.();
+      throw e;
+    }
+    if (receipt) on.reserved?.(receipt);
+    return fetcher(input, init);
+  };
+}
+
 export async function recordTrialTokens(receipt: Receipt | null, input: unknown, output: unknown) {
   if (!receipt) return;
   for (const [unit, count] of [["trial_input_tokens", input], ["trial_output_tokens", output]] as const) {

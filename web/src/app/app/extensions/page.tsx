@@ -5,7 +5,7 @@ import { connectors, type Connector } from "@/lib/platform";
 import { useLive } from "@/lib/useLive";
 import "../../settings.css";
 
-type System = { worker: { online: boolean; seenAgoMs: number | null; info: { tools?: { ffmpeg?: string | null; whisper?: string | null } } | null }; files: { whisper: boolean; whisperModel: boolean; captionFont: boolean }; queue: Record<string, number> };
+type System = { worker: { online: boolean; seenAgoMs: number | null; info: { tools?: { ffmpeg?: string | null; whisper?: string | null } } | null }; files: { whisper: boolean; whisperModel: boolean; captionFont: boolean }; queue: Record<string, number>; storageMode?: "disk" | "s3" };
 type Provider = { id: string; kind: "openai_compat" | "madlad_endpoint" | "asr_endpoint"; label: string; lastTestOk: boolean | null };
 
 const stateClass = { "in use": "s-done", next: "s-draft", planned: "s-planned", "check licence": "s-blocked" } as const;
@@ -17,8 +17,15 @@ type Verdict = { cls: string; text: string; why?: string };
 function judge(c: Connector, sys: System | undefined, providers: Provider[] | undefined): Verdict {
   const base: Verdict = c.hosted ? { cls: "s-planned", text: "Planned (hosted mode)", why: "Not needed on this computer." } : { cls: stateClass[c.state], text: stateText[c.state] };
   switch (c.wired) {
-    case "tus": return { cls: "s-done", text: "Working now", why: "Resumable uploads are served at /api/upload." };
-    case "storage": return { cls: "s-done", text: "Working now", why: "Data is in a local SQLite file; media is in a local folder." };
+    case "tus": {
+      if (!sys) return { cls: "s-off", text: "Checking…" };
+      if (sys.storageMode === "s3") return { cls: "s-off", text: "Not used here", why: "This server sends uploads in resumable parts straight to the private bucket." };
+      return { cls: "s-done", text: "Working now", why: "Resumable uploads are served at /api/upload." };
+    }
+    case "storage": {
+      if (!sys) return { cls: "s-off", text: "Checking…" };
+      return { cls: "s-done", text: "Working now", why: sys.storageMode === "s3" ? "Data is in Postgres; media is in a private S3-compatible bucket." : "Data is in Postgres; media is in a folder on this server." };
+    }
     case "auth": return { cls: "s-done", text: "Working now", why: "You are signed in through it." };
     case "ffmpeg": {
       if (!sys) return { cls: "s-off", text: "Checking…" };
@@ -56,7 +63,7 @@ const ENDPOINTS: [string, string, string][] = [
   ["POST", "/api/projects/:id/run", "Start a job: transcribe, suggest clips, translate, package"],
   ["POST", "/api/projects/:id/clips", "Add a clip by hand"],
   ["POST", "/api/projects/:id/people", "Add a person who appears in the recording"],
-  ["POST", "/api/projects/:id/consent", "Make a consent link to share"],
+  ["POST", "/api/projects/:id/consent", "Make a consent link to share (owner or admin)"],
   ["POST", "/api/projects/:id/declare", "Record the creator declaration"],
   ["POST", "/api/projects/:id/links", "Make a review link"],
   ["POST", "/api/projects/:id/comments", "Add a comment, optionally at a time"],
@@ -71,17 +78,21 @@ const ENDPOINTS: [string, string, string][] = [
   ["PATCH", "/api/items/enquiry/:id", "Update a licence enquiry"],
   ["PATCH", "/api/items/comment/:id", "Resolve a comment"],
   ["PATCH", "/api/items/job/:id", "Cancel or retry a job"],
-  ["DELETE", "/api/items/person/:id", "Remove a person"],
-  ["DELETE", "/api/items/link/:id", "Revoke a review link"],
+  ["DELETE", "/api/items/person/:id", "Remove a person (owner or admin)"],
+  ["DELETE", "/api/items/link/:id", "Revoke a share link (a consent link: owner or admin)"],
   ["POST", "/api/glossary", "Teach IZWI a spelling or fix a mishearing"],
   ["GET", "/api/plan", "Which planner is active"],
   ["POST", "/api/plan", "Plan steps from a sentence"],
   ["POST", "/api/plan/:id", "Approve or dismiss a plan"],
   ["GET", "/api/providers", "Your AI keys (never the key itself)"],
+  ["GET", "/api/providers/:id/models", "A provider's model list (owner or admin)"],
+  ["GET", "/api/providers/routes", "Which model each task uses"],
+  ["PUT", "/api/providers/routes", "Choose a model for each task (owner or admin)"],
   ["POST", "/api/providers", "Add an AI key and test it"],
   ["POST", "/api/providers/:id", "Test a provider again"],
   ["DELETE", "/api/providers/:id", "Remove a provider"],
   ["GET", "/api/system", "Worker, tools, queue, storage and usage"],
+  ["GET", "/api/workspace/audit", "The audit trail (owner)"],
   ["GET", "/api/team", "Members and pending invites"],
   ["POST", "/api/team", "Invite someone"],
   ["GET", "/api/media/:assetId", "Stream media (supports Range; add ?download to save)"],

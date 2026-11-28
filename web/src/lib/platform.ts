@@ -82,7 +82,7 @@ export const connectors: Connector[] = [
   { group: "Run local", name: "Tauri", does: "Desktop app for offline work", licence: "Apache-2.0", state: "planned" },
   { group: "Upload", name: "tus (tus-js-client)", does: "Uploads that resume after a dropped signal", licence: "MIT", state: "in use", wired: "tus" },
   { group: "Account", name: "better-auth", does: "Sign-in, passkeys, workspaces and invitations", licence: "MIT", state: "in use", wired: "auth" },
-  { group: "Account", name: "SQLite and local storage", does: "Your data and files stay on this computer", licence: "Public domain", state: "in use", wired: "storage" },
+  { group: "Account", name: "Postgres and private media storage", does: "Your data in Postgres; your files on this server or in a private bucket", licence: "PostgreSQL Licence", state: "in use", wired: "storage" },
   { group: "Account", name: "Supabase", does: "Hosted sign-in, data and private storage", licence: "Apache-2.0", state: "planned", hosted: true },
   { group: "Publish", name: "Postiz", does: "Schedule to social platforms", licence: "AGPL-3.0", state: "planned" },
   { group: "Protect", name: "c2pa-js", does: "Content credentials inside the exported file", licence: "MIT", state: "planned" },

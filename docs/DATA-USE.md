@@ -6,7 +6,7 @@
 
 | Data | Intended use | Current boundary |
 |---|---|---|
-| Account and workspace records | Sign-in, membership, roles and project access. | Stored in the local SQLite demo; authentication and role checks are implemented in code, but the complete user-facing flows are not all exercised over HTTP. |
+| Account and workspace records | Sign-in, membership, roles and project access. | Stored in the app's Postgres database; authentication and role checks are implemented in code, but the complete user-facing flows are not all exercised over HTTP. |
 | Uploaded media and derived audio/video | Transcribe, find requested clips, render and export the creator's project. | Processed by the local worker in the demo. Private media must not be added to public fixtures, logs, prompts or source control. |
 | Transcripts, captions, instructions and project metadata | Execute the requested workflow and show editable results. | Workspace-scoped in server functions. A connected AI provider may receive the prompt/context needed for that requested action; exact provider retention and training terms require separate verification. |
 | Provider credentials | Authenticate a creator-selected provider call. | Stored sealed at rest and unsealed for a call. Never return the key to the browser or log its value. Rotation is required if exposure is suspected. |

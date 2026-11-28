@@ -25,7 +25,7 @@ beforeAll(async () => {
   process.env.IZWI_STORAGE = "s3";
   db = await openTestDb();
   upload = await import("../src/server/upload");
-}, 30_000);
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -60,6 +60,35 @@ describe("hosted multipart upload", () => {
     const stranger = await fixture();
     await expect(upload.s3SignPart(stranger, created.uploadId, 1)).rejects.toMatchObject({ status: 404 });
     await expect(upload.s3SignPart(owner, created.uploadId, 2)).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("gives up a session the store no longer holds, so the browser can start again", async () => {
+    const who = await fixture();
+    const created = await upload.s3Create(who, { projectId: `sim_proj_${n}`, filename: "clip.mp4", size: 32, type: "video/mp4" });
+    store.listParts.mockRejectedValueOnce(Object.assign(new Error("gone"), { name: "NoSuchUpload" }));
+    await expect(upload.s3Status(who, created.uploadId)).rejects.toMatchObject({ status: 404 });
+    expect(await db.one(`SELECT 1 FROM upload_session WHERE upload_id = ?`, created.uploadId)).toBeUndefined();
+  });
+
+  it("starts a remembered upload afresh when the server answers 404", async () => {
+    const { S3Upload } = await import("../src/lib/s3-upload");
+    const memory = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => memory.get(k) ?? null, setItem: (k: string, v: string) => void memory.set(k, v), removeItem: (k: string) => void memory.delete(k) });
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push(`${init.method} ${url}`);
+      if (url === "/api/upload/s3/up_old") return new Response(JSON.stringify({ error: "Upload not found." }), { status: 404 });
+      if (url === "/api/upload/s3") return Response.json({ uploadId: "up_new", partBytes: 8 });
+      if (url === "/api/upload/s3/up_new") return Response.json({ finished: true, parts: [] });
+      return new Response("unexpected", { status: 500 });
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const u = new S3Upload(new File(["abc"], "clip.mp4"), { projectId: "p", retryDelays: [0], onProgress: () => {}, onSuccess: resolve, onError: reject });
+        void u.findPreviousUploads().then(() => { u.resumeFromPreviousUpload({ uploadId: "up_old", fingerprint: (u as unknown as { fingerprint: string }).fingerprint }); u.start(); });
+      });
+      expect(calls).toEqual(["GET /api/upload/s3/up_old", "POST /api/upload/s3", "GET /api/upload/s3/up_new"]);
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it("uses the store byte count, drops mismatched content, and creates one source and probe on success idempotently", async () => {

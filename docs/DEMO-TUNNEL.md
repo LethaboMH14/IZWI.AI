@@ -76,7 +76,7 @@ cloudflared tunnel --config "$env:USERPROFILE\.cloudflared\izwi-demo.yml" run iz
 
 Set any demo flags the same way, in both of the first two terminals (for example `IZWI_FLAG_ASSISTANT` and `IZWI_FLAG_INJECTION`).
 
-**Provider trial mode.** [demo.env.example](../deploy/tunnel/demo.env.example) turns it on with an empty policy. Until someone writes `IZWI_PROVIDER_TRIAL_RULES`, that refuses provider connection tests and translation, so a newly entered key can't pass its test and the assistant only uses keys that have passed. The commands above leave it off, so spending is limited only by the app's assistant budget and the provider's own limits: use a free tier or a capped key. The assistant's chat replies don't pass through the trial policy either way. To keep trial mode on instead, follow the [README](../deploy/tunnel/README.md) and write the rules first.
+**Provider trial mode.** [demo.env.example](../deploy/tunnel/demo.env.example) leaves it off. Switched on with an empty policy, it refuses every provider call: connection tests, planning, translation and assistant replies. The commands above leave it off, so spending is limited only by the app's assistant budget and the provider's own limits: use a free tier or a capped key. To use trial mode, follow the [README](../deploy/tunnel/README.md) and write `IZWI_PROVIDER_TRIAL_RULES` first.
 
 **First session on the hostname:** open `https://studio.<team-zone>`, pass Access, sign in with email and password, then open **Run on** and press **Add a passkey**. Sign out and back in with it before the demo.
 

@@ -17,8 +17,18 @@ type Driver = Handle & { tx: <T>(fn: (h: Handle) => Promise<T>) => Promise<T>; c
 pg.types.setTypeParser(20, (v) => Number(v));
 pg.types.setTypeParser(1700, (v) => Number(v));
 
+const logDropped = (e: Error) => console.error("[izwi] database connection dropped", e.name);
+
+// A hosted pooler closes connections, idle or in use. Without a listener, the "error" event of the pool (idle) or of a
+// checked-out client (in use, for example inside better-auth's transaction) is thrown as an uncaught exception.
+export function surviveDrops(pool: Pick<pg.Pool, "on">) {
+  pool.on("error", logDropped);
+  pool.on("connect", (client) => void client.on("error", logDropped));
+}
+
 function pgDriver(url: string): Driver {
   const pool = new pg.Pool({ connectionString: url, max: Number(process.env.IZWI_DB_POOL_MAX || 5), idleTimeoutMillis: 10_000 });
+  surviveDrops(pool);
   const exec: Exec = async (sql, params) => {
     const r = await pool.query(sql, params);
     return { rows: r.rows, rowCount: r.rowCount ?? 0 };
@@ -28,6 +38,7 @@ function pgDriver(url: string): Driver {
     script: async (sql) => void (await pool.query(sql)),
     async tx(fn) {
       const c = await pool.connect();
+      let broken: Error | undefined;
       try {
         await c.query("BEGIN");
         const out = await fn({
@@ -40,10 +51,10 @@ function pgDriver(url: string): Driver {
         await c.query("COMMIT");
         return out;
       } catch (e) {
-        await c.query("ROLLBACK").catch(() => {});
+        await c.query("ROLLBACK").catch((x: Error) => { broken = x; });
         throw e;
       } finally {
-        c.release();
+        c.release(broken);
       }
     },
     close: () => pool.end(),
@@ -80,7 +91,7 @@ function driver(): Promise<Driver> {
     if (process.env.IZWI_DB === "pglite") g.__izwiDriver = pgliteDriver();
     else {
       const url = process.env.DATABASE_URL;
-      if (!url) throw new Error("DATABASE_URL is not set. See docs/engineering/DEPLOY.md.");
+      if (!url) throw new Error("DATABASE_URL is not set. Add a Postgres connection string to web/.env.local (see web/.env.example).");
       g.__izwiDriver = Promise.resolve(pgDriver(url));
     }
   }

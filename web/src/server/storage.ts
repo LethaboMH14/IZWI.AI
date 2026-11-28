@@ -44,7 +44,7 @@ export function sha256File(file: string): Promise<string> {
 const g = globalThis as unknown as { __izwiS3?: Promise<S3Client> };
 const bucket = () => {
   const b = process.env.S3_BUCKET;
-  if (!b) throw new Error("S3_BUCKET is not set. See docs/engineering/DEPLOY.md.");
+  if (!b) throw new Error("S3_BUCKET is not set. Add the S3 settings to web/.env.local (see web/.env.example).");
   return b;
 };
 

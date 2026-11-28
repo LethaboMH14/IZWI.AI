@@ -21,7 +21,7 @@ const forgot = [
   ["Draft that looks finished", "A machine translation is visibly a draft until every line has a human yes.", "Localise"],
   ["Ready versus posted", "Prepared, connected, scheduled and published are four different states.", "Publish"],
   ["Cost before the job", "What a render uses is shown before it runs. A retry never bills twice.", "Publish export bar"],
-  ["Consent that is withdrawn", "A record can be revoked later, and that must pull back the outputs it covered.", "Protect, not built yet"],
+  ["Consent that is withdrawn", "A yes can be withdrawn later from the same link, and unposted renders that person appears in are held again.", "Consent link"],
   ["Names and slang", "A workspace glossary of words that must never be translated.", "Localise side panel"],
   ["The empty workspace", "A new account has no projects. The first screen must still feel alive.", "Home, new story row"],
   ["Wrong file, big file, no credit", "Each failure names what happened and the next step.", "Onboarding file check"],

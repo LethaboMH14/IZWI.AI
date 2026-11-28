@@ -8,6 +8,7 @@ import { requireCtx, projectOf } from "../../../../../server/guard";
 import { limit, LIMIT, RateLimitError } from "../../../../../server/ratelimit";
 import { acquireLease, renewLease, releaseLease, reserveAttempt, settleAttempt, BudgetError, type BudgetReceipt } from "../../../../../server/budget";
 import { sdkFetch } from "../../../../../server/sdk-fetch";
+import { recordTrialTokens, trialFetch } from "../../../../../server/provider-trial";
 import { unseal } from "../../../../../server/crypto";
 import { privacyOf, type ProviderRow } from "../../../../../server/providers";
 import { PUBLIC_URL } from "../../../../../server/env";
@@ -160,7 +161,11 @@ async function startTurn(
   const receipts = new Map<number, BudgetReceipt>();
   let activeReceipt: BudgetReceipt | null = null;
   let budgetViolation = false;
-  const compatible = createOpenAICompatible({ baseURL: provider.base_url, name: `izwi-${provider.kind}`, apiKey: key || undefined, headers, fetch: meteredFetch(() => activeReceipt, sdkFetch, () => { budgetViolation = true; }), includeUsage: true });
+  const refuse = () => { budgetViolation = true; };
+  // Hosted trial: the same per-route request and spend caps as planning, translation and the connection test.
+  let trialReceipt: Parameters<typeof recordTrialTokens>[0] = null;
+  const capped = trialFetch(provider, sdkFetch, { reserved: (r) => { trialReceipt = r; }, refused: refuse });
+  const compatible = createOpenAICompatible({ baseURL: provider.base_url, name: `izwi-${provider.kind}`, apiKey: key || undefined, headers, fetch: meteredFetch(() => activeReceipt, capped, refuse), includeUsage: true });
   if (!provider.model) throw new HttpError(409, "Choose a model for this provider first.");
   const model = compatible.chatModel(provider.model);
   let attempts = 0, tokensIn: number | null = 0, tokensOut: number | null = 0, outcome = "error";
@@ -180,9 +185,14 @@ async function startTurn(
       // Local models on a laptop CPU are slow (measured: qwen3:1.7b took ~140 s for a short tool call with the app running),
       // so the private class gets a longer limit. Qwen3 also "thinks" before answering unless reasoning is switched off.
       const local = provider.kind === "ollama";
-      const result = streamText({ model, system: context.system, messages, tools, maxRetries: 0, maxOutputTokens: 800, abortSignal: modelAbort.signal,
+      // Meta's Muse Spark cannot switch thinking off, thinks at "high" unless told otherwise, and counts that thinking
+      // against the reply limit: at 800 tokens it answered with nothing. See https://dev.meta.ai/docs/reasoning.
+      const meta = provider.kind === "meta";
+      const maxOutputTokens = meta ? 3000 : 800;
+      const result = streamText({ model, system: context.system, messages, tools, maxRetries: 0, maxOutputTokens, abortSignal: modelAbort.signal,
         timeout: local ? 180_000 : 30_000,
         ...(local ? { providerOptions: { openaiCompatible: { reasoningEffort: "none" } } } : {}),
+        ...(meta ? { providerOptions: { openaiCompatible: { reasoningEffort: "low" } } } : {}),
         // ai@7 calls this on every turn, with an empty list when nothing needs downloading.
         // Refuse any real URL; let an empty list through, or no text turn could ever run.
         experimental_download: async (requested: unknown[]) => {
@@ -196,9 +206,9 @@ async function startTurn(
             return { name, description: t.description, schema: t.inputSchema ? z.toJSONSchema(t.inputSchema) : null };
           });
           // R10'': reserve one input token per allowed UTF-8 body byte; meteredFetch checks the SDK's actual serialized body before network I/O.
-          const bytes = Buffer.byteLength(JSON.stringify({ model: provider.model, system: context.system, messages: stepMessages, tools: toolSchemas, maxOutputTokens: 800 })) + 2048;
+          const bytes = Buffer.byteLength(JSON.stringify({ model: provider.model, system: context.system, messages: stepMessages, tools: toolSchemas, maxOutputTokens })) + 2048;
           try {
-            const receipt = await reserveAttempt({ workspaceId: ctx.workspaceId, userId: ctx.userId, providerId: provider.id, model: provider.model!, provider, serializedRequestBytes: bytes, maxOutputTokens: 800 });
+            const receipt = await reserveAttempt({ workspaceId: ctx.workspaceId, userId: ctx.userId, providerId: provider.id, model: provider.model!, provider, serializedRequestBytes: bytes, maxOutputTokens });
             receipts.set(attempts, receipt);
             activeReceipt = receipt;
           }
@@ -217,6 +227,8 @@ async function startTurn(
             if (receipt) await settleAttempt(receipt, null);
           }
           if (activeReceipt === receipt) activeReceipt = null;
+          await recordTrialTokens(trialReceipt, usage.inputTokens, usage.outputTokens);
+          trialReceipt = null;
         },
       });
       // Draft tools (titles, caption posts) return text only. Small models often answer with just a tool call,
