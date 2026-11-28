@@ -106,7 +106,7 @@ type System = {
   usage: { unit: string; provider: string; total: number }[];
 };
 
-const QUEUE_LABEL: Record<string, string> = { queued: "Waiting", running: "Running", done: "Finished", failed: "Failed", cancelled: "Cancelled", blocked: "Held" };
+const QUEUE_LABEL: Record<string, string> = { queued: "Waiting", running: "Running", succeeded: "Finished", failed: "Failed", cancelled: "Cancelled", blocked: "Held" };
 const unitText = (u: string, t: number) =>
   u === "audio_seconds" ? `${(t / 60).toFixed(1)} min of audio` : u === "tokens" ? `${Math.round(t).toLocaleString("en-ZA")} tokens` : `${Math.round(t).toLocaleString("en-ZA")} ${u.replace(/_/g, " ")}`;
 const yn = (ok: boolean) => <span className={`pill ${ok ? "s-done" : "s-blocked"}`}>{ok ? "Found" : "Missing"}</span>;
@@ -118,7 +118,7 @@ function Worker() {
       <header>
         <div>
           <h2 id="wk-h">This computer&apos;s worker</h2>
-          <p>The worker does the heavy jobs: listening, cutting and rendering. It runs on the machine that hosts IZWI.</p>
+          <p>The worker does the heavy jobs: listening, cutting and rendering. It runs wherever the team starts it, for example on a laptop.</p>
         </div>
         {data && <span className={`pill ${data.worker.online ? "s-done" : "s-blocked"}`}>{data.worker.online ? "Worker online" : "Worker offline"}</span>}
       </header>
@@ -147,7 +147,7 @@ function Worker() {
           {Object.keys(data.queue).length === 0 ? <p className="st-empty">No jobs yet.</p> : (
             <div className="st-pillrow">
               {Object.entries(data.queue).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => (
-                <span key={k} className={`pill ${k === "failed" ? "s-blocked" : k === "done" ? "s-done" : k === "running" ? "s-draft" : "s-off"}`}>{QUEUE_LABEL[k] ?? k}: {n}</span>
+                <span key={k} className={`pill ${k === "failed" ? "s-blocked" : k === "succeeded" ? "s-done" : k === "running" ? "s-draft" : "s-off"}`}>{QUEUE_LABEL[k] ?? k}: {n}</span>
               ))}
             </div>
           )}
@@ -230,7 +230,8 @@ function ProviderCard({ p, onChange }: { p: Provider; onChange: () => void }) {
         <div><dt>Used for</dt><dd>{p.roles.map((r) => ROLE_LABEL[r] ?? r).join(", ")}</dd></div>
         <div><dt>Free tier</dt><dd>{p.freeTier ? "Owner marked" : "Not marked"}</dd></div>
       </dl>
-      <ModelList id={p.id} onChoose={async (m) => { try { await api(`/api/providers/${p.id}`, { method: "PATCH", body: { model: m.id, roles: p.roles } }); onChange(); } catch (e) { setMsg((e as Error).message); } }} />
+      {/* Changing the model clears the last test, so test the new one at once: only a tested provider is used. */}
+      {p.kind !== "madlad_endpoint" && p.kind !== "asr_endpoint" && <ModelList id={p.id} onChoose={async (m) => { try { await api(`/api/providers/${p.id}`, { method: "PATCH", body: { model: m.id, roles: p.roles } }); await retest(); onChange(); } catch (e) { setMsg(errText(e, true)); } }} />}
       {p.lastTestAt && <p className="st-test">{p.lastTestNote} <span className="mono">· {ago(p.lastTestAt)}</span></p>}
       {msg && <p className="st-note bad" role="alert">{msg}</p>}
       <div className="st-actions">
@@ -299,7 +300,7 @@ function AddProvider({ onAdded }: { onAdded: () => void }) {
           </label>
         </div>
         <label className="field"><span>Address (base URL)</span><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} readOnly={!!preset && kind !== "openai_compat"} required inputMode="url" placeholder="https://provider.example/v1" /></label>
-        {["openai_compat", "openrouter", "ollama", "meta"].includes(kind) && <label className="field"><span>Model</span><input value={model} onChange={(e) => setModel(e.target.value)} required placeholder={preset?.modelHint || "the model id this provider gives you"} /></label>}
+        {kind !== "madlad_endpoint" && kind !== "asr_endpoint" && <label className="field"><span>Model</span><input value={model} onChange={(e) => setModel(e.target.value)} required placeholder={preset?.modelHint || "the model id this provider gives you"} /></label>}
         <label className="field"><span>Key {preset?.keyOptional || kind !== "openai_compat" ? "(optional)" : ""}</span><input type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} placeholder="Paste it here once" /><small>Encrypted on this server. Never shown again.</small></label>
         {canFreeTier && ["groq", "gemini", "openrouter"].includes(kind) && <label className="field"><span><input type="checkbox" checked={freeTier} onChange={e => setFreeTier(e.target.checked)} /> I have this provider&apos;s free tier</span></label>}
         <fieldset className="st-roles">

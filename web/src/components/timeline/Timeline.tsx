@@ -10,6 +10,8 @@ import { api } from "@/lib/api";
 import { stripTimes, useFrame } from "@/lib/frames";
 import { clampTrim, envelopeSlice, msToPx, pxToMs, stackClips, trimBlocked, viewportRange, visibleWindow } from "@/lib/timeline-math";
 import { formatTime } from "@/lib/timecode";
+import { useOptionalFlat } from "@/components/flat/flat-context";
+import { langName } from "@/lib/languages";
 import { useTimelineRenders } from "./useTimelineRenders";
 
 // This timeline owns one shared scroll and time scale. wavesurfer.js owns its own scroll container, and
@@ -104,7 +106,10 @@ export function Timeline({ compact = false, onAskAI }: { compact?: boolean; onAs
   const [viewportWidth, setViewportWidth] = useState(0);
   const [windowMs, setWindowMs] = useState({ start: 0, end: Number.MAX_SAFE_INTEGER });
   const [draft, setDraft] = useState<DragRange | null>(null);
-  const [markers, setMarkers] = useState<{ inMs: number | null; outMs: number | null }>({ inMs: null, outMs: null });
+  // In and Out belong to Flat Studio, where "Add scene" reads them. Without it there is nothing to mark for.
+  const flat = useOptionalFlat();
+  const setIn = flat?.setIn;
+  const setOut = flat?.setOut;
   const [notice, setNotice] = useState("");
   const [copyNotice, setCopyNotice] = useState("");
   const { rendering, pendingRenders, pendingRef, renderNotice, renderTargets } = useTimelineRenders(projectStore);
@@ -184,8 +189,8 @@ export function Timeline({ compact = false, onAskAI }: { compact?: boolean; onAs
           playhead.seekTo(Math.min(duration, Math.max(0, playhead.ms + step)));
           break;
         }
-        case "i": setMarkers((old) => ({ ...old, inMs: Math.round(playhead.ms) })); break;
-        case "o": setMarkers((old) => ({ ...old, outMs: Math.round(playhead.ms) })); break;
+        case "i": if (!setIn) return; setIn(); break;
+        case "o": if (!setOut) return; setOut(); break;
         default: return;
       }
       event.preventDefault();
@@ -193,7 +198,7 @@ export function Timeline({ compact = false, onAskAI }: { compact?: boolean; onAs
     // React controls handle the key first. Flat Studio's window listener sees defaultPrevented.
     document.addEventListener("keydown", shortcut);
     return () => document.removeEventListener("keydown", shortcut);
-  }, [duration, playheadStore, projectStore]);
+  }, [duration, playheadStore, projectStore, setIn, setOut]);
 
   useEffect(() => projectStore.subscribe((state, previous) => {
     if (state.selection !== previous.selection) setDraft(null);
@@ -313,10 +318,10 @@ export function Timeline({ compact = false, onAskAI }: { compact?: boolean; onAs
       <div className="tl-toolbar">
         <button type="button" className="tl-icon-button tl-play" aria-label={playing ? "Pause" : "Play"} onClick={() => playheadStore.getState().togglePlay()}><span aria-hidden="true">{playing ? <Pause weight="fill" /> : <Play weight="fill" />}</span></button>
         <PlayheadDisplay duration={duration} />
-        <div className="tl-tools" aria-label="Timeline tools">
-          <button type="button" className="tl-small-button" onClick={() => setMarkers((old) => ({ ...old, inMs: Math.round(playheadStore.getState().ms) }))}>In <kbd>I</kbd></button>
-          <button type="button" className="tl-small-button" onClick={() => setMarkers((old) => ({ ...old, outMs: Math.round(playheadStore.getState().ms) }))}>Out <kbd>O</kbd></button>
-        </div>
+        {flat && <div className="tl-tools" aria-label="Timeline tools">
+          <button type="button" className="tl-small-button" onClick={flat.setIn}>In <kbd>I</kbd></button>
+          <button type="button" className="tl-small-button" onClick={flat.setOut}>Out <kbd>O</kbd></button>
+        </div>}
         {!compact && <div className="tl-zoom"><span>Zoom</span><Slider label="Timeline zoom" value={zoom} min={MIN_ZOOM} max={MAX_ZOOM} step={0.0001} onValueChange={setZoom} format={(value) => `${(value * 1000).toFixed(1)} px per second`} /><button type="button" className="tl-small-button" onClick={() => { const available = Math.max(100, (scrollRef.current?.clientWidth ?? viewportWidth) - LABEL_W); setZoom(duration ? Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, available / duration)) : MAX_ZOOM); programmaticScrollUntil.current = Date.now() + 500; scrollRef.current?.scrollTo({ left: 0, behavior: "auto" }); }}>Fit</button></div>}
       </div>
       <div className="tl-scroll" ref={scrollRef} onScroll={(event) => {
@@ -387,13 +392,13 @@ export function Timeline({ compact = false, onAskAI }: { compact?: boolean; onAs
             </div>;
           })}
           <PlayheadDisplay duration={duration} zoom={zoom} />
-          {markers.inMs != null && <div className="tl-marker tl-marker-in" style={{ left: LABEL_W + msToPx(markers.inMs, zoom) }} aria-label={`In point ${formatTime(markers.inMs)}`} />}
-          {markers.outMs != null && <div className="tl-marker tl-marker-out" style={{ left: LABEL_W + msToPx(markers.outMs, zoom) }} aria-label={`Out point ${formatTime(markers.outMs)}`} />}
+          {flat && flat.inMs != null && <div className="tl-marker tl-marker-in" style={{ left: LABEL_W + msToPx(flat.inMs, zoom) }} aria-label={`In point ${formatTime(flat.inMs)}`} />}
+          {flat && flat.outMs != null && <div className="tl-marker tl-marker-out" style={{ left: LABEL_W + msToPx(flat.outMs, zoom) }} aria-label={`Out point ${formatTime(flat.outMs)}`} />}
         </div>
       </div>
       <div className="tl-status">
         <span>{selectionStart == null || selectionEnd == null ? "No scene selected" : <>{selectionIds.length} scene{selectionIds.length === 1 ? "" : "s"} selected · <Timecode ms={selectionStart} /> – <Timecode ms={selectionEnd} /> ({Math.round((selectionEnd - selectionStart) / 1000)}s)</>}</span>
-        {!compact && firstTranslation && <span>{firstTranslation.language} · draft, {firstTranslation.approved}/{firstTranslation.lines} approved</span>}
+        {!compact && firstTranslation && <span>{langName(firstTranslation.language)} · {firstTranslation.status === "approved" ? "approved" : "draft"}, {firstTranslation.approved}/{firstTranslation.lines} lines approved</span>}
         <span role="status" aria-live="polite">{notice || copyNotice}</span>
         <span role="status" aria-live="polite">{renderNotice}</span>
       </div>

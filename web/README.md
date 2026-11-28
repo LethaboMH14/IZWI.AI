@@ -1,15 +1,21 @@
-# IZWI AI web: design prototype
+# IZWI AI web
 
-Next.js app that holds the interface designs. **Sample data only.** Nothing is sent, stored, uploaded or charged.
+The studio: a Next.js app, a Postgres database and one worker that runs FFmpeg and whisper.cpp.
 
-```sh
-npm install
-npm run dev
+Needs Node 24, FFmpeg on the PATH and a Postgres database. In PowerShell, from this folder:
+
+```powershell
+npm ci
+npm run setup
 ```
 
-Start at `/design`. See `../docs/design/FRONTEND.md` for the concept, screens, references and known weak points.
+`setup` creates `.env.local` with fresh secrets and downloads the pinned whisper.cpp build, the Whisper model and the caption font, each checked by SHA-256. It does not install FFmpeg or Postgres. Add `DATABASE_URL` to `.env.local` (names are listed in `.env.example`), then:
 
-- `src/lib/demo.ts`: all sample content shown on screen
-- `src/components/Strand.tsx`: the 3D voice strand (Three.js)
-- `src/components/Studio.tsx`: the five stage screens
-- `src/app/globals.css`: tokens and landing styles; `src/app/app.css`: every other screen
+```powershell
+npm run db:migrate
+npm run dev:all
+```
+
+The app opens on http://localhost:3187. With `IZWI_STORAGE` unset, media is stored in `storage/`. Tests need no database server: `npm run ci` runs typecheck, lint, tests on in-process PGlite and a production build.
+
+The landing page uses sample content from `src/lib/demo.ts`. The studio under `/app` works on real data. See `../docs/design/FRONTEND.md` for the design.

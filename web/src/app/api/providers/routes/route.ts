@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { body, fail, route } from "@/server/http";
 import { requireCtx, requireRole } from "@/server/guard";
-import { all, now, one, parse, run } from "@/server/db";
+import { all, now, one, parse, run, tx } from "@/server/db";
 import { privacyOf, type ProviderRow } from "@/server/providers";
 
 export const runtime = "nodejs";
@@ -24,7 +24,10 @@ export const PUT = route(async (req) => {
     const p = await one<ProviderRow>("SELECT * FROM provider WHERE id = ? AND workspace_id = ? AND last_test_ok = 1", item.providerId, ctx.workspaceId);
     if (!p || !parse<string[]>(p.roles, []).includes(item.role)) fail(400, "Choose a tested provider enabled for this task.");
   }
-  await run("DELETE FROM model_route WHERE workspace_id = ?", ctx.workspaceId);
-  for (const item of x.routes) await run("INSERT INTO model_route(workspace_id,role,provider_id,model,updated_by,updated_at) VALUES(?,?,?,?,?,?)", ctx.workspaceId, item.role, item.providerId, item.model, ctx.userId, now());
+  // Replace the routes in one step, so a failure part way never leaves a task unrouted.
+  await tx(async () => {
+    await run("DELETE FROM model_route WHERE workspace_id = ?", ctx.workspaceId);
+    for (const item of x.routes) await run("INSERT INTO model_route(workspace_id,role,provider_id,model,updated_by,updated_at) VALUES(?,?,?,?,?,?)", ctx.workspaceId, item.role, item.providerId, item.model, ctx.userId, now());
+  });
   return { saved: x.routes.length };
 });

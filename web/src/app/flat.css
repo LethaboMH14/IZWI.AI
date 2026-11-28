@@ -197,8 +197,10 @@
 .fs-phone .fs-scene-range { color: var(--z-ink-muted); }
 .fs-phone .fs-lines { max-height: 60vh; }
 
-/* Drawers */
+/* Drawers. The panel's close button exists only where the panel is a drawer; wider, there is nothing to close. */
+.fs .fs-project-head button { display: none; }
 @media (max-width: 1280px) {
+  .fs .fs-project-head button { display: inline-flex; }
   .fs { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) var(--z-agent-w); grid-template-rows: auto minmax(0, 1fr) 304px; grid-template-areas: "toggles toggles toggles" "editor text agent" "timeline timeline agent"; }
   .fs-toggles { display: flex; grid-area: toggles; gap: var(--z-s4); }
   .fs-toggle-agent { display: none; }

@@ -18,7 +18,7 @@
 | Public link to guest route | Anyone who receives or guesses a token | Link misuse, consent spoofing, private media exposure, spam |
 | Upload to worker and media tools | Creator-provided files, filenames and metadata | Parser/resource abuse, unsafe serving, command misuse |
 | App to AI provider | Creator prompt/media context, user-configured endpoint, provider response | Data disclosure, server-side request forgery, malformed proposal, misleading output |
-| App and worker to SQLite/local storage | Concurrent processes and filesystem state | Tenant mix-up, duplicate work, corruption or data loss |
+| App and worker to Postgres and media storage | Concurrent processes and filesystem state | Tenant mix-up, duplicate work, corruption or data loss |
 | Demo host to external network/tunnel | Network users and tunnel operator | Exposure beyond guest routes; configuration drift |
 
 ## Defensive controls and evidence

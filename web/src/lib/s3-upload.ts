@@ -138,8 +138,9 @@ export class S3Upload {
     return send();
   }
 
-  private async upload() {
+  private async upload(): Promise<void> {
     const base = "/api/upload/s3";
+    const resumed = !!this.uploadId;
     if (!this.uploadId) {
       const created = await this.request<{ uploadId: string; partBytes: number }>(base, {
         method: "POST", headers: { "content-type": "application/json" },
@@ -149,7 +150,17 @@ export class S3Upload {
       try { localStorage.setItem(this.fingerprint, this.uploadId); } catch { /* Resume remains available for this page lifetime. */ }
     }
     const id = encodeURIComponent(this.uploadId);
-    const status = await this.request<{ finished?: boolean; partBytes: number; parts: Part[] }>(`${base}/${id}`, { method: "GET" });
+    let status: { finished?: boolean; partBytes: number; parts: Part[] };
+    try {
+      status = await this.request<typeof status>(`${base}/${id}`, { method: "GET" });
+    } catch (error) {
+      // A remembered upload the server no longer knows: forget it and start this file again.
+      const gone = (error as { originalResponse?: { getStatus(): number } }).originalResponse?.getStatus() === 404;
+      if (!resumed || !gone) throw error;
+      try { localStorage.removeItem(this.fingerprint); } catch { /* nothing remembered to forget */ }
+      this.uploadId = null;
+      return this.upload();
+    }
     if (status.finished) {
       try { localStorage.removeItem(this.fingerprint); } catch { /* The server has completed the upload. */ }
       this.options.onProgress(this.file.size, this.file.size); this.options.onSuccess(); return;

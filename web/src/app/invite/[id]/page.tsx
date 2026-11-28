@@ -6,6 +6,7 @@ import { ArrowRight, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { Mark } from "@/components/Mark";
 import { auth } from "@/server/auth";
 import { getSession } from "@/server/guard";
+import { one } from "@/server/db";
 import "../../entry.css";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,12 @@ export default async function Invite({ params }: { params: Promise<{ id: string 
     problem = (e as { message?: string }).message ?? "";
   }
   if (!problem) redirect("/app");
+  // Already used by this very person (a second tab, a reload): they are in, so take them there.
+  const joined = await one(
+    `SELECT 1 FROM invitation i JOIN member m ON m."organizationId" = i."organizationId" AND m."userId" = ? WHERE i.id = ? AND i.status = 'accepted' AND lower(i.email) = lower(?)`,
+    session.user.id, id, session.user.email,
+  );
+  if (joined) redirect("/app");
 
   return (
     <main className="invite">

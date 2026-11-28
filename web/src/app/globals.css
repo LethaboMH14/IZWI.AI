@@ -1,4 +1,6 @@
 /* IZWI AI design tokens. Light ivory surfaces, amber and gold accents, charcoal type. No purple, no dark default. */
+/* Read by screen readers, not shown. Global, because any view may need it. */
+.sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 :root {
   --ivory: #faf8f4;
   --paper: #ffffff;

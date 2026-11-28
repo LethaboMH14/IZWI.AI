@@ -5,11 +5,12 @@ import { organization } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "@better-auth/passkey";
 import { Pool } from "pg";
-import { one } from "./db";
+import { one, surviveDrops } from "./db";
 import { STUDIO_URL } from "./env";
 import { audit } from "./audit";
 
 const authPool = process.env.IZWI_DB === "pglite" ? undefined : new Pool({ connectionString: process.env.DATABASE_URL });
+if (authPool) surviveDrops(authPool);
 
 export const auth = betterAuth({
   appName: "IZWI AI",

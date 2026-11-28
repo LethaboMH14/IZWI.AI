@@ -118,7 +118,7 @@ export function ProposalCard({ p, compact, localPending, setPending, announce, a
       )}
       {p.scope && !trim && <p className="ag-scope">{p.scope}</p>}
 
-      {changed && (
+      {changed && p.status === "proposed" && result?.kind !== "applied" && (
         <div className="ag-stale" role="status">
           <strong>Changed since the suggestion</strong>
           {canAsk && <Button size="sm" onClick={askAgain}>Ask again</Button>}

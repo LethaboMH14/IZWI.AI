@@ -52,7 +52,8 @@ export const POST = route<{ id: string }>(async (req, { id }) => {
     try { await persist(key, sourcePath, file.type || "application/octet-stream"); }
     finally { await rm(tempDir, { recursive: true, force: true }); }
   }
-  const job = await enqueueVoice({ workspaceId: ctx.workspaceId, projectId: project.id, idempotencyKey: `voice:${requestId}`, input: { key }, createdBy: ctx.userId });
+  // The worker only accepts a local recording stored under its own job id, so the job takes the id used in the key.
+  const job = await enqueueVoice({ id: idJob, workspaceId: ctx.workspaceId, projectId: project.id, idempotencyKey: `voice:${requestId}`, input: { key }, createdBy: ctx.userId });
   if (!job) { await removeObject(key); return Response.json({ error: "A voice transcription is already open.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } }); }
   const until = Date.now() + 60_000;
   let started = false;

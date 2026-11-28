@@ -4,6 +4,7 @@ import { useState } from "react";
 import { renderSVG } from "uqr";
 import { clock, ago } from "@/lib/format";
 import { CONSENT_SCOPES, consentScope, type ConsentScopeId } from "@/lib/consent-scope";
+import { LINK_DAYS } from "@/lib/limits";
 import type { TabProps } from "./types";
 import { Err, Pill, ShareLink, dateOf, useAct } from "./parts";
 import "@/app/consent-qr.css";
@@ -49,7 +50,7 @@ function ConsentQr({ url, name }: { url: string; name: string }) {
   );
 }
 
-function PersonCard({ person, projectId, links, act, busy }: { person: TabProps["state"]["people"][number]; projectId: string; links: TabProps["state"]["links"]; act: ReturnType<typeof useAct>["act"]; busy: string | null }) {
+function PersonCard({ person, projectId, links, canManage, act, busy }: { person: TabProps["state"]["people"][number]; projectId: string; links: TabProps["state"]["links"]; canManage: boolean; act: ReturnType<typeof useAct>["act"]; busy: string | null }) {
   const [scope, setScope] = useState<ConsentScopeId>("appearance");
   const [share, setShare] = useState<{ url: string; message: string } | null>(null);
   const [confirm, setConfirm] = useState(false);
@@ -89,26 +90,30 @@ function PersonCard({ person, projectId, links, act, busy }: { person: TabProps[
           {status === "revoked" && `Withdrawn${c.responded_name ? ` by ${c.responded_name}` : ""}${c.responded_at ? ` on ${dateOf(c.responded_at)}` : ""}.`}
         </p>
       )}
-      <div className="st-row">
-        <label className="st-scope-field" htmlFor={`sc-${person.id}`}><span>Scope for a new request</span>
-          <select id={`sc-${person.id}`} value={scope} onChange={(e) => setScope(e.target.value as ConsentScopeId)}>
-            {SCOPES.map(([id, s]) => <option key={id} value={id}>{s.label}</option>)}
-          </select>
-        </label>
-        <button type="button" className="btn btn-sm btn-gold" disabled={busy === "ask" + person.id} onClick={ask}>{c ? "Ask again" : "Ask for consent"}</button>
-        {!confirm ? (
-          <button type="button" className="btn btn-sm btn-quiet" onClick={() => setConfirm(true)}>Remove</button>
-        ) : (
-          <>
-            <button type="button" className="btn btn-sm btn-danger" disabled={busy === "rm" + person.id} onClick={() => act("rm" + person.id, "DELETE", `/api/items/person/${person.id}`)}>Yes, remove {person.name}</button>
-            <button type="button" className="btn btn-sm btn-quiet" onClick={() => setConfirm(false)}>Keep</button>
-          </>
-        )}
-      </div>
+      {canManage ? (
+        <div className="st-row">
+          <label className="st-scope-field" htmlFor={`sc-${person.id}`}><span>Scope for a new request</span>
+            <select id={`sc-${person.id}`} value={scope} onChange={(e) => setScope(e.target.value as ConsentScopeId)}>
+              {SCOPES.map(([id, s]) => <option key={id} value={id}>{s.label}</option>)}
+            </select>
+          </label>
+          <button type="button" className="btn btn-sm btn-gold" disabled={busy === "ask" + person.id} onClick={ask}>{c ? "Ask again" : "Ask for consent"}</button>
+          {!confirm ? (
+            <button type="button" className="btn btn-sm btn-quiet" onClick={() => setConfirm(true)}>Remove</button>
+          ) : (
+            <>
+              <button type="button" className="btn btn-sm btn-danger" disabled={busy === "rm" + person.id} onClick={() => act("rm" + person.id, "DELETE", `/api/items/person/${person.id}`)}>Yes, remove {person.name}</button>
+              <button type="button" className="btn btn-sm btn-quiet" onClick={() => setConfirm(false)}>Keep</button>
+            </>
+          )}
+        </div>
+      ) : (
+        <p className="fine">Only an owner or admin can ask for consent or remove a person.</p>
+      )}
       {confirm && <p className="fine">Removing a person also removes their consent record. Renders that were held for them are released if nothing else holds them.</p>}
-      {share && <ShareLink url={share.url} message={share.message} onDone={() => setShare(null)} note="This consent link works for 30 days. It is shown once and can't be shown again." />}
+      {share && <ShareLink url={share.url} message={share.message} onDone={() => setShare(null)} note={`This consent link works for ${LINK_DAYS} days. It is shown once and can't be shown again.`} />}
       {share && <ConsentQr url={share.url} name={person.name} />}
-      {!share && c && c.status === "requested" && (
+      {canManage && !share && c && c.status === "requested" && (
         <div className="cq-renew">
           <p className="fine">This link cannot be shown again. Make a new link if {person.name} has not got it.</p>
           {!renew ? (
@@ -178,7 +183,7 @@ export function ProtectTab({ state, refresh }: TabProps) {
         {state.people.length === 0 ? (
           <div className="st-empty"><b>No one added yet</b><p>If anyone other than you speaks or appears, add them and ask for their consent. Renders of the stretches they are in are held until they say yes.</p></div>
         ) : (
-          <ul className="st-list">{state.people.map((p) => <PersonCard key={p.id} person={p} projectId={pid} links={state.links} act={act} busy={busy} />)}</ul>
+          <ul className="st-list">{state.people.map((p) => <PersonCard key={p.id} person={p} projectId={pid} links={state.links} canManage={state.canManageConsent} act={act} busy={busy} />)}</ul>
         )}
         <form onSubmit={add} className="st-card soft" aria-label="Add a person">
           <h3>Add a person</h3>

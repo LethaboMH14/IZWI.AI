@@ -18,6 +18,8 @@ __pycache__/
 uploads/
 renders/
 models/
+# …but never source: the model-list API route lives in a folder named "models", and this rule once kept it out of Git.
+!web/src/**/models/
 .cache/
 # Local materialization
 work/
