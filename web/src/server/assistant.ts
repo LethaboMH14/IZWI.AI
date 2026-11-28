@@ -59,21 +59,21 @@ export function redactForMayLog(text: string, names: string[]) {
   return { text: out, count };
 }
 
-export function buildAssistantContext(ctx: Ctx, projectId: string, privacy: Privacy): AssistantContext {
-  const p = one<{ title: string; spoken_language: string; workspace_id: string }>(`SELECT title, spoken_language, workspace_id FROM project WHERE id = ? AND workspace_id = ?`, projectId, ctx.workspaceId);
+export async function buildAssistantContext(ctx: Ctx, projectId: string, privacy: Privacy): Promise<AssistantContext> {
+  const p = await one<{ title: string; spoken_language: string; workspace_id: string }>(`SELECT title, spoken_language, workspace_id FROM project WHERE id = ? AND workspace_id = ?`, projectId, ctx.workspaceId);
   if (!p) throw new HttpError(404, "Not found.");
-  const clips = all<{ id: string; start_ms: number; end_ms: number }>(`SELECT id, start_ms, end_ms FROM clip WHERE project_id = ? AND workspace_id = ? ORDER BY start_ms`, projectId, ctx.workspaceId);
-  const people = all<{ id: string; name: string; status: string | null }>(`SELECT p.id, p.name, (SELECT c.status FROM consent c WHERE c.person_id = p.id ORDER BY c.updated_at DESC LIMIT 1) status FROM person p WHERE p.project_id = ? AND p.workspace_id = ? ORDER BY p.created_at`, projectId, ctx.workspaceId);
-  const source = one<{ id: string; language: string }>(`SELECT id, language FROM caption_track WHERE project_id = ? AND workspace_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, projectId, ctx.workspaceId);
+  const clips = await all<{ id: string; start_ms: number; end_ms: number }>(`SELECT id, start_ms, end_ms FROM clip WHERE project_id = ? AND workspace_id = ? ORDER BY start_ms`, projectId, ctx.workspaceId);
+  const people = await all<{ id: string; name: string; status: string | null }>(`SELECT p.id, p.name, (SELECT c.status FROM consent c WHERE c.person_id = p.id ORDER BY c.updated_at DESC LIMIT 1) status FROM person p WHERE p.project_id = ? AND p.workspace_id = ? ORDER BY p.created_at`, projectId, ctx.workspaceId);
+  const source = await one<{ id: string; language: string }>(`SELECT id, language FROM caption_track WHERE project_id = ? AND workspace_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, projectId, ctx.workspaceId);
   let excludedLines = 0;
   let excerpt = "";
   if (source) {
-    const lines = all<{ id: string; idx: number; text: string }>(`SELECT id, idx, text FROM caption_line WHERE track_id = ? ORDER BY idx`, source.id);
+    const lines = await all<{ id: string; idx: number; text: string }>(`SELECT id, idx, text FROM caption_line WHERE track_id = ? ORDER BY idx`, source.id);
     const kept: string[] = [];
     let usedChars = 0;
     for (const line of lines) {
       const textHash = hashText(line.text);
-      const scan = one<{ text_hash: string; score: number }>(`SELECT text_hash, score FROM line_injection_scan WHERE line_id = ?`, line.id);
+      const scan = await one<{ text_hash: string; score: number }>(`SELECT text_hash, score FROM line_injection_scan WHERE line_id = ?`, line.id);
       if (scan?.text_hash === textHash && scan.score > INJECTION_SCORE) { excludedLines++; continue; }
       const row = `[${line.idx}] ${line.text}`;
       const remaining = 4000 - usedChars;
@@ -92,7 +92,7 @@ export function buildAssistantContext(ctx: Ctx, projectId: string, privacy: Priv
 
 export type Proposal = { planId: string; title: string; reason: string; source?: { lineId: string; index: number; atMs: number }; preview: { label: string; before?: string; after?: string }[]; scope?: string; kind: "action" | "jobs" };
 
-export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; source?: Proposal["source"]; preview: Proposal["preview"]; scope?: string }>, hasTranscript: boolean, decodedInputs: unknown[] = []) {
+export async function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; source?: Proposal["source"]; preview: Proposal["preview"]; scope?: string }>, hasTranscript: boolean, decodedInputs: unknown[] = []) {
   const action = (actionName: string, schema: z.ZodTypeAny, title: (v: Record<string, unknown>) => string) => tool({
     description: "Create a proposal for the person to review. This tool never changes project data.", inputSchema: schema as never,
     execute: async (input: Record<string, unknown>) => {
@@ -102,12 +102,12 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
       let scopeText: string | undefined;
       if (actionName === "requestConsent") {
         const personId = String(input.personId);
-        if (!one(`SELECT 1 FROM person WHERE id = ? AND project_id = ? AND workspace_id = ?`, personId, projectId, ctx.workspaceId)) throw new HttpError(404, "Person not found.");
-        const current = one<{ id: string; updated_at: number; seq: number | null }>(`SELECT c.id, c.updated_at, (SELECT MAX(seq) FROM consent_ledger WHERE consent_id = c.id) seq FROM consent c WHERE c.person_id = ? AND c.project_id = ? AND c.workspace_id = ? ORDER BY c.updated_at DESC LIMIT 1`, personId, projectId, ctx.workspaceId);
+        if (!await one(`SELECT 1 FROM person WHERE id = ? AND project_id = ? AND workspace_id = ?`, personId, projectId, ctx.workspaceId)) throw new HttpError(404, "Person not found.");
+        const current = await one<{ id: string; updated_at: number; seq: number | null }>(`SELECT c.id, c.updated_at, (SELECT MAX(seq) FROM consent_ledger WHERE consent_id = c.id) seq FROM consent c WHERE c.person_id = ? AND c.project_id = ? AND c.workspace_id = ? ORDER BY c.updated_at DESC LIMIT 1`, personId, projectId, ctx.workspaceId);
         consent = { personId, id: current?.id ?? null, updatedAt: current?.updated_at ?? null, ledgerSeq: current?.seq ?? null };
       }
       if (actionName === "addGlossaryTerm" && typeof input.heard === "string" && input.heard) {
-        const affected = previewGlossaryChanges(ctx.workspaceId, { term: String(input.term), heard: input.heard });
+        const affected = await previewGlossaryChanges(ctx.workspaceId, { term: String(input.term), heard: input.heard });
         lines = affected.map(({ id, textHash }) => ({ id, textHash }));
         scopeText = `Teaches this spelling to the whole workspace; changes ${affected.length} draft lines in ${new Set(affected.map((line) => line.projectId)).size} projects now`;
       } else if (actionName === "addGlossaryTerm") {
@@ -120,9 +120,9 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
     },
   } as never);
   const clipId = z.string().min(1);
-  const currentClip = (id: string) => one<{ id: string; updated_at: number; start_ms: number; end_ms: number; title: string; status: string }>(`SELECT id, updated_at, start_ms, end_ms, title, status FROM clip WHERE id = ? AND project_id = ? AND workspace_id = ?`, id, projectId, ctx.workspaceId);
+  const currentClip = async (id: string) => await one<{ id: string; updated_at: number; start_ms: number; end_ms: number; title: string; status: string }>(`SELECT id, updated_at, start_ms, end_ms, title, status FROM clip WHERE id = ? AND project_id = ? AND workspace_id = ?`, id, projectId, ctx.workspaceId);
   // The transcript line where a clip starts, so each card can say "from transcript line N".
-  const sourceLine = (atMs: number) => one<{ id: string; idx: number; start_ms: number }>(
+  const sourceLine = async (atMs: number) => await one<{ id: string; idx: number; start_ms: number }>(
     `SELECT l.id, l.idx, l.start_ms FROM caption_line l JOIN caption_track t ON t.id = l.track_id
      WHERE t.project_id = ? AND t.workspace_id = ? AND t.kind = 'source' AND l.end_ms > ? ORDER BY l.start_ms LIMIT 1`,
     projectId, ctx.workspaceId, atMs,
@@ -135,17 +135,17 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
     execute: async (raw: Record<string, unknown>) => {
       decodedInputs.push(raw);
       const { reason, ...input } = raw as Record<string, unknown> & { reason?: string };
-      const id = String(input.clipId ?? ""); const c = currentClip(id);
+      const id = String(input.clipId ?? ""); const c = await currentClip(id);
       if (!c) throw new HttpError(404, "Clip not found.");
       // A proposal that would change nothing is noise: say so to the model instead of showing a card.
       if (NOOP[actionName] && c.status === NOOP[actionName]) return { proposed: false, note: `That clip is already ${c.status}.` };
       if (actionName === "trimClip") {
-        const duration = one<{ duration_ms: number | null }>(`SELECT duration_ms FROM asset WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, projectId)?.duration_ms;
+        const duration = (await one<{ duration_ms: number | null }>(`SELECT duration_ms FROM asset WHERE project_id = ? AND kind = 'source' ORDER BY created_at DESC LIMIT 1`, projectId))?.duration_ms;
         if (Number(input.startMs) < 0 || Number(input.endMs) <= Number(input.startMs) || (duration && Number(input.endMs) > duration)) throw new HttpError(400, "Clip times must stay within the source recording.");
       }
       const step = { kind: "action", action: actionName, args: input, pre: { clips: [{ id, updatedAt: c.updated_at, textHash: hashText(c.title) }], lines: [], consent: null } };
       StepSchema.parse(step);
-      const line = sourceLine(c.start_ms);
+      const line = await sourceLine(c.start_ms);
       proposals.push({
         steps: [step], title: title(input, c),
         reason: typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 300) : "Suggested by the studio assistant.",
@@ -176,21 +176,21 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
   return tools;
 }
 
-export function saveAssistantTurn(args: { threadId: string; projectId: string; workspaceId: string; provider: ProviderRow; text: string; assistantText: string; redacted: number; excludedLines?: number; proposals: Proposal[]; requestId: string; tokensIn: number | null; tokensOut: number | null }) {
+export async function saveAssistantTurn(args: { threadId: string; projectId: string; workspaceId: string; provider: ProviderRow; text: string; assistantText: string; redacted: number; excludedLines?: number; proposals: Proposal[]; requestId: string; tokensIn: number | null; tokensOut: number | null }) {
   const t = now();
-  run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, ?, ?, ?, '[]', 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.text, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, args.requestId, args.tokensIn, args.tokensOut, t);
+  await run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, ?, ?, ?, '[]', 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.text, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, args.requestId, args.tokensIn, args.tokensOut, t);
   // Only the assistant's row carries excluded_lines: it is what the badge on that reply reports.
-  run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, excluded_lines, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.assistantText, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, args.excludedLines ?? 0, JSON.stringify(args.proposals), args.requestId, args.tokensIn, args.tokensOut, t + 1);
+  await run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, excluded_lines, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.assistantText, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, args.excludedLines ?? 0, JSON.stringify(args.proposals), args.requestId, args.tokensIn, args.tokensOut, t + 1);
 }
 
-export function persistProposals(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; source?: Proposal["source"]; preview: Proposal["preview"]; scope?: string }>, provider: ProviderRow, threadId?: string) {
+export async function persistProposals(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; source?: Proposal["source"]; preview: Proposal["preview"]; scope?: string }>, provider: ProviderRow, threadId?: string) {
   const result: Proposal[] = [];
   for (const p of proposals) {
     const steps = p.steps.map((s) => StepSchema.parse(s));
-    const id = savePlan(ctx, projectId, p.reason.slice(0, 300), `assistant:${provider.id}/${provider.model}`, steps);
+    const id = await savePlan(ctx, projectId, p.reason.slice(0, 300), `assistant:${provider.id}/${provider.model}`, steps);
     // Creation is audited next to approval (planner.ts), so the trail shows what the assistant suggested even if nobody acts on it.
     // Names only: action or job verbs, never arguments, which can carry transcript text.
-    audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "assistant", action: "assistant.proposal_created", target: id,
+    await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "assistant", action: "assistant.proposal_created", target: id,
       meta: { projectId, threadId: threadId ?? null, provider: provider.id, model: provider.model, steps: steps.map((s) => (s.kind === "action" ? s.action : s.verb)) } });
     result.push({ planId: id, title: p.title, reason: p.reason, ...(p.source ? { source: p.source } : {}), preview: p.preview, ...(p.scope ? { scope: p.scope } : {}), kind: p.steps.some((s) => (s as { kind?: string }).kind === "job") ? "jobs" : "action" });
   }

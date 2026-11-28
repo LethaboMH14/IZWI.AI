@@ -10,7 +10,7 @@ import "../entry.css";
 
 export const dynamic = "force-dynamic";
 
-type Row = ReturnType<typeof projectList>[number];
+type Row = Awaited<ReturnType<typeof projectList>>[number];
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -40,8 +40,8 @@ function chips(p: Row) {
 
 export default async function Home() {
   const ctx = await pageCtx();
-  const rows = projectList(ctx);
-  const ws = one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
+  const rows = await projectList(ctx);
+  const ws = await one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
   const first = ctx.userName.trim().split(/\s+/)[0] || "there";
 
   if (rows.length === 0) {

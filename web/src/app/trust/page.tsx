@@ -133,9 +133,9 @@ function rows(): Row[] {
 
 const short = (hash: string) => `${hash.slice(0, 12)}…${hash.slice(-6)}`;
 
-export default function TrustPage() {
+export default async function TrustPage() {
   const list = rows();
-  const head = ledgerHead();
+  const head = await ledgerHead();
   const counts = { implemented: 0, partial: 0, planned: 0 } as Record<Status, number>;
   for (const r of list) counts[r.status]++;
   return (

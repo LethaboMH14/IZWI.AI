@@ -12,8 +12,8 @@ export const runtime = "nodejs";
 export const GET = route(async () => {
   const ctx = await requireCtx();
   return {
-    members: all(`SELECT m.id, m.role, u.name, u.email FROM member m JOIN "user" u ON u.id = m.userId WHERE m.organizationId = ? ORDER BY m.createdAt`, ctx.workspaceId),
-    invites: all<{ id: string; email: string; role: string; status: string; expiresAt: string }>(`SELECT id, email, role, status, expiresAt FROM invitation WHERE organizationId = ? AND status = 'pending' ORDER BY expiresAt DESC`, ctx.workspaceId)
+    members: await all(`SELECT m.id, m.role, u.name, u.email FROM member m JOIN "user" u ON u.id = m."userId" WHERE m."organizationId" = ? ORDER BY m."createdAt"`, ctx.workspaceId),
+    invites: (await all<{ id: string; email: string; role: string; status: string; expiresAt: string }>(`SELECT id, email, role, status, "expiresAt" FROM invitation WHERE "organizationId" = ? AND status = 'pending' ORDER BY "expiresAt" DESC`, ctx.workspaceId))
       .map((i) => ({ ...i, url: `${PUBLIC_URL}/invite/${i.id}` })),
     me: { role: ctx.role, userId: ctx.userId },
   };

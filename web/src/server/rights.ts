@@ -4,14 +4,14 @@ import { all, one } from "./db";
 
 export type Gate = { ok: boolean; declaration: boolean; waiting: { personId: string; name: string; status: string }[] };
 
-export function gateFor(projectId: string, startMs: number, endMs: number): Gate {
-  const declaration = !!one(`SELECT id FROM declaration WHERE project_id = ? LIMIT 1`, projectId);
-  const people = all<{ id: string; name: string; whole_recording: number }>(`SELECT id, name, whole_recording FROM person WHERE project_id = ?`, projectId);
+export async function gateFor(projectId: string, startMs: number, endMs: number): Promise<Gate> {
+  const declaration = !!(await one(`SELECT id FROM declaration WHERE project_id = ? LIMIT 1`, projectId));
+  const people = await all<{ id: string; name: string; whole_recording: number }>(`SELECT id, name, whole_recording FROM person WHERE project_id = ?`, projectId);
   const waiting: Gate["waiting"] = [];
   for (const p of people) {
-    const inClip = p.whole_recording === 1 || !!one(`SELECT 1 FROM appearance WHERE person_id = ? AND start_ms < ? AND end_ms > ?`, p.id, endMs, startMs);
+    const inClip = p.whole_recording === 1 || !!(await one(`SELECT 1 FROM appearance WHERE person_id = ? AND start_ms < ? AND end_ms > ?`, p.id, endMs, startMs));
     if (!inClip) continue;
-    const c = one<{ status: string }>(`SELECT status FROM consent WHERE person_id = ? ORDER BY requested_at DESC LIMIT 1`, p.id);
+    const c = await one<{ status: string }>(`SELECT status FROM consent WHERE person_id = ? ORDER BY requested_at DESC LIMIT 1`, p.id);
     if (c?.status !== "granted") waiting.push({ personId: p.id, name: p.name, status: c?.status ?? "not asked" });
   }
   return { ok: declaration && waiting.length === 0, declaration, waiting };

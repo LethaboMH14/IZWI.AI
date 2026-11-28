@@ -7,7 +7,7 @@ async function main() {
   loadLocalEnv();
   const { ledgerKeys, verifyLedger } = await import("../src/server/ledger");
   const trusted = new Set([ledgerKeys().pubHex, ...(process.env.IZWI_LEDGER_OLD_KEYS ?? "").split(",").map((s) => s.trim()).filter(Boolean)]);
-  const r = verifyLedger(trusted);
+  const r = await verifyLedger(trusted);
   if (!r.ok) {
     console.error(`ledger  BROKEN at entry ${r.seq}: ${r.reason}`);
     process.exit(1);

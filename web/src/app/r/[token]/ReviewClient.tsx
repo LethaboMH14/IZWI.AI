@@ -100,7 +100,7 @@ export function ReviewClient({ token, data }: { token: string; data: ReviewData 
     if (!text) return;
     const atMs = Math.round(now);
     if (await post("comment", { action: "comment", atMs, body: text })) {
-      addComment({ author: name.trim(), at_ms: atMs, body: text, kind: "note" });
+      await addComment({ author: name.trim(), at_ms: atMs, body: text, kind: "note" });
       setBody("");
     }
   };
@@ -116,7 +116,7 @@ export function ReviewClient({ token, data }: { token: string; data: ReviewData 
     const text = suggestBody.trim();
     if (!text) return;
     if (await post(`sg-${l.id}`, { action: "comment", atMs: l.startMs, lineId: l.id, body: text })) {
-      addComment({ author: name.trim(), at_ms: l.startMs, body: `Line ${l.idx + 1}: ${text}`, kind: "note" });
+      await addComment({ author: name.trim(), at_ms: l.startMs, body: `Line ${l.idx + 1}: ${text}`, kind: "note" });
       setSuggest(null);
       setSuggestBody("");
     }

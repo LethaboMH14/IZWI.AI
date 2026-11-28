@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { db, newId } from "./db";
+import { lockKey, newId, one, run, tx } from "./db";
 
 const ruleSchema = z.object({
   baseUrl: z.url({ protocol: /^https$/ }).refine((url) => {
@@ -21,7 +21,7 @@ export function trialEnabled() {
 }
 
 /** Charge the full operator-approved estimate before sending. Unknown charges remain reserved. */
-export function reserveTrialCall(input: { base_url: string; model: string | null; workspace_id: string }, url: string) {
+export async function reserveTrialCall(input: { base_url: string; model: string | null; workspace_id: string }, url: string) {
   if (!trialEnabled()) return null;
   let rules: z.infer<typeof rulesSchema>;
   try {
@@ -35,32 +35,36 @@ export function reserveTrialCall(input: { base_url: string; model: string | null
     throw new TrialPolicyError("This provider or model is outside the hosted trial policy.");
   }
   const route = JSON.stringify([rule.baseUrl, rule.model]);
-  return db.transaction(() => {
-    const usage = db.prepare(
+  // One reservation at a time per route, so two requests can never both pass the cap.
+  return tx(async () => {
+    await lockKey(`trial:${route}`);
+    const usage = (await one<{ requests: number; micros: number }>(
       "SELECT COUNT(*) AS requests, COALESCE(SUM(amount), 0) AS micros FROM usage_event WHERE unit = ? AND provider = ?",
-    ).get(RESERVATION, route) as { requests: number; micros: number };
+      RESERVATION, route,
+    ))!;
     if (usage.requests >= rule.maxRequests || usage.micros + rule.maxMicrosPerRequest > rule.capMicros) {
       throw new TrialPolicyError("The hosted trial request or spending cap has been reached.");
     }
     const id = newId("trial");
-    addUsage(id, input.workspace_id, RESERVATION, rule.maxMicrosPerRequest, route);
+    await addUsage(id, input.workspace_id, RESERVATION, rule.maxMicrosPerRequest, route);
     return { id, route, workspaceId: input.workspace_id };
-  }).immediate();
+  });
 }
 
-type Receipt = NonNullable<ReturnType<typeof reserveTrialCall>>;
+type Receipt = NonNullable<Awaited<ReturnType<typeof reserveTrialCall>>>;
 
-export function recordTrialTokens(receipt: Receipt | null, input: unknown, output: unknown) {
+export async function recordTrialTokens(receipt: Receipt | null, input: unknown, output: unknown) {
   if (!receipt) return;
   for (const [unit, count] of [["trial_input_tokens", input], ["trial_output_tokens", output]] as const) {
     if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) {
-      addUsage(`${receipt.id}:${unit}`, receipt.workspaceId, unit, count, receipt.route);
+      await addUsage(`${receipt.id}:${unit}`, receipt.workspaceId, unit, count, receipt.route);
     }
   }
 }
 
-function addUsage(id: string, workspaceId: string, unit: string, amount: number, provider: string) {
-  db.prepare(
+async function addUsage(id: string, workspaceId: string, unit: string, amount: number, provider: string) {
+  await run(
     "INSERT INTO usage_event (id, workspace_id, unit, amount, provider, idempotency_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-  ).run(id, workspaceId, unit, amount, provider, id, Date.now());
+    id, workspaceId, unit, amount, provider, id, Date.now(),
+  );
 }

@@ -10,15 +10,15 @@ export const runtime = "nodejs";
 
 export const GET = route(async () => {
   const ctx = await requireCtx();
-  const p = providerFor(ctx.workspaceId, "plan");
+  const p = await providerFor(ctx.workspaceId, "plan");
   return { model: p ? `${p.label} · ${p.model}` : null };
 });
 
 export const POST = route(async (req) => {
   const ctx = await requireCtx();
-  limit(`plan:${ctx.workspaceId}:${ctx.userId}`, LIMIT.plan);
+  await limit(`plan:${ctx.workspaceId}:${ctx.userId}`, LIMIT.plan);
   const x = await body(req, z.object({ projectId: z.string(), prompt: z.string().trim().min(3).max(600) }));
-  projectOf(ctx, x.projectId);
+  await projectOf(ctx, x.projectId);
   let intents = ruleIntents(x.prompt);
   let planner = "IZWI rules";
   let note: string | null = null;
@@ -34,7 +34,7 @@ export const POST = route(async (req) => {
     note = `${e instanceof ProviderError ? e.message : "The planning model did not answer."} Built-in rules made this plan.`;
   }
   if (!intents.length) fail(422, "I could not turn that into steps. Name what you want made: clips, captions in a language, a render or a package for your editor.");
-  const steps = describe(intents, projectPlanState(ctx.workspaceId, x.projectId));
-  const id = savePlan(ctx, x.projectId, x.prompt, planner, steps);
+  const steps = describe(intents, await projectPlanState(ctx.workspaceId, x.projectId));
+  const id = await savePlan(ctx, x.projectId, x.prompt, planner, steps);
   return { id, planner, steps, note };
 });

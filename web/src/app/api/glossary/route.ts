@@ -6,4 +6,4 @@ import { GlossaryIn, learnGlossary } from "@/server/actions";
 
 export const runtime = "nodejs";
 
-export const POST = route(async (req) => learnGlossary(await requireCtx(), await body(req, GlossaryIn)));
+export const POST = route(async (req) => await learnGlossary(await requireCtx(), await body(req, GlossaryIn)));

@@ -1,7 +1,7 @@
 // Durable job queue in the database. The database is the record; no separate broker to drift out of sync.
 // Claiming is one atomic UPDATE ... RETURNING. Leases expire, so a crashed worker's job is picked up again.
 // Idempotency keys make "run this again" safe: the same key returns the existing job instead of a duplicate.
-import { all, newId, now, one, parse, run, tx } from "./db";
+import { all, lockKey, newId, now, one, parse, run, tx } from "./db";
 import { gateFor } from "./rights";
 
 export type JobType = "probe" | "proxy" | "transcribe" | "voice_transcribe" | "suggest_clips" | "translate" | "publish" | "render" | "package";
@@ -15,39 +15,42 @@ export type JobRow = {
   priority: number;
 };
 
-export function enqueue(j: {
+export async function enqueue(j: {
   workspaceId: string; projectId: string | null; type: JobType; input?: unknown;
   idempotencyKey?: string; dependsOn?: string | null; createdBy?: string | null; maxAttempts?: number; priority?: number;
-}): JobRow {
+}): Promise<JobRow> {
   // Keys are scoped to the workspace: the same key in two workspaces names two different jobs.
   const key = j.idempotencyKey ? `${j.workspaceId}:${j.idempotencyKey}` : null;
-  return tx(() => {
+  return tx(async () => {
+    if (key) await lockKey(`job:${j.workspaceId}:${key}`);
     if (key) {
-      const existing = one<JobRow>(`SELECT * FROM job WHERE idempotency_key = ? AND workspace_id = ?`, key, j.workspaceId);
+      const existing = await one<JobRow>(`SELECT * FROM job WHERE idempotency_key = ? AND workspace_id = ?`, key, j.workspaceId);
       if (existing && existing.status !== "failed" && existing.status !== "cancelled") return existing;
-      if (existing) run(`UPDATE job SET idempotency_key = NULL WHERE id = ?`, existing.id); // allow a fresh retry
+      if (existing) await run(`UPDATE job SET idempotency_key = NULL WHERE id = ?`, existing.id); // allow a fresh retry
     }
     const id = newId("job");
-    run(
+    await run(
       `INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, depends_on, run_after, created_by, created_at, max_attempts, priority)
        VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
       id, j.workspaceId, j.projectId, j.type, JSON.stringify(j.input ?? {}), key,
       j.dependsOn ?? null, now(), j.createdBy ?? null, now(), j.maxAttempts ?? 3, j.priority ?? 0,
     );
-    return one<JobRow>(`SELECT * FROM job WHERE id = ?`, id)!;
+    return (await one<JobRow>(`SELECT * FROM job WHERE id = ?`, id))!;
   });
 }
 
-export function enqueueVoice(j: { workspaceId: string; projectId: string; input: unknown; createdBy: string; idempotencyKey: string }): JobRow | null {
-  return tx(() => {
-    if (one(`SELECT 1 FROM job WHERE created_by = ? AND type = 'voice_transcribe' AND status IN ('queued','running') LIMIT 1`, j.createdBy)) return null;
+export async function enqueueVoice(j: { workspaceId: string; projectId: string; input: unknown; createdBy: string; idempotencyKey: string }): Promise<JobRow | null> {
+  return tx(async () => {
     const id = newId("job");
-    run(`INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, run_after, created_by, created_at, max_attempts, priority) VALUES (?, ?, ?, 'voice_transcribe', 'queued', ?, ?, ?, ?, ?, 3, 10)`, id, j.workspaceId, j.projectId, JSON.stringify(j.input), `${j.workspaceId}:${j.idempotencyKey}`, now(), j.createdBy, now());
-    return one<JobRow>(`SELECT * FROM job WHERE id = ?`, id)!;
+    const row = await one<JobRow>(`INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, run_after, created_by, created_at, max_attempts, priority) VALUES (?, ?, ?, 'voice_transcribe', 'queued', ?, ?, ?, ?, ?, 3, 10) ON CONFLICT DO NOTHING RETURNING *`, id, j.workspaceId, j.projectId, JSON.stringify(j.input), `${j.workspaceId}:${j.idempotencyKey}`, now(), j.createdBy, now());
+    if (row) return row;
+    const existing = await one<JobRow>(`SELECT * FROM job WHERE idempotency_key = ? AND workspace_id = ?`, `${j.workspaceId}:${j.idempotencyKey}`, j.workspaceId);
+    if (existing) return existing;
+    return null;
   });
 }
 
-export function claim(workerId: string, leaseMs: number): JobRow | undefined {
+export async function claim(workerId: string, leaseMs: number): Promise<JobRow | undefined> {
   const t = now();
   return one<JobRow>(
     `UPDATE job SET status = 'running', worker_id = ?, lease_until = ?, attempts = attempts + 1, started_at = COALESCE(started_at, ?), error = NULL
@@ -55,15 +58,15 @@ export function claim(workerId: string, leaseMs: number): JobRow | undefined {
        SELECT j.id FROM job j
        WHERE j.status = 'queued' AND j.run_after <= ?
          AND (j.depends_on IS NULL OR EXISTS (SELECT 1 FROM job d WHERE d.id = j.depends_on AND d.status = 'succeeded'))
-       ORDER BY j.priority DESC, j.created_at LIMIT 1
+       ORDER BY j.priority DESC, j.created_at FOR UPDATE SKIP LOCKED LIMIT 1
      )
      RETURNING *`,
     workerId, t + leaseMs, t, t,
   );
 }
 
-export function heartbeat(id: string, workerId: string, leaseMs: number, progress?: number, stage?: string) {
-  run(
+export async function heartbeat(id: string, workerId: string, leaseMs: number, progress?: number, stage?: string) {
+  await run(
     `UPDATE job SET lease_until = ?, progress = COALESCE(?, progress), stage = COALESCE(?, stage) WHERE id = ? AND worker_id = ? AND status = 'running'`,
     now() + leaseMs, progress ?? null, stage ?? null, id, workerId,
   );
@@ -71,88 +74,88 @@ export function heartbeat(id: string, workerId: string, leaseMs: number, progres
 
 // Only the worker that holds the lease may finish a job, and only while it is still running. A job cancelled meanwhile,
 // or one whose lease expired and was claimed by another worker, is left alone. Each returns whether it applied.
-export function succeed(id: string, workerId: string, output: unknown) {
-  return run(
+export async function succeed(id: string, workerId: string, output: unknown) {
+  return (await run(
     `UPDATE job SET status = 'succeeded', output = ?, progress = 1, stage = 'done', lease_until = NULL, finished_at = ? WHERE id = ? AND worker_id = ? AND status = 'running'`,
     JSON.stringify(output ?? {}), now(), id, workerId,
-  ).changes > 0;
+  )).changes > 0;
 }
 
 export function failJob(id: string, workerId: string, message: string, retryable: boolean) {
-  return tx(() => {
-    const j = one<JobRow>(`SELECT * FROM job WHERE id = ? AND worker_id = ? AND status = 'running'`, id, workerId);
+  return tx(async () => {
+    const j = await one<JobRow>(`SELECT * FROM job WHERE id = ? AND worker_id = ? AND status = 'running'`, id, workerId);
     if (!j) return false;
     if (retryable && j.attempts < j.max_attempts) {
       const backoff = 5000 * 2 ** (j.attempts - 1);
-      run(`UPDATE job SET status = 'queued', error = ?, run_after = ?, lease_until = NULL, worker_id = NULL WHERE id = ?`, message, now() + backoff, id);
+      await run(`UPDATE job SET status = 'queued', error = ?, run_after = ?, lease_until = NULL, worker_id = NULL WHERE id = ?`, message, now() + backoff, id);
     } else {
-      run(`UPDATE job SET status = 'failed', error = ?, lease_until = NULL, finished_at = ? WHERE id = ?`, message, now(), id);
+      await run(`UPDATE job SET status = 'failed', error = ?, lease_until = NULL, finished_at = ? WHERE id = ?`, message, now(), id);
     }
     return true;
   });
 }
 
-export function block(id: string, workerId: string, reason: string) {
-  return run(`UPDATE job SET status = 'blocked', error = ?, lease_until = NULL, worker_id = NULL WHERE id = ? AND worker_id = ? AND status = 'running'`, reason, id, workerId).changes > 0;
+export async function block(id: string, workerId: string, reason: string) {
+  return (await run(`UPDATE job SET status = 'blocked', error = ?, lease_until = NULL, worker_id = NULL WHERE id = ? AND worker_id = ? AND status = 'running'`, reason, id, workerId)).changes > 0;
 }
 
-export function cancel(id: string, workspaceId: string) {
-  return run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status IN ('queued','blocked','running')`, now(), id, workspaceId).changes > 0;
+export async function cancel(id: string, workspaceId: string) {
+  return (await run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status IN ('queued','blocked','running')`, now(), id, workspaceId)).changes > 0;
 }
 
-export function cancelQueued(id: string, workspaceId: string) {
-  return run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status = 'queued'`, now(), id, workspaceId).changes > 0;
+export async function cancelQueued(id: string, workspaceId: string) {
+  return (await run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status = 'queued'`, now(), id, workspaceId)).changes > 0;
 }
 
-export function cancelQueuedOrBlocked(id: string, workspaceId: string) {
-  return run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status IN ('queued','blocked')`, now(), id, workspaceId).changes > 0;
+export async function cancelQueuedOrBlocked(id: string, workspaceId: string) {
+  return (await run(`UPDATE job SET status = 'cancelled', finished_at = ? WHERE id = ? AND workspace_id = ? AND status IN ('queued','blocked')`, now(), id, workspaceId)).changes > 0;
 }
 
-export function acquireWhisperLease(jobId: string, leaseMs = 300_000) {
+export async function acquireWhisperLease(jobId: string, leaseMs = 300_000) {
   const t = now();
-  return Boolean(one(`INSERT INTO whisper_lease (id, job_id, expires_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET job_id = excluded.job_id, expires_at = excluded.expires_at WHERE whisper_lease.expires_at <= ? RETURNING job_id`, jobId, t + leaseMs, t));
+  return Boolean(await one(`INSERT INTO whisper_lease (id, job_id, expires_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET job_id = excluded.job_id, expires_at = excluded.expires_at WHERE whisper_lease.expires_at <= ? RETURNING job_id`, jobId, t + leaseMs, t));
 }
 
-export function renewWhisperLease(jobId: string, leaseMs = 300_000) {
-  return run(`UPDATE whisper_lease SET expires_at = ? WHERE id = 1 AND job_id = ? AND expires_at > ?`, now() + leaseMs, jobId, now()).changes > 0;
+export async function renewWhisperLease(jobId: string, leaseMs = 300_000) {
+  return (await run(`UPDATE whisper_lease SET expires_at = ? WHERE id = 1 AND job_id = ? AND expires_at > ?`, now() + leaseMs, jobId, now())).changes > 0;
 }
 
-export function releaseWhisperLease(jobId: string) {
-  return run(`DELETE FROM whisper_lease WHERE id = 1 AND job_id = ?`, jobId).changes > 0;
+export async function releaseWhisperLease(jobId: string) {
+  return (await run(`DELETE FROM whisper_lease WHERE id = 1 AND job_id = ?`, jobId)).changes > 0;
 }
 
-export function deferWhisperJob(id: string, workerId: string, delayMs = 2000) {
-  return run(`UPDATE job SET status = 'queued', attempts = MAX(0, attempts - 1), run_after = ?, lease_until = NULL, worker_id = NULL WHERE id = ? AND worker_id = ? AND status = 'running'`, now() + delayMs, id, workerId).changes > 0;
+export async function deferWhisperJob(id: string, workerId: string, delayMs = 2000) {
+  return (await run(`UPDATE job SET status = 'queued', attempts = GREATEST(0, attempts - 1), run_after = ?, lease_until = NULL, worker_id = NULL WHERE id = ? AND worker_id = ? AND status = 'running'`, now() + delayMs, id, workerId)).changes > 0;
 }
 
-function queueRenderOutput(job: JobRow): boolean {
+async function queueRenderOutput(job: JobRow): Promise<boolean> {
   const outputId = parse<{ outputId?: string }>(job.input, {}).outputId;
   if (!outputId) return false;
-  const output = one<{ id: string; project_id: string; start_ms: number; end_ms: number }>(
+  const output = await one<{ id: string; project_id: string; start_ms: number; end_ms: number }>(
     `SELECT o.id, o.project_id, c.start_ms, c.end_ms FROM output o JOIN clip c ON c.id = o.clip_id WHERE o.id = ? AND o.job_id = ? AND o.workspace_id = ? AND o.status IN ('queued','failed','blocked')`, outputId, job.id, job.workspace_id,
   );
-  if (!output || !gateFor(output.project_id, output.start_ms, output.end_ms).ok) return false;
-  run(`UPDATE output SET status = 'queued', note = NULL, updated_at = ? WHERE id = ?`, now(), output.id);
+  if (!output || !(await gateFor(output.project_id, output.start_ms, output.end_ms)).ok) return false;
+  await run(`UPDATE output SET status = 'queued', note = NULL, updated_at = ? WHERE id = ?`, now(), output.id);
   return true;
 }
 
 export function retry(id: string, workspaceId: string) {
-  return tx(() => {
-    const job = one<JobRow>(`SELECT * FROM job WHERE id = ? AND workspace_id = ? AND status IN ('failed','cancelled','blocked')`, id, workspaceId);
-    if (!job || (job.type === "render" && !queueRenderOutput(job))) return false;
-    return run(`UPDATE job SET status = 'queued', run_after = ?, max_attempts = attempts + 3, error = NULL, progress = 0, stage = NULL, finished_at = NULL, worker_id = NULL, lease_until = NULL WHERE id = ?`, now(), id).changes > 0;
+  return tx(async () => {
+    const job = await one<JobRow>(`SELECT * FROM job WHERE id = ? AND workspace_id = ? AND status IN ('failed','cancelled','blocked')`, id, workspaceId);
+    if (!job || (job.type === "render" && !(await queueRenderOutput(job)))) return false;
+    return (await run(`UPDATE job SET status = 'queued', run_after = ?, max_attempts = attempts + 3, error = NULL, progress = 0, stage = NULL, finished_at = NULL, worker_id = NULL, lease_until = NULL WHERE id = ?`, now(), id)).changes > 0;
   });
 }
 
-export function isCancelled(id: string) {
-  return one<{ status: string }>(`SELECT status FROM job WHERE id = ?`, id)?.status === "cancelled";
+export async function isCancelled(id: string) {
+  return (await one<{ status: string }>(`SELECT status FROM job WHERE id = ?`, id))?.status === "cancelled";
 }
 
 // Housekeeping each worker tick: expired leases go back to the queue; dependents of failed jobs fail with a reason.
-export function sweep() {
+export async function sweep() {
   const t = now();
-  run(`UPDATE job SET status = 'queued', worker_id = NULL, lease_until = NULL WHERE status = 'running' AND lease_until < ?`, t);
-  run(
+  await run(`UPDATE job SET status = 'queued', worker_id = NULL, lease_until = NULL WHERE status = 'running' AND lease_until < ?`, t);
+  await run(
     `UPDATE job SET status = 'failed', error = 'A step it depends on did not finish.', finished_at = ?
      WHERE status = 'queued' AND depends_on IN (SELECT id FROM job WHERE status IN ('failed','cancelled'))`,
     t,
@@ -161,19 +164,19 @@ export function sweep() {
 
 // Blocked jobs (for example renders waiting on consent) re-enter the queue when the blocker clears.
 export function requeueBlocked(projectId: string, type: JobType) {
-  return tx(() => {
-    const jobs = all<JobRow>(`SELECT * FROM job WHERE project_id = ? AND type = ? AND status = 'blocked'`, projectId, type);
+  return tx(async () => {
+    const jobs = await all<JobRow>(`SELECT * FROM job WHERE project_id = ? AND type = ? AND status = 'blocked'`, projectId, type);
     let count = 0;
     for (const job of jobs) {
-      if (type === "render" && !queueRenderOutput(job)) continue;
-      count += run(`UPDATE job SET status = 'queued', error = NULL, run_after = ? WHERE id = ? AND status = 'blocked'`, now(), job.id).changes;
+      if (type === "render" && !(await queueRenderOutput(job))) continue;
+      count += (await run(`UPDATE job SET status = 'queued', error = NULL, run_after = ? WHERE id = ? AND status = 'blocked'`, now(), job.id)).changes;
     }
     return count;
   });
 }
 
-export function projectJobs(projectId: string, limit = 40) {
-  return all<JobRow>(`SELECT * FROM job WHERE project_id = ? ORDER BY created_at DESC LIMIT ?`, projectId, limit).map(publicJob);
+export async function projectJobs(projectId: string, limit = 40) {
+  return (await all<JobRow>(`SELECT * FROM job WHERE project_id = ? ORDER BY created_at DESC LIMIT ?`, projectId, limit)).map(publicJob);
 }
 
 export function publicJob(j: JobRow) {

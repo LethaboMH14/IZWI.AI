@@ -4,13 +4,16 @@ import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "@better-auth/passkey";
-import { db, one } from "./db";
+import { Pool } from "pg";
+import { one } from "./db";
 import { STUDIO_URL } from "./env";
 import { audit } from "./audit";
 
+const authPool = process.env.IZWI_DB === "pglite" ? undefined : new Pool({ connectionString: process.env.DATABASE_URL });
+
 export const auth = betterAuth({
   appName: "IZWI AI",
-  database: db,
+  database: authPool,
   baseURL: STUDIO_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   emailAndPassword: { enabled: true, minPasswordLength: 10, maxPasswordLength: 128, autoSignIn: true },
@@ -30,7 +33,7 @@ export const auth = betterAuth({
     session: {
       create: {
         before: async (session) => {
-          const m = one<{ organizationId: string }>(`SELECT organizationId FROM member WHERE userId = ? ORDER BY createdAt LIMIT 1`, session.userId);
+          const m = await one<{ organizationId: string }>(`SELECT "organizationId" FROM member WHERE "userId" = ? ORDER BY "createdAt" LIMIT 1`, session.userId);
           return { data: { ...session, activeOrganizationId: m?.organizationId ?? null } };
         },
       },
@@ -45,7 +48,7 @@ export const auth = betterAuth({
       membershipLimit: 50,
       // No email provider is configured: the invite link is shown in the app and can be shared on WhatsApp.
       async sendInvitationEmail(data) {
-        audit({ workspaceId: data.organization.id, userId: data.inviter.user.id, actor: "user", action: "invite.created", target: data.id, meta: { role: data.role } });
+        await audit({ workspaceId: data.organization.id, userId: data.inviter.user.id, actor: "user", action: "invite.created", target: data.id, meta: { role: data.role } });
       },
     }),
     nextCookies(),
@@ -53,3 +56,7 @@ export const auth = betterAuth({
 });
 
 export type AuthSession = typeof auth.$Infer.Session;
+
+export async function closeAuthPool() {
+  await authPool?.end();
+}
