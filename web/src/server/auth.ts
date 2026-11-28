@@ -16,7 +16,9 @@ if (authPool) surviveDrops(authPool);
 export const auth = betterAuth({
   appName: "IZWI AI",
   database: authPool,
-  baseURL: STUDIO_URL,
+  // The site answers at its own address. Preview deployments (izwi-ai-*.vercel.app) are allowed too, so sign-in and
+  // reset links work there. Any other address falls back to the configured one.
+  baseURL: { allowedHosts: [new URL(STUDIO_URL).host, "izwi-ai*.vercel.app"], fallback: STUDIO_URL, protocol: "https" },
   secret: process.env.BETTER_AUTH_SECRET,
   emailAndPassword: {
     enabled: true, minPasswordLength: 10, maxPasswordLength: 128, autoSignIn: true,
