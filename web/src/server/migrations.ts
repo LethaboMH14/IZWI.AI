@@ -530,6 +530,21 @@ ALTER TABLE upload_session ADD COLUMN finished_at BIGINT;`,
     name: "creator greeting language preferences",
     sql: `ALTER TABLE user_preferences ADD COLUMN languages TEXT NOT NULL DEFAULT '["en"]';`,
   },
+  {
+    version: 12,
+    name: "platform policy pre-check records",
+    sql: `CREATE TABLE policy_check (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  output_id TEXT NOT NULL REFERENCES output(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,
+  result TEXT NOT NULL CHECK (result IN ('pass','review','block')),
+  findings TEXT NOT NULL,
+  checked_at BIGINT NOT NULL,
+  checked_by TEXT NOT NULL,
+  UNIQUE (output_id, platform)
+);`,
+  },
 ];
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 

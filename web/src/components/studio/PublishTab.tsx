@@ -5,6 +5,7 @@ import { langName } from "@/lib/languages";
 import { bytes, clock, media, ago } from "@/lib/format";
 import type { TabProps } from "./types";
 import { Err, Pill, dateOf, useAct } from "./parts";
+import { PolicyPrecheck } from "./PolicyPrecheck";
 
 const PRESETS = [
   { id: "vertical", label: "9:16 vertical", use: "Reels, Shorts, TikTok" },
@@ -96,6 +97,7 @@ function OutputRow({ o, state, refresh }: { o: Output } & Pick<TabProps, "state"
           {o.asset.sha256 ? <> · <span className="mono">sha256 {o.asset.sha256.slice(0, 8)}</span></> : null}
         </p>
       )}
+      {o.status === "ready" && <PolicyPrecheck outputId={o.id} />}
       {o.posted ? (
         <p className="st-ok">You report posting on {o.posted.platform}{o.posted.url ? <> · <a className="link" href={o.posted.url} target="_blank" rel="noreferrer">open</a></> : ""}. Recorded on {dateOf(o.posted.at)}.</p>
       ) : o.status === "ready" ? (

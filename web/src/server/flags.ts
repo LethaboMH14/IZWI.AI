@@ -23,3 +23,7 @@ export function languagesEnabled(): boolean {
 export function spatialRestoreEnabled(): boolean {
   return process.env.IZWI_FLAG_SPATIAL_RESTORE === "1";
 }
+
+export function policyPrecheckEnabled(): boolean {
+  return process.env.IZWI_FLAG_POLICY_PRECHECK === "1";
+}

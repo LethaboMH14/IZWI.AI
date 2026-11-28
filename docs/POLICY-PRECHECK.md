@@ -1,0 +1,7 @@
+# Platform policy pre-check
+
+Status: partial. With `IZWI_FLAG_POLICY_PRECHECK=1`, Publish can save a platform result against a finished render for YouTube, TikTok, Instagram or Facebook. The limited check records a result and cited findings. It flags missing evidence for captions, rights, consent, metadata, thumbnail text, AI disclosure and sensitive topics. It applies the TikTok developer upload ten-minute hard limit. It does not inspect media or use a model to judge policy; unresolved items are Review. “Pass” is not a guarantee a platform will accept the video. No edits are made automatically.
+
+Published rule sources are stored in `web/src/lib/platform-policy.ts`, last checked 2026-11-28: [YouTube Community Guidelines](https://support.google.com/youtube/answer/9288567?hl=en), [YouTube AI disclosure](https://support.google.com/youtube/answer/14328491?hl=en), [TikTok media transfer limits](https://developers.tiktok.com/docs/en/content-posting-api-media-transfer-guide), and [Meta Community Standards](https://transparency.meta.com/policies/community-standards/).
+
+Focused tests: `web/tests/platform-policy.test.ts`, `web/tests/api-routes.test.ts`; browser evidence requires owner state and a ready output fixture in `IZWI_E2E_POLICY_PROJECT` and `IZWI_E2E_POLICY_OUTPUT`.
