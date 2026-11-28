@@ -4,7 +4,7 @@ import { pageCtx } from "@/server/guard";
 import { projectState } from "@/server/state";
 import { HttpError } from "@/server/http";
 import { StudioShell } from "@/components/studio/StudioShell";
-import { assistantEnabled } from "@/server/flags";
+import { assistantEnabled, designStageEnabled } from "@/server/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -19,5 +19,5 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
     throw e;
   }
   // The old studio, kept for reference: on an ivory working surface like every other working panel.
-  return <div className="z-classic"><StudioShell id={id} initial={initial} assistant={assistantEnabled()} /></div>;
+  return <div className="z-classic"><StudioShell id={id} initial={initial} assistant={assistantEnabled()} designEnabled={designStageEnabled()} /></div>;
 }

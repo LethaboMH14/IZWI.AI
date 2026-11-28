@@ -39,3 +39,7 @@ export function scheduledPostsEnabled(): boolean {
 export function homeTipsEnabled(): boolean {
   return process.env.IZWI_FLAG_HOME_TIPS === "1";
 }
+
+export function designStageEnabled(): boolean {
+  return process.env.IZWI_FLAG_DESIGN === "1";
+}

@@ -2,7 +2,7 @@
 import type { ProjectState } from "@/server/state";
 
 export type { ProjectState };
-export type TabId = "canvas" | "create" | "localise" | "protect" | "publish" | "earn";
+export type TabId = "canvas" | "create" | "localise" | "protect" | "design" | "publish" | "earn";
 export type TabProps = {
   state: ProjectState;
   /** Re-read the project from the server, e.g. after an action. */

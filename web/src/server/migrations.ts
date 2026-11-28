@@ -570,6 +570,24 @@ ALTER TABLE upload_session ADD COLUMN finished_at BIGINT;`,
     name: "creator niche preference for Home tips",
     sql: `ALTER TABLE user_preferences ADD COLUMN creator_niche TEXT NOT NULL DEFAULT 'podcast';`,
   },
+  {
+    version: 15,
+    name: "saved design text mock-ups",
+    sql: `CREATE TABLE design_draft (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+  created_by TEXT NOT NULL,
+  artifact TEXT NOT NULL CHECK (artifact IN ('thumbnail','cover','poster','countdown','illustration')),
+  platform TEXT NOT NULL CHECK (platform IN ('youtube','tiktok','instagram','facebook','general')),
+  headline TEXT NOT NULL CHECK (length(headline) <= 100),
+  subtitle TEXT NOT NULL DEFAULT '' CHECK (length(subtitle) <= 180),
+  accent TEXT NOT NULL CHECK (accent IN ('amber','terracotta','forest','ocean')),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved')),
+  created_at BIGINT NOT NULL,
+  approved_at BIGINT
+);`,
+  },
 ];
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 

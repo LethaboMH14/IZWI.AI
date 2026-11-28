@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { CaretDown, Coins, Export, FilmSlate, ShieldCheck, Translate } from "@phosphor-icons/react";
+import { CaretDown, Coins, Export, FilmSlate, PaintBrush, ShieldCheck, Translate } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { stageCounts, type StageId } from "@/lib/stage-counts";
 import { DropdownMenu, type MenuItem } from "@/components/z";
@@ -50,7 +50,7 @@ function SaveState() {
   return <span className="z-savestate" role="status"><i aria-hidden="true" />{save.lastSavedAt ? "Saved" : "Up to date"}</span>;
 }
 
-export function ProjectFrame({ children }: { children: React.ReactNode }) {
+export function ProjectFrame({ children, designEnabled = false }: { children: React.ReactNode; designEnabled?: boolean }) {
   const id = useProject((s) => s.id);
   const title = useProject((s) => s.state.project.title);
   const state = useProject((s) => s.state);
@@ -94,6 +94,7 @@ export function ProjectFrame({ children }: { children: React.ReactNode }) {
             </span>
           );
         })}
+        {designEnabled && <><span className="z-stage-sep" aria-hidden="true" /><Link href={`${base}/design`} className="z-stage" aria-current={path === `${base}/design` ? "page" : undefined}><PaintBrush size={16} aria-hidden="true" />Design</Link></>}
       </nav>
       <div className="z-stagebody">{children}</div>
     </div>

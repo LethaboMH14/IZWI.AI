@@ -15,20 +15,21 @@ import { LocaliseTab } from "./LocaliseTab";
 import { ProtectTab } from "./ProtectTab";
 import { PublishTab } from "./PublishTab";
 import { EarnTab } from "./EarnTab";
+import { DesignTab } from "./DesignTab";
 import { AssistantPanel } from "./AssistantPanel";
 import "@/app/studio.css";
 
 type Job = ProjectState["jobs"][number];
 type Status = "done" | "draft" | "blocked" | "off" | "planned";
 
-const TABS: TabId[] = ["canvas", "create", "localise", "protect", "publish", "earn"];
+const TABS: TabId[] = ["canvas", "create", "localise", "protect", "design", "publish", "earn"];
 const STAGES: { id: Exclude<TabId, "canvas">; label: string }[] = [
-  { id: "create", label: "Create" }, { id: "localise", label: "Localise" }, { id: "protect", label: "Protect" }, { id: "publish", label: "Publish" }, { id: "earn", label: "Earn" },
+  { id: "create", label: "Create" }, { id: "localise", label: "Localise" }, { id: "protect", label: "Protect" }, { id: "design", label: "Design" }, { id: "publish", label: "Publish" }, { id: "earn", label: "Earn" },
 ];
 const KINDS = ["podcast", "video", "lesson", "music", "film", "animation", "client"];
 const BODY: Record<TabId, (p: TabProps) => React.ReactNode> = {
   canvas: (p) => <CanvasTab {...p} />, create: (p) => <CreateTab {...p} />, localise: (p) => <LocaliseTab {...p} />,
-  protect: (p) => <ProtectTab {...p} />, publish: (p) => <PublishTab {...p} />, earn: (p) => <EarnTab {...p} />,
+  protect: (p) => <ProtectTab {...p} />, design: (p) => <DesignTab {...p} />, publish: (p) => <PublishTab {...p} />, earn: (p) => <EarnTab {...p} />,
 };
 
 const subscribe = (cb: () => void) => { window.addEventListener("hashchange", cb); return () => window.removeEventListener("hashchange", cb); };
@@ -84,14 +85,17 @@ function stageStatus(s: ProjectState): Record<Exclude<TabId, "canvas">, { status
     : s.listings.length > 0 ? { status: "draft" as Status, hint: "Listing switched off" }
     : { status: "off" as Status, hint: "No licence listing yet" };
 
-  return { create, localise, protect, publish, earn };
+  const design = { status: "draft" as Status, hint: "Make a text-led design mock-up" };
+  return { create, localise, protect, design, publish, earn };
 }
 
-export function StudioShell({ id, initial, assistant = false }: { id: string; initial: ProjectState; assistant?: boolean }) {
+export function StudioShell({ id, initial, assistant = false, designEnabled = false }: { id: string; initial: ProjectState; assistant?: boolean; designEnabled?: boolean }) {
   const { data, error, refresh } = useLive<ProjectState>(`/api/projects/${id}`, { initial, busy: (s) => s.jobs.some(active) || s.people.some((p) => p.consent?.status === "pending" || p.consent?.status === "requested") });
   const state = data ?? initial;
   const hash = useSyncExternalStore(subscribe, hashNow, hashServer);
-  const tab: TabId = (TABS as string[]).includes(hash) ? (hash as TabId) : "canvas";
+  const visibleTabs = designEnabled ? TABS : TABS.filter((item) => item !== "design");
+  const visibleStages = designEnabled ? STAGES : STAGES.filter((item) => item.id !== "design");
+  const tab: TabId = (visibleTabs as string[]).includes(hash) ? (hash as TabId) : "canvas";
   const go = useCallback((t: TabId) => {
     window.location.hash = t;
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -163,7 +167,7 @@ export function StudioShell({ id, initial, assistant = false }: { id: string; in
       <nav className="stagenav" aria-label="Stages">
         <button className={"sn-map" + (tab === "canvas" ? " on" : "")} onClick={() => go("canvas")} aria-current={tab === "canvas" ? "page" : undefined}>Canvas</button>
         <ol>
-          {STAGES.map((s) => {
+          {visibleStages.map((s) => {
             const st = stages[s.id];
             return (
               <li key={s.id} className={`s-${st.status}` + (tab === s.id ? " on" : "")}>

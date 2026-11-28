@@ -46,6 +46,7 @@ const PROMPTS: Record<Stage, string[]> = {
   create: ["Which parts of this recording should I keep?", "Find the strongest 30 seconds.", "Which lines look like transcript mistakes?"],
   localise: ["Which translated lines need a check?", "Is a name spelled differently across my languages?"],
   protect: ["Who still needs to give consent?", "Which clips are held, and why?"],
+  design: ["What copy should appear on this cover?", "Suggest a clear title and subtitle for this story."],
   publish: ["What is blocking my renders?", "Which outputs are ready to share?"],
   earn: ["What do I need before I can list a licence?", "Why is my listing switched off?"],
 };

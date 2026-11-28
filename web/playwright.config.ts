@@ -4,7 +4,7 @@ import { defineConfig } from "@playwright/test";
 // and the feature-off app on 4301; never take over the demo/worker ports.
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "settings-*.spec.ts",
+  testMatch: "**/*.spec.ts",
   fullyParallel: false,
   workers: 1,
   reporter: "list",

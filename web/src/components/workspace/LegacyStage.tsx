@@ -10,12 +10,13 @@ import { LocaliseTab } from "@/components/studio/LocaliseTab";
 import { ProtectTab } from "@/components/studio/ProtectTab";
 import { PublishTab } from "@/components/studio/PublishTab";
 import { EarnTab } from "@/components/studio/EarnTab";
+import { DesignTab } from "@/components/studio/DesignTab";
 import { AssistantPanel } from "@/components/studio/AssistantPanel";
 import { useAssistantEnabled, useProject, useProjectStore } from "./ProjectProvider";
 import "@/app/studio.css";
 
-const ROUTE: Record<TabId, string> = { canvas: "/spatial", create: "", localise: "/localise", protect: "/protect", publish: "/publish", earn: "/earn" };
-const BODY = { canvas: CanvasTab, create: CreateTab, localise: LocaliseTab, protect: ProtectTab, publish: PublishTab, earn: EarnTab } as const;
+const ROUTE: Record<TabId, string> = { canvas: "/spatial", create: "", localise: "/localise", protect: "/protect", design: "/design", publish: "/publish", earn: "/earn" };
+const BODY = { canvas: CanvasTab, create: CreateTab, localise: LocaliseTab, protect: ProtectTab, design: DesignTab, publish: PublishTab, earn: EarnTab } as const;
 
 export function LegacyStage({ tab }: { tab: TabId }) {
   const router = useRouter();
