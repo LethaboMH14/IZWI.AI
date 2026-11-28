@@ -7,6 +7,7 @@ import { ArrowRight, Plus, UploadSimple } from "@phosphor-icons/react";
 import { Uploader, NextSteps } from "@/components/Uploader";
 import { api, ApiError, newKey } from "@/lib/api";
 import { makers } from "@/lib/platform";
+import { StarterTemplateLibrary } from "@/components/studio/StarterTemplateLibrary";
 import "@/app/entry.css";
 
 const OK = /\.(mp4|mov|m4v|webm|mkv|avi|mp3|m4a|aac|wav|ogg|opus|flac|3gp)$/i;
@@ -72,6 +73,7 @@ export function NewStory({ empty = false }: { empty?: boolean }) {
 
       {!projectId ? (
         <>
+          <StarterTemplateLibrary instance="new-story" compact onApply={(template) => setTitle(template.titlePattern)} />
           <div className="chips" role="radiogroup" aria-label="Kind of story">
             {makers.map((m) => <button key={m.id} type="button" role="radio" aria-checked={kind === m.id} className={kind === m.id ? "on" : ""} onClick={() => setKind(m.id)}>{m.name}</button>)}
           </div>

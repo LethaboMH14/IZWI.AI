@@ -6,6 +6,7 @@ import { bytes, clock, media, ago } from "@/lib/format";
 import type { TabProps } from "./types";
 import { Err, Pill, dateOf, useAct } from "./parts";
 import { PolicyPrecheck } from "./PolicyPrecheck";
+import { StarterTemplateLibrary } from "@/components/studio/StarterTemplateLibrary";
 
 const PRESETS = [
   { id: "vertical", label: "9:16 vertical", use: "Reels, Shorts, TikTok" },
@@ -132,6 +133,7 @@ export function PublishTab(props: TabProps) {
     <div className="st">
       <section className="st-card" aria-labelledby="pb-render">
         <h2 id="pb-render">Render a clip</h2>
+        <StarterTemplateLibrary instance="publish" compact />
         <p className="st-intro">Render and download. Post it yourself.</p>
         {kept.length === 0 ? (
           <div className="st-empty">

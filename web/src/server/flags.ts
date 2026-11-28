@@ -27,3 +27,7 @@ export function spatialRestoreEnabled(): boolean {
 export function policyPrecheckEnabled(): boolean {
   return process.env.IZWI_FLAG_POLICY_PRECHECK === "1";
 }
+
+export function starterTemplatesEnabled(): boolean {
+  return process.env.IZWI_FLAG_STARTER_TEMPLATES === "1";
+}

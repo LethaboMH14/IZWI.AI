@@ -41,6 +41,7 @@ const ROUTES: Entry[] = [
   { path: "public/listing/[slug]", params: { slug: "no-such-clip" }, methods: { GET: {}, POST: { json: { name: "x", contact: "x@example.test", use: "a long enough use" } } }, kind: "public" },
   { path: "public/review/[token]", params: { token: "z".repeat(32) }, methods: { GET: {}, POST: { json: { action: "decision", author: "x", decision: "approve" } } }, kind: "public" },
   { path: "system", params: {}, methods: { GET: {} }, kind: "session" },
+  { path: "starter-templates", params: {}, methods: { GET: {} }, kind: "session" },
   { path: "team", params: {}, methods: { GET: {}, POST: { json: { email: "x@example.test" } } }, kind: "session" },
   { path: "upload/[[...tus]]", params: {}, methods: { GET: {}, POST: {}, PATCH: {}, HEAD: {}, DELETE: {}, OPTIONS: {} }, kind: "tus" },
   { path: "upload/s3", params: {}, methods: { POST: { json: { projectId: A.project, filename: "a.mp4", size: 1 } } }, kind: "hosted-only" },
@@ -61,6 +62,7 @@ beforeAll(async () => {
   process.env.IZWI_FLAG_PREFERENCES = "1";
   process.env.IZWI_FLAG_LANGUAGES = "1";
   process.env.IZWI_FLAG_POLICY_PRECHECK = "1";
+  process.env.IZWI_FLAG_STARTER_TEMPLATES = "1";
   db = await openTestDb();
   await db.execScript(`CREATE TABLE IF NOT EXISTS invitation (id TEXT PRIMARY KEY, "organizationId" TEXT, email TEXT, role TEXT, status TEXT, "expiresAt" TEXT)`);
   await seedWorkspace(db, "org_a", "own_a", A.project);
@@ -87,7 +89,7 @@ beforeAll(async () => {
   ];
   for (const s of sql) await db.run(s);
 }, 60_000);
-afterAll(async () => { delete process.env.IZWI_FLAG_PREFERENCES; delete process.env.IZWI_FLAG_LANGUAGES; delete process.env.IZWI_FLAG_POLICY_PRECHECK; await closeTestDb(db); });
+afterAll(async () => { delete process.env.IZWI_FLAG_PREFERENCES; delete process.env.IZWI_FLAG_LANGUAGES; delete process.env.IZWI_FLAG_POLICY_PRECHECK; delete process.env.IZWI_FLAG_STARTER_TEMPLATES; await closeTestDb(db); });
 beforeEach(() => { hoisted.session = null; });
 
 const TABLES = ["project", "asset", "clip", "caption_track", "caption_line", "person", "share_link", "job", "output", "listing", "enquiry", "comment", "provider", "plan_run", "declaration", "consent", "model_route", "workspace_pref"];

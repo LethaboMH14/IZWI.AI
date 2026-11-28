@@ -8,6 +8,8 @@ import { projectList } from "@/server/state";
 import { languagesEnabled } from "@/server/flags";
 import { readCreatorLanguages } from "@/server/languages";
 import { greetingFor } from "@/lib/greetings";
+import { starterTemplatesEnabled } from "@/server/flags";
+import { StarterTemplateLibrary } from "@/components/studio/StarterTemplateLibrary";
 import "../entry.css";
 import "../stories.css";
 
@@ -32,6 +34,7 @@ export default async function Home() {
   return (
     <div className="st-page">
       <StoriesBoard cards={cards} workspace={ws?.name ?? "Workspace"} greeting={greeting ? `${greeting.text}, ${ctx.userName}` : null} newStory={<NewStory empty={cards.length === 0} />} />
+      {starterTemplatesEnabled() && <StarterTemplateLibrary instance="home" compact />}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { Wave } from "@/components/Wave";
 import { ReviewRoom } from "@/components/ReviewRoom";
 import { StoryBoard } from "@/components/StoryBoard";
 import type { ProjectState, TabProps } from "./types";
+import { StarterTemplateLibrary } from "@/components/studio/StarterTemplateLibrary";
 
 type Clip = ProjectState["clips"][number];
 type Line = ProjectState["lines"][number];
@@ -296,6 +297,7 @@ function EditView({ state, refresh }: { state: ProjectState; refresh: () => Prom
           {(range.start != null || range.end != null) && <button className="btn btn-quiet" onClick={() => { setRange({ start: null, end: null }); setAnchor(null); }}>Clear</button>}
         </div>
         {shown.length === 0 && <p className="cr-empty">{lines.length ? "No clips yet. Find clips, or cut your own from a selection." : "Clips appear after the recording has been listened to."}</p>}
+        {shown.length === 0 && <StarterTemplateLibrary instance="studio-empty" compact />}
         <ul className="cr-cliplist">
           {shown.map((c) => <li key={c.id}><ClipCard clip={c} d={edit(c)} active={c.id === active} busy={working === `status-${c.id}` || working === `title-${c.id}`} onSelect={() => { setActive(c.id); seek(c.startMs); }} onPlay={() => playClip(c)} onStatus={(s) => void setStatus(c, s)} onRename={(title) => void rename(c, title)} /></li>)}
         </ul>

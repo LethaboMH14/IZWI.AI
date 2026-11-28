@@ -10,6 +10,7 @@ import { api, ApiError, newKey } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { KIND_LABEL, KIND_ORDER } from "@/lib/kinds";
 import { LANGUAGES, langName } from "@/lib/languages";
+import { StarterTemplateLibrary } from "@/components/studio/StarterTemplateLibrary";
 import "../entry.css";
 
 const MAKES = [
@@ -252,6 +253,7 @@ export default function Welcome() {
           <>
             <h1>Bring your first <em>story.</em></h1>
             <p className="lede">One episode, one video, one voice note. It stays private to <b>{wsName || wsNameValue}</b>.</p>
+            {!projectId && <StarterTemplateLibrary instance="welcome" compact onApply={(template) => setTitle(template.titlePattern)} />}
             {!projectId ? (
               <form className="wfirst" onSubmit={(e) => { e.preventDefault(); void createProject(); }} noValidate>
                 <label className="field wfield">
