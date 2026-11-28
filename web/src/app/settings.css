@@ -18,6 +18,10 @@
 .connection-wizard code { overflow-wrap: anywhere; }
 .link-button { border: 0; padding: 0; background: none; color: var(--amber-deep); text-decoration: underline; cursor: pointer; font: inherit; }
 .preferences-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(15rem, 0.9fr); gap: 1.2rem; align-items: start; }
+.language-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .65rem; border: 0; padding: 0; margin: 1rem 0; }
+.language-options legend { font-weight: 700; margin-bottom: .5rem; }
+.language-options label { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .35rem .65rem; padding: .75rem; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ivory); }
+.language-options small { grid-column: 2; color: var(--muted); }
 .preferences-controls { display: grid; gap: 0.9rem; }
 .preferences-preview { display: grid; gap: 0.9rem; padding: 1.1rem; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--paper); }
 .preferences-preview h3 { margin: 0; }

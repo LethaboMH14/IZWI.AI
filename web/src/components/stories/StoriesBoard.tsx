@@ -48,7 +48,7 @@ function Envelope({ peaks }: { peaks: number[] }) {
   );
 }
 
-export function StoriesBoard({ cards, workspace, newStory }: { cards: StoryCard[]; workspace: string; newStory: React.ReactNode }) {
+export function StoriesBoard({ cards, workspace, greeting, newStory }: { cards: StoryCard[]; workspace: string; greeting: string | null; newStory: React.ReactNode }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<string | null>(cards[0]?.id ?? null);
@@ -70,7 +70,7 @@ export function StoriesBoard({ cards, workspace, newStory }: { cards: StoryCard[
       <section className="st-main" aria-labelledby="st-title">
         <div className="st-head">
           <div>
-            <h1 id="st-title">Stories</h1>
+            <h1 id="st-title">{greeting ?? "Stories"}</h1>
             <p className="st-meta">{workspace} · {cards.length} {cards.length === 1 ? "story" : "stories"}</p>
           </div>
           <Button variant="primary" onClick={() => setAdding((v) => !v)} aria-expanded={adding}><Plus size={16} aria-hidden="true" />New story</Button>

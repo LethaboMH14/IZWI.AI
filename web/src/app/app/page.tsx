@@ -5,6 +5,9 @@ import { KIND_LABEL } from "@/lib/kinds";
 import { one } from "@/server/db";
 import { pageCtx } from "@/server/guard";
 import { projectList } from "@/server/state";
+import { languagesEnabled } from "@/server/flags";
+import { readCreatorLanguages } from "@/server/languages";
+import { greetingFor } from "@/lib/greetings";
 import "../entry.css";
 import "../stories.css";
 
@@ -14,6 +17,7 @@ export default async function Home() {
   const ctx = await pageCtx();
   const rows = await projectList(ctx);
   const ws = await one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
+  const greeting = languagesEnabled() ? greetingFor(await readCreatorLanguages(ctx.userId)) : null;
   const cards: StoryCard[] = rows.map((p) => ({
     id: p.id,
     title: p.title,
@@ -27,7 +31,7 @@ export default async function Home() {
   }));
   return (
     <div className="st-page">
-      <StoriesBoard cards={cards} workspace={ws?.name ?? "Workspace"} newStory={<NewStory empty={cards.length === 0} />} />
+      <StoriesBoard cards={cards} workspace={ws?.name ?? "Workspace"} greeting={greeting ? `${greeting.text}, ${ctx.userName}` : null} newStory={<NewStory empty={cards.length === 0} />} />
     </div>
   );
 }

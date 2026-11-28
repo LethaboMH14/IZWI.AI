@@ -525,6 +525,11 @@ ALTER TABLE upload_session ADD COLUMN finished_at BIGINT;`,
   updated_at BIGINT NOT NULL
 );`,
   },
+  {
+    version: 11,
+    name: "creator greeting language preferences",
+    sql: `ALTER TABLE user_preferences ADD COLUMN languages TEXT NOT NULL DEFAULT '["en"]';`,
+  },
 ];
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 

@@ -30,6 +30,7 @@ const ROUTES: Entry[] = [
   { path: "projects/[id]/assistant", params: { id: A.project }, methods: { GET: {}, POST: { json: { providerId: A.provider, text: "hi" } } }, kind: "session" },
   { path: "projects/[id]/assistant/transcribe", params: { id: A.project }, methods: { POST: {} }, kind: "session" },
   { path: "settings/preferences", params: {}, methods: { GET: {}, PATCH: { json: { theme: "warm", accent: "forest", fontPair: "clean", textSize: "large", reducedMotion: true } } }, kind: "session" },
+  { path: "settings/languages", params: {}, methods: { GET: {}, PATCH: { json: { languages: ["zu", "en"] } } }, kind: "session" },
   { path: "providers", params: {}, methods: { GET: {}, POST: { json: { kind: "openai_compat", label: "x", baseUrl: "https://x.example.test/v1", model: "m", roles: ["plan"] } } }, kind: "session" },
   { path: "providers/models", params: {}, methods: { POST: { json: { kind: "openai_compat", baseUrl: "https://x.example.test/v1" } } }, kind: "session" },
   { path: "providers/[id]", params: { id: A.provider }, methods: { PATCH: { json: { label: "taken" } }, POST: {}, DELETE: {} }, kind: "session" },
@@ -57,6 +58,7 @@ let db: Db;
 beforeAll(async () => {
   process.env.IZWI_FLAG_ASSISTANT = "1";
   process.env.IZWI_FLAG_PREFERENCES = "1";
+  process.env.IZWI_FLAG_LANGUAGES = "1";
   db = await openTestDb();
   await db.execScript(`CREATE TABLE IF NOT EXISTS invitation (id TEXT PRIMARY KEY, "organizationId" TEXT, email TEXT, role TEXT, status TEXT, "expiresAt" TEXT)`);
   await seedWorkspace(db, "org_a", "own_a", A.project);
@@ -83,7 +85,7 @@ beforeAll(async () => {
   ];
   for (const s of sql) await db.run(s);
 }, 60_000);
-afterAll(async () => { delete process.env.IZWI_FLAG_PREFERENCES; await closeTestDb(db); });
+afterAll(async () => { delete process.env.IZWI_FLAG_PREFERENCES; delete process.env.IZWI_FLAG_LANGUAGES; await closeTestDb(db); });
 beforeEach(() => { hoisted.session = null; });
 
 const TABLES = ["project", "asset", "clip", "caption_track", "caption_line", "person", "share_link", "job", "output", "listing", "enquiry", "comment", "provider", "plan_run", "declaration", "consent", "model_route", "workspace_pref"];
