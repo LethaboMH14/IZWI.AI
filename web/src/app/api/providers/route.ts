@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 export const GET = route(async () => {
   const ctx = await requireCtx();
-  return all<ProviderRow>(`SELECT * FROM provider WHERE workspace_id = ? ORDER BY created_at`, ctx.workspaceId).map(publicProvider);
+  return (await all<ProviderRow>(`SELECT * FROM provider WHERE workspace_id = ? ORDER BY created_at`, ctx.workspaceId)).map(publicProvider);
 });
 
 const ProviderIn = z.object({
@@ -28,18 +28,18 @@ const ProviderIn = z.object({
 export const POST = route(async (req) => {
   const ctx = await requireCtx();
   requireRole(ctx, ["owner", "admin"]);
-  limit(`provider-test:${ctx.workspaceId}:${ctx.userId}`, LIMIT.providerTest);
+  await limit(`provider-test:${ctx.workspaceId}:${ctx.userId}`, LIMIT.providerTest);
   const x = await body(req, ProviderIn);
   if (x.freeTier && !canMarkFreeTier(ctx.role)) requireRole(ctx, ["owner"]);
   if (x.kind === "ollama") requireRole(ctx, ["owner"]);
   const id = newId("prv");
-  run(
+  await run(
     `INSERT INTO provider (id, workspace_id, kind, label, base_url, model, key_sealed, key_hint, roles, free_tier, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id, ctx.workspaceId, x.kind, x.label, checkBaseUrl(x.baseUrl, x.kind), x.model || null, x.key ? seal(x.key) : null, x.key ? keyHint(x.key) : null, JSON.stringify(x.roles), x.freeTier ? 1 : 0, ctx.userId, now(),
   );
-  audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "provider.added", target: id, meta: { kind: x.kind, label: x.label } });
-  const row = one<ProviderRow>(`SELECT * FROM provider WHERE id = ?`, id)!;
+  await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "provider.added", target: id, meta: { kind: x.kind, label: x.label } });
+  const row = (await one<ProviderRow>(`SELECT * FROM provider WHERE id = ?`, id))!;
   const t = await testProvider(row);
-  run(`UPDATE provider SET last_test_at = ?, last_test_ok = ?, last_test_note = ? WHERE id = ?`, now(), t.ok ? 1 : 0, t.note, id);
-  return publicProvider(one<ProviderRow>(`SELECT * FROM provider WHERE id = ?`, id)!);
+  await run(`UPDATE provider SET last_test_at = ?, last_test_ok = ?, last_test_note = ? WHERE id = ?`, now(), t.ok ? 1 : 0, t.note, id);
+  return publicProvider((await one<ProviderRow>(`SELECT * FROM provider WHERE id = ?`, id))!);
 });

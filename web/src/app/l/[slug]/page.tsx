@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   try {
-    const d = listingData(slug);
+    const d = await listingData(slug);
     return { title: `${d.title} | Licence this clip | IZWI AI`, description: `A clip by ${d.by}. Ask to license it.` };
   } catch {
     return { title: "Clip not found | IZWI AI", robots: { index: false } };
@@ -17,9 +17,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ListingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  let data: ReturnType<typeof listingData>;
+  let data: Awaited<ReturnType<typeof listingData>>;
   try {
-    data = listingData(slug);
+    data = await listingData(slug);
   } catch (e) {
     return <GuestFailure error={e} what="listing" />;
   }

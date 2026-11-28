@@ -8,9 +8,9 @@ export const metadata: Metadata = { title: "A request for your permission | IZWI
 
 export default async function ConsentPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  let data: ReturnType<typeof consentData>;
+  let data: Awaited<ReturnType<typeof consentData>>;
   try {
-    data = consentData(token);
+    data = await consentData(token);
   } catch (e) {
     return <GuestFailure error={e} what="consent" />;
   }

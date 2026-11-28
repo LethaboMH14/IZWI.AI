@@ -13,7 +13,7 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
   const ctx = await pageCtx();
   let initial;
   try {
-    initial = projectState(ctx, id);
+    initial = await projectState(ctx, id);
   } catch (e) {
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;

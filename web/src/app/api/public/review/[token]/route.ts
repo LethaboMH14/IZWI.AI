@@ -7,7 +7,7 @@ type P = { token: string };
 const ip = clientIp;
 
 export const GET = route<P>(async (req, { token }) => {
-  limit(`review-read:${ip(req)}`, LIMIT.publicRead);
-  return reviewData(token);
+  await limit(`review-read:${ip(req)}`, LIMIT.publicRead);
+  return await reviewData(token);
 });
-export const POST = route<P>(async (req, { token }) => reviewAction(token, await body(req, ReviewIn), ip(req)));
+export const POST = route<P>(async (req, { token }) => await reviewAction(token, await body(req, ReviewIn), ip(req)));

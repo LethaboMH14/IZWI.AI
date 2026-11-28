@@ -18,6 +18,7 @@ export function route<P = Record<string, string>>(handler: (req: Request, params
   return async (req: Request, ctx: Ctx<P>) => {
     try {
       if (req.method !== "GET" && req.method !== "HEAD") checkOrigin(req);
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises -- presence check on the params promise, not its value
       const params = ctx?.params ? await ctx.params : ({} as P);
       const out = await handler(req, params);
       if (out instanceof Response) return out;

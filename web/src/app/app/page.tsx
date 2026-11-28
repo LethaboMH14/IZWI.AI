@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const ctx = await pageCtx();
-  const rows = projectList(ctx);
-  const ws = one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
+  const rows = await projectList(ctx);
+  const ws = await one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
   const cards: StoryCard[] = rows.map((p) => ({
     id: p.id,
     title: p.title,

@@ -10,7 +10,7 @@ export const GET = route(async (req) => {
   const ctx = await requireCtx();
   requireRole(ctx, ["owner"]);
   const before = Number(new URL(req.url).searchParams.get("before") ?? "") || Number.MAX_SAFE_INTEGER;
-  const rows = all<{ id: number; user_id: string | null; actor: string; action: string; target: string | null; meta: string | null; created_at: number; name: string | null }>(
+  const rows = await all<{ id: number; user_id: string | null; actor: string; action: string; target: string | null; meta: string | null; created_at: number; name: string | null }>(
     `SELECT a.id, a.user_id, a.actor, a.action, a.target, a.meta, a.created_at, u.name
        FROM audit_log a LEFT JOIN "user" u ON u.id = a.user_id
       WHERE a.workspace_id = ? AND a.id < ? ORDER BY a.id DESC LIMIT 200`,

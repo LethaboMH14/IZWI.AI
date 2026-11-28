@@ -8,9 +8,9 @@ export const metadata: Metadata = { title: "Review a project | IZWI AI", robots:
 
 export default async function ReviewPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  let data: ReturnType<typeof reviewData>;
+  let data: Awaited<ReturnType<typeof reviewData>>;
   try {
-    data = reviewData(token);
+    data = await reviewData(token);
   } catch (e) {
     return <GuestFailure error={e} what="review" />;
   }

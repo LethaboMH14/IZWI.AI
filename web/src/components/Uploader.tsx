@@ -1,10 +1,11 @@
 "use client";
-// Resumable upload (tus). Shows only what tus reports: bytes confirmed by the server. Nothing is estimated ahead of time.
+// Resumable uploads use tus on disk and signed S3 multipart parts when hosted. Progress reflects confirmed bytes.
 // A reload loses the File object (browsers cannot keep it), so after a reload the person picks the same file again and
 // findPreviousUploads() continues from the last confirmed byte.
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import * as tus from "tus-js-client";
+import { S3Upload } from "@/lib/s3-upload";
 import { ArrowClockwise, CheckCircle, FileVideo, Pause, Play, UploadSimple, WifiSlash } from "@phosphor-icons/react";
 import { bytes } from "@/lib/format";
 import "@/app/entry.css";
@@ -65,7 +66,7 @@ export function Uploader({ projectId, onDone, hint, file: initialFile, showNext 
     () => true,
   );
 
-  const up = useRef<tus.Upload | null>(null);
+  const up = useRef<tus.Upload | S3Upload | null>(null);
   const samples = useRef<{ t: number; b: number }[]>([]);
   const resumedFlag = useRef(false);
   const userPaused = useRef(false);
@@ -86,15 +87,8 @@ export function Uploader({ projectId, onDone, hint, file: initialFile, showNext 
     setFile(f); setSent(0); setTotal(f.size); setSpeed(0); setFail(null); setResumedAt(null);
     samples.current = []; resumedFlag.current = false; userPaused.current = false; doneCalled.current = false;
     const offline = typeof navigator !== "undefined" && !navigator.onLine;
-    const u = new tus.Upload(f, {
-      endpoint: "/api/upload",
-      chunkSize: 8 * MB,
-      retryDelays: [0, 3000, 10000, 30000],
-      metadata: { projectId, filename: f.name, filetype: f.type || "application/octet-stream" },
-      // The default fingerprint is the file; add the story so the same file in two stories never shares an upload.
-      fingerprint: async (file, options) => `${await tus.defaultOptions.fingerprint(file, options)}::${projectId}`,
-      removeFingerprintOnSuccess: true,
-      onProgress: (b, t) => {
+    const callbacks = {
+      onProgress: (b: number, t: number) => {
         if (resumedFlag.current) { resumedFlag.current = false; if (b > 0) setResumedAt(b); }
         const now = Date.now();
         const s = samples.current;
@@ -108,17 +102,27 @@ export function Uploader({ projectId, onDone, hint, file: initialFile, showNext 
         go("done");
         if (!doneCalled.current) { doneCalled.current = true; onDoneRef.current?.(f.name); }
       },
-      onError: (err) => {
+      onError: (err: Error) => {
         if (typeof navigator !== "undefined" && !navigator.onLine) { go("waiting"); return; }
         setFail(explain(err));
         setSpeed(0);
         go("error");
       },
+    };
+    const s3 = process.env.NEXT_PUBLIC_IZWI_UPLOAD === "s3";
+    const u = s3 ? new S3Upload(f, { projectId, retryDelays: [0, 3000, 10000, 30000], ...callbacks }) : new tus.Upload(f, {
+      endpoint: "/api/upload",
+      chunkSize: 8 * MB,
+      retryDelays: [0, 3000, 10000, 30000],
+      metadata: { projectId, filename: f.name, filetype: f.type || "application/octet-stream" },
+      // The default fingerprint is the file; add the story so the same file in two stories never shares an upload.
+      fingerprint: async (file, options) => `${await tus.defaultOptions.fingerprint(file, options)}::${projectId}`,
+      removeFingerprintOnSuccess: true,
     });
     up.current = u;
     try {
       const prev = await u.findPreviousUploads();
-      if (prev.length) { u.resumeFromPreviousUpload(prev[0]); resumedFlag.current = true; }
+      if (prev.length) { u.resumeFromPreviousUpload(prev[0] as never); resumedFlag.current = true; }
     } catch { /* storage unavailable: start from zero */ }
     if (up.current !== u) return; // replaced or reset while we were looking up earlier uploads
     if (offline) { go("waiting"); return; }

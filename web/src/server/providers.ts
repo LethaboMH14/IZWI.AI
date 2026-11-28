@@ -128,13 +128,13 @@ export async function listProviderModels(p: ProviderRow): Promise<ListedModel[]>
   }
 }
 
-export function providerFor(workspaceId: string, role: Role): ProviderRow | undefined {
-  const routed = one<{ provider_id: string; model: string }>(`SELECT provider_id, model FROM model_route WHERE workspace_id = ? AND role = ?`, workspaceId, role);
+export async function providerFor(workspaceId: string, role: Role): Promise<ProviderRow | undefined> {
+  const routed = await one<{ provider_id: string; model: string }>(`SELECT provider_id, model FROM model_route WHERE workspace_id = ? AND role = ?`, workspaceId, role);
   if (routed) {
-    const provider = one<ProviderRow>(`SELECT * FROM provider WHERE id = ? AND workspace_id = ? AND last_test_ok = 1`, routed.provider_id, workspaceId);
+    const provider = await one<ProviderRow>(`SELECT * FROM provider WHERE id = ? AND workspace_id = ? AND last_test_ok = 1`, routed.provider_id, workspaceId);
     return provider ? { ...provider, model: routed.model } : undefined;
   }
-  return all<ProviderRow>(`SELECT * FROM provider WHERE workspace_id = ? ORDER BY created_at`, workspaceId).find(
+  return (await all<ProviderRow>(`SELECT * FROM provider WHERE workspace_id = ? ORDER BY created_at`, workspaceId)).find(
     (p) => parse<string[]>(p.roles, []).includes(role) && p.last_test_ok === 1,
   );
 }
@@ -179,9 +179,9 @@ export function statusError(p: ProviderRow, status: number) {
   return new ProviderError(`${p.label} ${hint}`, status === 429 || status >= 500);
 }
 
-async function call(p: ProviderRow, url: string, init: GuardedInit): Promise<{ response: Response; receipt: ReturnType<typeof reserveTrialCall> }> {
+async function call(p: ProviderRow, url: string, init: GuardedInit): Promise<{ response: Response; receipt: Awaited<ReturnType<typeof reserveTrialCall>> }> {
   try {
-    const receipt = reserveTrialCall(p, url);
+    const receipt = await reserveTrialCall(p, url);
     const headers = { ...init.headers, ...(p.kind === "openrouter" ? { "HTTP-Referer": PUBLIC_URL, "X-Title": "IZWI AI" } : {}) };
     const body = init.body instanceof Uint8Array
       ? init.body.buffer.slice(init.body.byteOffset, init.body.byteOffset + init.body.byteLength) as ArrayBuffer
@@ -221,7 +221,7 @@ export async function chatJSON<T>(p: ProviderRow, system: string, user: string, 
     throw statusError(p, res.status);
   }
   const d = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
-  recordTrialTokens(receipt, d.usage?.prompt_tokens, d.usage?.completion_tokens);
+  await recordTrialTokens(receipt, d.usage?.prompt_tokens, d.usage?.completion_tokens);
   const text = d.choices?.[0]?.message?.content ?? "";
   const a = text.indexOf("{"), b = text.lastIndexOf("}");
   if (a < 0 || b < a) throw new ProviderError("The model did not return JSON.", true);

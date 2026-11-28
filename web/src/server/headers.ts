@@ -6,15 +6,27 @@
 const FONTSHARE_CSS = "https://api.fontshare.com";
 const FONTSHARE_FONTS = "https://cdn.fontshare.com";
 
+// Hosted media lives on a private S3-compatible bucket (R2); the browser plays, shows and uploads to presigned URLs there.
+// Read straight from the environment: this file must not import server modules.
+export function storageCspOrigin(): string {
+  if (process.env.IZWI_STORAGE !== "s3" || !process.env.S3_ENDPOINT) return "";
+  try {
+    return ` ${new URL(process.env.S3_ENDPOINT).origin}`;
+  } catch {
+    return "";
+  }
+}
+
 export function cspFor(nonce: string, opts: { dev: boolean; path: string }): string {
+  const store = storageCspOrigin();
   const trust = opts.path === "/trust" || opts.path.startsWith("/trust/");
   return [
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${opts.dev ? " 'unsafe-eval'" : ""}${trust ? " 'wasm-unsafe-eval'" : ""}`,
     `style-src 'self' 'unsafe-inline' ${FONTSHARE_CSS}`,
-    `img-src 'self' data: blob:`,
-    `media-src 'self' blob:`,
-    `connect-src 'self'${opts.dev ? " ws: wss:" : ""}`,
+    `img-src 'self' data: blob:${store}`,
+    `media-src 'self' blob:${store}`,
+    `connect-src 'self'${store}${opts.dev ? " ws: wss:" : ""}`,
     `font-src 'self' ${FONTSHARE_FONTS}`,
     `worker-src 'self' blob:`,
     `object-src 'none'`,

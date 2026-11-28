@@ -15,7 +15,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
   const ctx = await pageCtx();
   let initial;
   try {
-    initial = projectState(ctx, id);
+    initial = await projectState(ctx, id);
   } catch (e) {
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
