@@ -24,7 +24,7 @@
 .as-asst { align-self: flex-start; background: var(--paper); border: 1px solid var(--line); }
 .as-md p, .as-md ul, .as-md ol { margin: 0 0 0.5rem; }
 .as-md ul, .as-md ol { padding-left: 20px; }
-.as-md code, .as-card .mono { font-family: var(--mono); font-size: 0.85em; background: var(--sand); padding: 0 0.25em; border-radius: 4px; }
+.as-md code, .as-card .mono { font-family: var(--mono); font-size: 0.85em; background: var(--sand); padding: 0 0.25em; border-radius: var(--z-r-nested); }
 .as-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
 .as-chip { padding: 2px 8px; border-radius: var(--z-r-control); background: var(--sand); font-size: var(--z-type-xs); }
 .as-chip-warn { background: var(--tint); }
@@ -38,12 +38,12 @@
 .as-diff div { display: grid; grid-template-columns: 7rem 1fr; gap: 0.5rem; }
 .as-diff dt { font-weight: 600; font-size: var(--z-type-xs); }
 .as-diff dd { margin: 0; }
-.as-diff del { color: var(--clay); }
+.as-diff del { color: var(--clay-text); }
 .as-diff ins { color: var(--moss); text-decoration: none; font-weight: 600; }
 .as-card-act, .as-prompts { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .as-prompts { list-style: none; padding: 0; margin: 0; }
 .as-prompts .btn { height: auto; min-height: 44px; padding-block: 0.5rem; white-space: normal; text-align: left; }
-.as-err, .as-error { color: var(--clay); font-size: var(--z-type-sm); margin: 0; }
+.as-err, .as-error { color: var(--clay-text); font-size: var(--z-type-sm); margin: 0; }
 .as-error p { margin: 0 0 6px; }
 .as-done { color: var(--moss); font-weight: 600; }
 .as-compose { display: grid; gap: 0.5rem; }

@@ -16,6 +16,7 @@
   --tint: #ffe0a0;
   --tint-2: #fff1cf;
   --clay: #c4552d;
+  --clay-text: #8f3a1c;
   --clay-tint: #fbe3d8;
   --moss: #4f6b3a;
   --moss-tint: #e2ebd8;
@@ -49,10 +50,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 ul, ol { list-style: none; }
 img { display: block; max-width: 100%; }
 h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -0.03em; line-height: 0.98; text-wrap: balance; font-variation-settings: "SOFT" 50; }
-em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; color: var(--amber); }
+em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; color: var(--amber-deep); }
 .mono { font-family: var(--mono); font-size: var(--z-type-xs); letter-spacing: 0; }
 .fine { font-size: var(--z-type-xs); color: var(--muted); max-width: 64ch; }
-:focus-visible { outline: 2.5px solid var(--ink); outline-offset: 3px; border-radius: 6px; }
+:focus-visible { outline: 2.5px solid var(--ink); outline-offset: 3px; border-radius: var(--z-r-clip); }
 ::selection { background: var(--tint); }
 
 /* language tints, used wherever a word carries its language */
@@ -63,10 +64,10 @@ em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spa
 em.l-zu, em.l-mix { color: var(--lc); }
 
 /* status colours: reviewed, draft, waiting, not connected, planned */
-.s-done { --sc: var(--moss); --sb: var(--moss-tint); }
-.s-draft { --sc: var(--amber); --sb: var(--tint-2); }
-.s-blocked { --sc: var(--clay); --sb: var(--clay-tint); }
-.s-off, .s-planned { --sc: #8d877c; --sb: var(--sand); }
+.s-done { --sc: var(--moss); --sct: var(--moss); --sb: var(--moss-tint); }
+.s-draft { --sc: var(--amber); --sct: var(--amber-deep); --sb: var(--tint-2); }
+.s-blocked { --sc: var(--clay); --sct: var(--clay-text); --sb: var(--clay-tint); }
+.s-off, .s-planned { --sc: var(--z-shell-muted); --sct: var(--ink-2); --sb: var(--sand); }
 
 .btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: var(--z-r-control); background: var(--ink); color: var(--ivory); font-weight: 600; font-size: var(--z-type-base); transition: transform 0.25s var(--ease), background 0.2s; white-space: nowrap; }
 .btn:hover { background: var(--amber-deep); transform: translateY(-1px); }
@@ -94,13 +95,13 @@ em.l-zu, em.l-mix { color: var(--lc); }
 .seg button { height: 38px; padding: 0 1rem; border-radius: var(--z-r-control); font-weight: 600; font-size: var(--z-type-sm); color: var(--ink-2); transition: background 0.2s, color 0.2s; }
 .seg button.on { background: var(--ink); color: var(--ivory); }
 
-.pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border-radius: var(--z-r-control); background: var(--sb, var(--sand)); color: var(--sc, var(--ink-2)); font-size: var(--z-type-xs); font-weight: 600; white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border-radius: var(--z-r-control); background: var(--sb, var(--sand)); color: var(--sct, var(--ink-2)); font-size: var(--z-type-xs); font-weight: 600; white-space: nowrap; }
 .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .s-planned.pill::before, .s-off.pill::before { background: none; border: 1.5px solid currentColor; }
 
 /* ---------- waveform ---------- */
 .wave { width: 100%; height: 56px; display: block; }
-.wave rect { fill: #cfc8b9; }
+.wave rect { fill: var(--z-ivory-line-strong); }
 .wave rect.clip { fill: var(--gold); }
 .wave rect.played { fill: var(--ink); }
 .wave .wave-region { fill: var(--tint-2); }
@@ -108,7 +109,7 @@ em.l-zu, em.l-mix { color: var(--lc); }
 .wave .wave-head { fill: var(--clay); }
 
 /* ---------- caption player ---------- */
-.capplayer { position: relative; overflow: hidden; border-radius: var(--r-l); background: #2a2119; box-shadow: var(--shadow); isolation: isolate; }
+.capplayer { position: relative; overflow: hidden; border-radius: var(--r-l); background: var(--z-shell-2); box-shadow: var(--shadow); isolation: isolate; }
 .capplayer.tall { aspect-ratio: 9 / 16; width: min(100%, 360px); }
 .capplayer img { width: 100%; height: 100%; object-fit: cover; }
 .capplayer img.kb { animation: kb 17s ease-in-out infinite alternate; }
@@ -119,8 +120,8 @@ em.l-zu, em.l-mix { color: var(--lc); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 .capplayer .w { color: rgba(255, 255, 255, 0.38); transition: color 0.18s; }
 .capplayer .w.lit { color: #fff; }
-.capplayer .w.lit.l-zu { color: #ff9d78; }
-.capplayer .w.lit.l-mix { color: #ffcf5c; }
+.capplayer .w.lit.l-zu { color: var(--clay-tint); }
+.capplayer .w.lit.l-mix { color: var(--gold); }
 .capbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 12px; padding: 12px 1rem 1rem; color: #fff; }
 .capbar button { width: 36px; height: 36px; border-radius: 50%; background: var(--gold); color: var(--ink); display: grid; place-items: center; }
 .capbar .mono { opacity: 0.8; white-space: nowrap; }
@@ -138,7 +139,7 @@ em.l-zu, em.l-mix { color: var(--lc); }
 .dim { opacity: 0.18; }
 .sm-src rect { fill: var(--ink); }
 .sm-src .sm-t1 { fill: var(--ivory); }
-.sm-src .sm-t2 { fill: #c9c2b4; }
+.sm-src .sm-t2 { fill: var(--z-ivory-line-strong); }
 .sm-clip rect { fill: var(--tint); }
 .sm-clip, .sm-leaf { transition: opacity 0.25s; }
 .sm-leaf { cursor: default; outline: none; }
@@ -162,7 +163,7 @@ em.l-zu, em.l-mix { color: var(--lc); }
 .nav nav a:hover { color: var(--amber-deep); }
 .nav-cta { margin-left: auto; display: flex; align-items: center; gap: 20px; }
 
-.hero { position: relative; min-height: min(80dvh, 760px); padding: 6rem var(--pad) 3rem; overflow: hidden; background: radial-gradient(900px 440px at 78% 40%, #fff3d6 0%, transparent 60%), var(--ivory); }
+.hero { position: relative; min-height: min(80dvh, 760px); padding: 6rem var(--pad) 3rem; overflow: hidden; background: radial-gradient(900px 440px at 78% 40%, var(--tint-2) 0%, transparent 60%), var(--ivory); }
 .strand { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .strand canvas { width: 100% !important; height: 100% !important; display: block; }
 .strand-fallback { background: linear-gradient(90deg, transparent 0, var(--gold) 20%, transparent 46%) center / 100% 6px no-repeat; }
@@ -192,7 +193,7 @@ em.l-zu, em.l-mix { color: var(--lc); }
 .speak h2 { font-size: var(--z-type-display); }
 .speak-copy > p { margin: 24px 0 32px; font-size: var(--z-type-base); color: var(--ink-2); max-width: 34rem; }
 .legend { display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0 1rem; font-size: var(--z-type-sm); font-weight: 500; }
-.legend i { display: inline-block; width: 18px; height: 6px; border-radius: 3px; background: var(--lc); margin-right: 6px; vertical-align: middle; }
+.legend i { display: inline-block; width: 18px; height: 6px; border-radius: var(--z-r-nested); background: var(--lc); margin-right: 6px; vertical-align: middle; }
 .mapsec { background: var(--paper); border-radius: var(--z-r-panel); margin: 0 clamp(0.5rem, 2vw, 1.5rem); padding: clamp(2.5rem, 6vw, 4rem) var(--pad); }
 .mapsec-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 1.5rem; }
 .mapsec h2 { font-size: var(--z-type-display); }
@@ -253,9 +254,12 @@ em.l-zu, em.l-mix { color: var(--lc); }
   .speak, .mzansi { padding-top: 48px; padding-bottom: 3rem; }
   .price { padding-top: 2rem; padding-bottom: 3rem; }
   .price h2, .speak h2, .mzansi h2, .closer h2 { font-size: var(--z-type-display); line-height: 1.02; }
-  .closer { gap: 1.25rem; padding: 32px 1.5rem; border-radius: 20px; }
+  .closer { gap: 1.25rem; padding: 32px 1.5rem; border-radius: var(--z-r-panel); }
   .micbtn { position: absolute; left: var(--pad); bottom: 1rem; margin: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Market table: a "none confirmed" cell is quiet text, still readable on white. */
+td.no { color: var(--muted); }

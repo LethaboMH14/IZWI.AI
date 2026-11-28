@@ -1,7 +1,7 @@
 /* Flat Studio panels (docs/design/DESIGN-SYSTEM.md, Panels, TranscriptRow). Tokens only; the few hex values are the
    shell pill pairs from workspace.css and the selected-row tint from the Panels component page. */
 .fs {
-  --fs-row-on: #443824;
+  --fs-row-on: var(--z-shell-4);
   position: relative; height: 100%; min-height: 640px; box-sizing: border-box; padding: var(--z-s4);
   display: grid; gap: var(--z-s4);
   grid-template-columns: var(--z-panel-w) minmax(0, 1.25fr) minmax(0, 1fr) var(--z-agent-w);
@@ -44,12 +44,12 @@
 .fs .z-tabs-indicator { display: none; }
 
 /* Pills on the charcoal panel use the shell pairs */
-.fs-project .z-pill-moss { background: #344624; color: #d9ebbd; }
-.fs-project .z-pill-moss svg { color: #d9ebbd; }
-.fs-project .z-pill-amber, .fs-project .z-pill-gold { background: #4a3416; color: #f6cf85; border-color: var(--z-gold); }
-.fs-project .z-pill-clay { background: #5b3329; color: #f4c9bd; }
-.fs-project .z-pill-held { background: repeating-linear-gradient(135deg, #5b3329 0 4px, #4a2a22 4px 7px); color: #f4c9bd; border-color: var(--z-clay); }
-.fs-project .z-pill-outline { color: #f6cf85; border-color: var(--z-amber-strong); }
+.fs-project .z-pill-moss { background: var(--z-shell-4); color: var(--line); }
+.fs-project .z-pill-moss svg { color: var(--line); }
+.fs-project .z-pill-amber, .fs-project .z-pill-gold { background: var(--z-shell-4); color: var(--tint); border-color: var(--z-gold); }
+.fs-project .z-pill-clay { background: var(--ink-2); color: var(--z-ivory-line); }
+.fs-project .z-pill-held { background: repeating-linear-gradient(135deg, var(--ink-2) 0 4px, var(--z-shell-4) 4px 7px); color: var(--z-ivory-line); border-color: var(--z-clay); }
+.fs-project .z-pill-outline { color: var(--tint); border-color: var(--z-amber-strong); }
 .fs-project .z-pill-muted { background: var(--z-shell-4); color: var(--z-shell-muted); }
 .fs-project .z-btn:not(.z-btn-primary) { color: var(--z-shell-text); }
 .fs-pillwrap { display: inline-flex; border-radius: var(--z-r-control); flex: none; }
@@ -68,7 +68,7 @@
 .fs-row { display: flex; justify-content: space-between; align-items: center; gap: var(--z-s4); padding: var(--z-s3) var(--z-s2); font-size: var(--z-text-meta); }
 .fs-row-text { min-width: 0; display: flex; flex-direction: column; overflow: hidden; text-overflow: ellipsis; }
 .fs-row-sub, .fs-row-meta { font-size: var(--z-text-micro); color: var(--z-shell-muted); }
-.fs-row-meta.is-open { color: #f6cf85; }
+.fs-row-meta.is-open { color: var(--tint); }
 .fs-none { margin: 0; font-size: var(--z-text-meta); color: var(--z-shell-muted); }
 .fs-project-foot { margin: auto 0 0; font-size: var(--z-text-micro); color: var(--z-shell-muted); }
 .fs-scene { display: flex; align-items: center; gap: var(--z-s3); padding: var(--z-s2); border-radius: var(--z-r-control); }
@@ -103,7 +103,7 @@
 .fs-panel .fs-muted { color: var(--z-shell-muted); }
 .fs-panel-flow { position: static; flex: 1; color: var(--z-ink); }
 .fs-panel-flow .fs-muted { color: var(--z-ink-muted); }
-.fs-bar { width: min(240px, 70%); height: 4px; border-radius: 2px; background: var(--z-shell-line-strong); overflow: hidden; display: block; }
+.fs-bar { width: min(240px, 70%); height: 4px; border-radius: var(--z-r-nested); background: var(--z-shell-line-strong); overflow: hidden; display: block; }
 .fs-bar i { display: block; height: 100%; background: var(--z-amber); }
 .fs-marks { position: absolute; left: var(--z-s5); top: var(--z-s5); display: flex; gap: var(--z-s3); pointer-events: none; }
 .fs-badge { font-size: var(--z-text-micro); font-weight: 600; background: var(--z-gold-tint); color: var(--z-ink); border-radius: var(--z-r-control); padding: 2px 8px; }
@@ -114,9 +114,9 @@
 .fs-clock { font: var(--z-text-meta) var(--z-font-mono); white-space: nowrap; }
 .fs-scrubwrap { position: relative; flex: 1; min-width: 40px; height: 24px; display: flex; align-items: center; }
 .fs-scrub { appearance: none; width: 100%; height: 24px; margin: 0; background: transparent; cursor: pointer; }
-.fs-scrub::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--z-amber) var(--p), rgba(255, 255, 255, 0.3) var(--p)); }
-.fs-scrub::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.3); }
-.fs-scrub::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--z-amber); }
+.fs-scrub::-webkit-slider-runnable-track { height: 4px; border-radius: var(--z-r-nested); background: linear-gradient(to right, var(--z-amber) var(--p), rgba(255, 255, 255, 0.3) var(--p)); }
+.fs-scrub::-moz-range-track { height: 4px; border-radius: var(--z-r-nested); background: rgba(255, 255, 255, 0.3); }
+.fs-scrub::-moz-range-progress { height: 4px; border-radius: var(--z-r-nested); background: var(--z-amber); }
 .fs-scrub::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--z-amber); border: 2px solid var(--z-ivory-0); }
 .fs-scrub::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--z-amber); border: 2px solid var(--z-ivory-0); }
 .fs-scrub:focus-visible { box-shadow: none; outline: 2px solid var(--z-amber-glow); outline-offset: 2px; }
@@ -128,7 +128,7 @@
 .fs-ctl-extra { display: inline-flex; }
 .fs-env { position: absolute; inset: 0 0 44px; }
 .fs-env-bars { position: absolute; inset: var(--z-s6); display: flex; align-items: center; gap: 2px; }
-.fs-env-bars i { flex: 1; border-radius: 1px; background: var(--z-shell-muted); }
+.fs-env-bars i { flex: 1; border-radius: var(--z-r-nested); background: var(--z-shell-muted); }
 .fs-env-played i { background: var(--z-amber); }
 
 /* Scene strip */
@@ -157,8 +157,8 @@
 .fs-line[aria-current="true"] .fs-tc { color: var(--z-amber-text); }
 .fs-line-body { min-width: 0; cursor: pointer; }
 .fs-line-text { margin: 0; overflow-wrap: anywhere; }
-.fs-line-text .is-word { color: var(--z-amber-text); background: var(--z-amber-hover); border-radius: 3px; }
-.fs-hit { background: var(--z-amber-hover); color: inherit; border-radius: 3px; }
+.fs-line-text .is-word { color: var(--z-amber-text); background: var(--z-amber-hover); border-radius: var(--z-r-nested); }
+.fs-hit { background: var(--z-amber-hover); color: inherit; border-radius: var(--z-r-nested); }
 .fs-line-meta { display: flex; flex-wrap: wrap; gap: var(--z-s3); align-items: center; font-size: var(--z-text-micro); }
 .fs-line-meta:empty { display: none; }
 .fs-line-edit { width: 100%; box-sizing: border-box; font: inherit; color: var(--z-ink); background: var(--z-ivory-0); border: 1px solid var(--z-amber); border-radius: var(--z-r-control); padding: var(--z-s3) var(--z-s4); resize: vertical; }
@@ -267,3 +267,18 @@
   .fs-project, .fs-agent { transition: none; }
   .fs-line:hover { transform: none; }
 }
+
+/* A thin envelope under each transcript line: loud speech is taller. Drawn only from real peaks. */
+.fs-line-wave { display: flex; align-items: flex-end; gap: 1px; height: 14px; margin-top: var(--z-s2); }
+.fs-line-wave span { flex: 1 1 0; min-width: 1px; background: var(--z-ivory-line-strong); border-radius: var(--z-r-nested); }
+
+/* Readiness checklist for a story with nothing to edit yet. Plain rows; the state word carries the meaning. */
+.fs-ready { display: grid; gap: var(--z-s4); padding: var(--z-s6); max-width: 36rem; }
+.fs-ready-h { margin: 0; font: 600 var(--z-text-body)/1.3 var(--z-font-ui); color: var(--z-ink); }
+.fs-ready-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--z-ivory-line); }
+.fs-ready-item { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: var(--z-s4); padding: var(--z-s4) 0; border-bottom: 1px solid var(--z-ivory-line); }
+.fs-ready-state { font: 600 var(--z-text-micro)/1 var(--z-font-ui); color: var(--z-ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.fs-ready-item[data-done] .fs-ready-state { color: var(--z-ink); }
+.fs-ready-text { display: grid; gap: var(--z-s1); min-width: 0; }
+.fs-ready-text b { font: 600 var(--z-text-body)/1.3 var(--z-font-ui); color: var(--z-ink); }
+.fs-ready-act { justify-self: end; }

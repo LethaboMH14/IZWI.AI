@@ -21,7 +21,7 @@
 .ag-fig .mono { font-family: var(--z-font-mono); color: var(--z-ink-muted); }
 .ag-waves { display: grid; grid-template-columns: 64px 1fr; gap: var(--z-s3) var(--z-s4); align-items: center; font-size: var(--z-text-meta); }
 .ag-wave { display: flex; align-items: center; gap: 2px; height: 24px; }
-.ag-wave > span { flex: 1; min-width: 1px; border-radius: 1px; }
+.ag-wave > span { flex: 1; min-width: 1px; border-radius: var(--z-r-nested); }
 .ag-wave[data-tone="original"] > span { background: var(--z-wave-original); }
 .ag-wave[data-tone="proposed"] > span { background: var(--z-wave-proposed); }
 .ag-wave-none { color: var(--z-ink-faint); }

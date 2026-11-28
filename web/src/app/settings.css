@@ -2,7 +2,7 @@
 .st-page { max-width: 62rem; padding-bottom: 4rem; }
 .st-page > header { margin: 20px 0 24px; }
 .st-page h1 { font-size: var(--z-type-display); }
-.st-page h1 em { font-family: var(--display); font-style: italic; color: var(--amber); }
+.st-page h1 em { font-family: var(--display); font-style: italic; color: var(--amber-deep); }
 .st-page .lede { margin-top: 12px; max-width: 40rem; }
 
 .st-sec { margin-top: 24px; padding: 20px; border-radius: var(--r-l); background: var(--paper); box-shadow: var(--shadow); }
@@ -12,9 +12,9 @@
 .st-sec header p, .st-note { color: var(--ink-2); font-size: var(--z-type-sm); margin-top: 4px; max-width: 40rem; }
 
 .st-note { padding: 12px 1rem; border-radius: var(--r-m); background: var(--tint-2); line-height: 1.45; }
-.st-note.bad { background: var(--clay-tint); color: var(--clay); font-weight: 600; }
+.st-note.bad { background: var(--clay-tint); color: var(--clay-text); font-weight: 600; }
 .st-note.good { background: var(--moss-tint); color: var(--moss); font-weight: 600; }
-.st-note code, .st-sec code { font-family: var(--mono); font-size: 0.82em; background: var(--sand); padding: 2px 6px; border-radius: 6px; word-break: break-all; }
+.st-note code, .st-sec code { font-family: var(--mono); font-size: 0.82em; background: var(--sand); padding: 2px 6px; border-radius: var(--z-r-clip); word-break: break-all; }
 .st-empty { color: var(--muted); font-size: var(--z-type-sm); padding: 6px 0; }
 .st-skel { height: 5rem; border-radius: var(--r-m); background: linear-gradient(90deg, var(--sand), var(--ivory), var(--sand)); background-size: 200% 100%; animation: st-shimmer 1.4s linear infinite; }
 @keyframes st-shimmer { to { background-position: -200% 0; } }
@@ -44,7 +44,7 @@
 .st-test { font-size: var(--z-type-sm); color: var(--ink-2); }
 .st-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .st-actions .btn { height: 40px; font-size: var(--z-type-sm); }
-.btn.st-danger { background: var(--clay-tint); color: var(--clay); }
+.btn.st-danger { background: var(--clay-tint); color: var(--clay-text); }
 .btn.st-danger:hover { background: var(--clay); color: var(--paper); }
 .st-confirm { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-size: var(--z-type-sm); font-weight: 600; }
 

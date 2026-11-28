@@ -5,12 +5,12 @@
 .auth-box .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: var(--z-type-sm); font-weight: 600; }
 .auth-box .or::before, .auth-box .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .auth .btn[disabled] { opacity: 0.85; }
-.form-err { padding: 0.75rem 1rem; border-radius: var(--r-s); background: var(--clay-tint); color: #8b3517; font-weight: 600; font-size: var(--z-type-sm); line-height: 1.35; }
+.form-err { padding: 0.75rem 1rem; border-radius: var(--r-s); background: var(--clay-tint); color: var(--amber-deep); font-weight: 600; font-size: var(--z-type-sm); line-height: 1.35; }
 
 /* ---- invite ---- */
 .invite { min-height: 100dvh; padding: 1.4rem clamp(1.2rem, 5vw, 4.5rem) 4rem; display: flex; flex-direction: column; }
 .invite-box { margin: auto; max-width: 30rem; display: grid; gap: 1rem; justify-items: start; }
-.invite-box > svg { width: 44px; height: 44px; color: var(--clay); }
+.invite-box > svg { width: 44px; height: 44px; color: var(--clay-text); }
 .invite-box h1 { font-size: var(--z-type-display); }
 .invite-actions { margin-top: 8px; }
 
@@ -46,12 +46,12 @@
 .up-bar { height: 12px; border-radius: var(--z-r-control); background: var(--sand-2); overflow: hidden; }
 .up-bar i { display: block; height: 100%; border-radius: var(--z-r-control); background: var(--gold); transition: width 0.35s var(--ease); }
 .u-done .up-bar i { background: var(--moss); }
-.u-waiting .up-bar i, .u-paused .up-bar i { background: #b9b2a3; }
+.u-waiting .up-bar i, .u-paused .up-bar i { background: var(--z-shell-muted); }
 .up-meta { display: flex; justify-content: space-between; gap: 8px 1rem; flex-wrap: wrap; color: var(--ink-2); }
 .up-note { display: flex; gap: 0.5rem; align-items: flex-start; font-size: var(--z-type-sm); color: var(--ink-2); line-height: 1.4; }
 .up-note.ok { color: var(--moss); font-weight: 600; }
 .up-note.warn { color: var(--amber-deep); font-weight: 600; }
-.up-note.err { color: #8b3517; font-weight: 600; background: var(--clay-tint); padding: 0.75rem 1rem; border-radius: var(--r-s); display: block; }
+.up-note.err { color: var(--amber-deep); font-weight: 600; background: var(--clay-tint); padding: 0.75rem 1rem; border-radius: var(--r-s); display: block; }
 .up-note svg { flex: none; margin-top: 2px; }
 .up-actions { display: flex; gap: 12px 20px; align-items: center; flex-wrap: wrap; }
 .up-next { display: grid; gap: 8px; counter-reset: n; color: var(--ink-2); font-size: var(--z-type-sm); }

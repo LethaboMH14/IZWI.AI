@@ -14,18 +14,18 @@
 .st-item p, .st-meta { font-size: var(--z-type-sm); color: var(--muted); overflow-wrap: anywhere; }
 .st-empty { padding: 24px 20px; border-radius: var(--r-m); background: var(--sand); color: var(--ink-2); display: grid; gap: 8px; justify-items: start; }
 .st-empty b { font: 700 1.1rem var(--display); }
-.st-err { color: var(--clay); font-weight: 600; font-size: var(--z-type-sm); overflow-wrap: anywhere; }
+.st-err { color: var(--clay-text); font-weight: 600; font-size: var(--z-type-sm); overflow-wrap: anywhere; }
 .st-err a { text-decoration: underline; }
 .st-ok { color: var(--moss); font-weight: 600; font-size: var(--z-type-sm); }
-.st-bar { height: 8px; border-radius: 99px; background: var(--sand-2); overflow: hidden; }
-.st-bar i { display: block; height: 100%; background: var(--amber); border-radius: 99px; transition: width 0.45s var(--ease); }
+.st-bar { height: 8px; border-radius: var(--z-r-panel); background: var(--sand-2); overflow: hidden; }
+.st-bar i { display: block; height: 100%; background: var(--amber); border-radius: var(--z-r-panel); transition: width 0.45s var(--ease); }
 .st-bar.done i { background: var(--moss); }
 .st select, .st .st-in { font: inherit; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-s); padding: 0 12px; height: 44px; max-width: 100%; }
 .st textarea.st-in { height: auto; padding: 8px 12px; width: 100%; resize: vertical; }
 .st select:focus, .st .st-in:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 4px var(--tint-2); }
 .st .btn:focus-visible, .st button:focus-visible, .st a:focus-visible { outline: 2.5px solid var(--ink); outline-offset: 2px; }
 .st .btn-sm { height: 36px; font-size: var(--z-type-sm); padding: 0 16px; }
-.st .btn-danger { background: var(--clay-tint); color: var(--clay); }
+.st .btn-danger { background: var(--clay-tint); color: var(--clay-text); }
 .st .btn-danger:hover { background: var(--clay); color: #fff; }
 .st-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .st-lang { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.5rem; }
@@ -37,7 +37,7 @@
 .st-line { display: grid; grid-template-columns: 4.6rem 1fr auto; gap: 0.5rem 12px; align-items: start; padding: 8px 0; border-bottom: 1px dashed var(--line); }
 .st-line.ok .st-text { color: var(--ink-2); }
 .st-text { font-family: var(--serif); font-size: var(--z-type-base); overflow-wrap: anywhere; }
-.st-flag { color: var(--clay); font-size: var(--z-type-xs); font-weight: 600; }
+.st-flag { color: var(--clay-text); font-size: var(--z-type-xs); font-weight: 600; }
 .st-link { display: grid; gap: 0.5rem; padding: 16px 1rem; border-radius: var(--r-m); background: var(--moss-tint); }
 .st-link code { font: 500 0.8rem var(--mono); overflow-wrap: anywhere; background: var(--paper); padding: 6px 8px; border-radius: var(--r-s); display: block; }
 .st-quote { font-family: var(--serif); font-style: italic; padding: 12px 1rem; border-left: 3px solid var(--gold); background: var(--tint-2); border-radius: 0 var(--r-s) var(--r-s) 0; }

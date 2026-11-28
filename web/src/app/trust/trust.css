@@ -2,7 +2,7 @@
 .trust { min-height: 100vh; background: var(--ivory); color: var(--ink); font-family: var(--text); padding: 24px 16px 64px; }
 .trust > * { max-width: 880px; margin-left: auto; margin-right: auto; }
 .trust .mono { font-family: var(--mono); }
-.trust code { font-family: var(--mono); font-size: 0.82em; background: var(--sand); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; }
+.trust code { font-family: var(--mono); font-size: 0.82em; background: var(--sand); border-radius: var(--z-r-clip); padding: 2px 6px; overflow-wrap: anywhere; }
 .trust h1, .trust h2 { font-family: var(--display); font-weight: 500; letter-spacing: -0.01em; }
 .trust h1 { font-size: var(--z-type-display); line-height: 1.1; margin: 0 0 12px; }
 .trust h2 { font-size: var(--z-type-lg); margin: 0 0 12px; }

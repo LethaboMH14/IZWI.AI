@@ -1,6 +1,6 @@
 /* Consent link QR in Studio Protect, and the language switcher on the guest consent page. */
 .cq { display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: start; padding: 16px 1rem; border-radius: var(--r-m); background: var(--paper); border: 1.5px solid var(--line); }
-.cq-code { width: 240px; height: 240px; padding: 12px; background: #faf8f4; border: 1px solid var(--line); border-radius: var(--r-s); }
+.cq-code { width: 240px; height: 240px; padding: 12px; background: var(--ivory); border: 1px solid var(--line); border-radius: var(--r-s); }
 .cq-code svg { display: block; width: 100%; height: 100%; }
 .cq-side { display: grid; gap: 8px; min-width: 0; }
 .cq-side code { font: 500 0.8rem var(--mono); overflow-wrap: anywhere; background: var(--sand); padding: 6px 8px; border-radius: var(--r-s); display: block; }
