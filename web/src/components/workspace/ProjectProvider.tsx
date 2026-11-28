@@ -8,14 +8,20 @@ import { createPlayheadStore, createProjectStore, type PlayheadState, type Proje
 
 type Stores = { project: StoreApi<ProjectStoreState>; playhead: StoreApi<PlayheadState> };
 const ProjectContext = createContext<Stores | null>(null);
+// The runtime kill switch, read by the server layout on each request (server/flags.ts).
+const AssistantContext = createContext(false);
 
-export function ProjectProvider({ id, initial, children }: { id: string; initial: ProjectState; children: ReactNode }) {
+export function ProjectProvider({ id, initial, assistant = false, children }: { id: string; initial: ProjectState; assistant?: boolean; children: ReactNode }) {
   const [stores] = useState<Stores>(() => ({ project: createProjectStore(id, initial), playhead: createPlayheadStore() }));
   useEffect(() => {
     stores.project.getState().startPolling();
     return () => stores.project.getState().stopPolling();
   }, [stores]);
-  return <ProjectContext.Provider value={stores}>{children}</ProjectContext.Provider>;
+  return (
+    <ProjectContext.Provider value={stores}>
+      <AssistantContext.Provider value={assistant}>{children}</AssistantContext.Provider>
+    </ProjectContext.Provider>
+  );
 }
 
 function useStores() {
@@ -23,6 +29,8 @@ function useStores() {
   if (!stores) throw new Error("Project hooks must be used inside <ProjectProvider>.");
   return stores;
 }
+
+export function useAssistantEnabled() { return useContext(AssistantContext); }
 
 export function useProject<T>(selector: (state: ProjectStoreState) => T): T {
   return useStore(useStores().project, selector);

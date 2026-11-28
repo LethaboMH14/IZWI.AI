@@ -59,3 +59,15 @@ export function parseMarkdown(text: string): Block[] {
   flush();
   return blocks;
 }
+
+// The warning chips on an assistant reply: the creator's only view of what the server held back from the model.
+export function metaChips(data: { redacted?: number; excludedLines?: number }) {
+  const n = data.redacted ?? 0, held = data.excludedLines ?? 0;
+  const chips: { text: string; title?: string }[] = [];
+  if (n > 0) chips.push({ text: n === 1 ? "1 item redacted" : `${n} items redacted` });
+  if (held > 0) chips.push({
+    text: held === 1 ? "1 transcript line held back: possible instruction" : `${held} transcript lines held back: possible instructions`,
+    title: "The injection check scored these lines as instructions, so the assistant never saw them. The check is trained on English only and can miss other languages.",
+  });
+  return chips;
+}

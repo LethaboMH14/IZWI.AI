@@ -45,6 +45,7 @@
 .ag-outcons a:hover { background: var(--z-ivory-2); }
 .ag-chips { display: flex; gap: var(--z-s3); margin: 0; flex-wrap: wrap; }
 .ag-chip { font-size: var(--z-text-micro); border-radius: 999px; padding: 1px 8px; background: var(--z-ivory-4); color: var(--z-ink-muted); }
+.ag-chip-warn { background: var(--z-amber-tint); color: var(--z-amber-ink); }
 .ag-note { margin: 0; color: var(--z-ink-muted); }
 .ag-err { margin: 0; color: var(--z-clay); font-size: var(--z-text-ui); }
 .ag-prompts { display: flex; flex-direction: column; gap: var(--z-s3); margin-top: var(--z-s4); }

@@ -6,6 +6,7 @@ import { projectState } from "@/server/state";
 import { HttpError } from "@/server/http";
 import { ProjectProvider } from "@/components/workspace/ProjectProvider";
 import { ProjectFrame } from "@/components/workspace/ProjectFrame";
+import { assistantEnabled } from "@/server/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
     throw e;
   }
   return (
-    <ProjectProvider key={id} id={id} initial={initial}>
+    <ProjectProvider key={id} id={id} initial={initial} assistant={assistantEnabled()}>
       <ProjectFrame>{children}</ProjectFrame>
     </ProjectProvider>
   );

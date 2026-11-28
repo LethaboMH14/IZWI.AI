@@ -1,5 +1,7 @@
 # Lane A demo deployment
 
+For the demo, start with the [demo tunnel runbook](../../docs/DEMO-TUNNEL.md): it compares this two-hostname setup with a consent-only one and holds the phone checklist.
+
 Use the `izwi-demo` named tunnel for the isolated build. The team account owner adds `studio.<team-zone>` and `consent.<team-zone>` within an existing Cloudflare zone. Use a restricted self-hosted Cloudflare Access application on the whole Studio hostname. Configure its audience in the ingress rule so the connector verifies Access before forwarding. Keep the Studio app sign-in enabled inside Access. [Cloudflare origin parameters](https://developers.cloudflare.com/tunnel/reference/origin-parameters/)
 
 1. Use dedicated storage, SQLite, application secrets and team-only demo accounts. Bind the app origin to loopback at port 3187. Start the worker with the same storage, database and environment. Apply migrations to a backup copy before deploying with data.

@@ -10,7 +10,7 @@ import { buildGraph, litEdges, type Graph, type GraphEdge, type GraphNode } from
 import { langName } from "@/lib/languages";
 import { trimBlocked } from "@/lib/timeline-math";
 import { useFrame } from "@/lib/frames";
-import { usePlayheadStore, useProject, useProjectStore } from "@/components/workspace/ProjectProvider";
+import { useAssistantEnabled, usePlayheadStore, useProject, useProjectStore } from "@/components/workspace/ProjectProvider";
 import "@/app/spatial.css";
 
 type Props = { backdrop?: ReactNode; timeline: ReactNode; agentCard: ReactNode };
@@ -61,6 +61,7 @@ function CanvasScene({ graph, onFitColumn }: { graph: Graph; onFitColumn: (label
 }
 
 function SpatialCanvasInner({ backdrop, timeline, agentCard }: Props) {
+  const assistant = useAssistantEnabled();
   const state = useProject((s) => s.state);
   const selection = useProject((s) => s.selection);
   const store = useProjectStore();
@@ -171,7 +172,7 @@ function SpatialCanvasInner({ backdrop, timeline, agentCard }: Props) {
       switch (node.kind) {
         case "scene": return [
           { label: "Open in Flat Studio", run: () => { router.push(`${base}?focus=${encodeURIComponent(id)}`); } },
-          { label: "Trim with AI", tone: "ai", run: () => { const clip = state.clips.find((c) => c.id === id); askAgent(`Suggest a tighter trim for “${clip?.title ?? "scene"}” (${clip?.startMs ?? 0}–${clip?.endMs ?? 0} ms).`); say("Added to the agent"); } },
+          ...(assistant ? [{ label: "Trim with AI", tone: "ai" as const, run: () => { const clip = state.clips.find((c) => c.id === id); askAgent(`Suggest a tighter trim for “${clip?.title ?? "scene"}” (${clip?.startMs ?? 0}–${clip?.endMs ?? 0} ms).`); say("Added to the agent"); } }] : []),
           { label: "Render", items: PRESETS.map(([value, label]) => ({ label, run: () => void runPerScene("queued", (clipId, signal) => renderScene(clipId, value, signal), [id]) })) },
           { label: "Keep", run: () => void runPerScene("kept", (clipId, signal) => setClipStatus(clipId, "kept", signal), [id]) },
           { label: "Drop", run: () => void runPerScene("dropped", (clipId, signal) => setClipStatus(clipId, "dropped", signal), [id]) },
@@ -190,13 +191,13 @@ function SpatialCanvasInner({ backdrop, timeline, agentCard }: Props) {
         case "offer": return [{ label: "Open in Earn", run: () => { router.push(`${base}/earn`); } }];
         case "proposal": return [
           { label: "Preview range", run: () => { const n = byId.get(`prop:${id}`); if (n?.data.startMs !== undefined && n.data.endMs !== undefined) playhead.getState().playRange(n.data.startMs, n.data.endMs); } },
-          { label: "Open in agent panel", run: () => { askAgent(`Review trim proposal ${node.data.title} (${node.data.meta}).`); } },
+          ...(assistant ? [{ label: "Open in agent panel", run: () => { askAgent(`Review trim proposal ${node.data.title} (${node.data.meta}).`); } }] : []),
         ];
         default: return [];
       }
     };
     return menusFor(graph.nodes, make);
-  }, [graph, projectId, state, router, runPerScene, renderScene, setClipStatus, askConsent, playhead, say]);
+  }, [graph, projectId, state, router, runPerScene, renderScene, setClipStatus, askConsent, playhead, say, assistant]);
 
   const openMenu = menu ? menus.get(menu.nodeId) ?? [] : [];
   const activeEdges = active ? graph.edges.filter((e) => e.source === active.id || e.target === active.id) : [];

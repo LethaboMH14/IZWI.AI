@@ -11,7 +11,7 @@ import { ProtectTab } from "@/components/studio/ProtectTab";
 import { PublishTab } from "@/components/studio/PublishTab";
 import { EarnTab } from "@/components/studio/EarnTab";
 import { AssistantPanel } from "@/components/studio/AssistantPanel";
-import { useProject, useProjectStore } from "./ProjectProvider";
+import { useAssistantEnabled, useProject, useProjectStore } from "./ProjectProvider";
 import "@/app/studio.css";
 
 const ROUTE: Record<TabId, string> = { canvas: "/spatial", create: "", localise: "/localise", protect: "/protect", publish: "/publish", earn: "/earn" };
@@ -19,6 +19,7 @@ const BODY = { canvas: CanvasTab, create: CreateTab, localise: LocaliseTab, prot
 
 export function LegacyStage({ tab }: { tab: TabId }) {
   const router = useRouter();
+  const assistant = useAssistantEnabled();
   const store = useProjectStore();
   const id = useProject((s) => s.id);
   const state = useProject((s) => s.state);
@@ -28,7 +29,7 @@ export function LegacyStage({ tab }: { tab: TabId }) {
   return (
     <div className="legacy-stage">
       <Body state={state} refresh={refresh} go={go} />
-      <AssistantPanel projectId={id} tab={tab} refresh={refresh} />
+      <AssistantPanel enabled={assistant} projectId={id} tab={tab} refresh={refresh} />
     </div>
   );
 }

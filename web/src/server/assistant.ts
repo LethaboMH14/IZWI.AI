@@ -12,6 +12,7 @@ import { StepSchema } from "./planner";
 import { savePlan } from "./planner";
 import { previewGlossaryChanges } from "./actions";
 import { ConsentScopeSchema } from "./consent-scope";
+import { audit } from "./audit";
 
 const INJECTION_SCORE = 0.7;
 const hashText = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -175,17 +176,22 @@ export function assistantTools(ctx: Ctx, projectId: string, proposals: Array<{ s
   return tools;
 }
 
-export function saveAssistantTurn(args: { threadId: string; projectId: string; workspaceId: string; provider: ProviderRow; text: string; assistantText: string; redacted: number; proposals: Proposal[]; requestId: string; tokensIn: number | null; tokensOut: number | null }) {
+export function saveAssistantTurn(args: { threadId: string; projectId: string; workspaceId: string; provider: ProviderRow; text: string; assistantText: string; redacted: number; excludedLines?: number; proposals: Proposal[]; requestId: string; tokensIn: number | null; tokensOut: number | null }) {
   const t = now();
   run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, ?, ?, ?, '[]', 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.text, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, args.requestId, args.tokensIn, args.tokensOut, t);
-  run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.assistantText, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, JSON.stringify(args.proposals), args.requestId, args.tokensIn, args.tokensOut, t + 1);
+  // Only the assistant's row carries excluded_lines: it is what the badge on that reply reports.
+  run(`INSERT INTO assistant_message (id, thread_id, workspace_id, project_id, role, text, provider_id, provider_label, model, privacy, redacted, excluded_lines, proposals, outcome, request_id, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, 'complete', ?, ?, ?, ?)`, newId("asm"), args.threadId, args.workspaceId, args.projectId, args.assistantText, args.provider.id, args.provider.label, args.provider.model, privacyOf(args.provider), args.redacted, args.excludedLines ?? 0, JSON.stringify(args.proposals), args.requestId, args.tokensIn, args.tokensOut, t + 1);
 }
 
-export function persistProposals(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; source?: Proposal["source"]; preview: Proposal["preview"]; scope?: string }>, provider: ProviderRow) {
+export function persistProposals(ctx: Ctx, projectId: string, proposals: Array<{ steps: unknown[]; title: string; reason: string; source?: Proposal["source"]; preview: Proposal["preview"]; scope?: string }>, provider: ProviderRow, threadId?: string) {
   const result: Proposal[] = [];
   for (const p of proposals) {
     const steps = p.steps.map((s) => StepSchema.parse(s));
     const id = savePlan(ctx, projectId, p.reason.slice(0, 300), `assistant:${provider.id}/${provider.model}`, steps);
+    // Creation is audited next to approval (planner.ts), so the trail shows what the assistant suggested even if nobody acts on it.
+    // Names only: action or job verbs, never arguments, which can carry transcript text.
+    audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "assistant", action: "assistant.proposal_created", target: id,
+      meta: { projectId, threadId: threadId ?? null, provider: provider.id, model: provider.model, steps: steps.map((s) => (s.kind === "action" ? s.action : s.verb)) } });
     result.push({ planId: id, title: p.title, reason: p.reason, ...(p.source ? { source: p.source } : {}), preview: p.preview, ...(p.scope ? { scope: p.scope } : {}), kind: p.steps.some((s) => (s as { kind?: string }).kind === "job") ? "jobs" : "action" });
   }
   return result;
