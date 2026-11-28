@@ -17,6 +17,14 @@
 .connection-wizard h3 { margin: 0; }
 .connection-wizard code { overflow-wrap: anywhere; }
 .link-button { border: 0; padding: 0; background: none; color: var(--amber-deep); text-decoration: underline; cursor: pointer; font: inherit; }
+.preferences-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(15rem, 0.9fr); gap: 1.2rem; align-items: start; }
+.preferences-controls { display: grid; gap: 0.9rem; }
+.preferences-preview { display: grid; gap: 0.9rem; padding: 1.1rem; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--paper); }
+.preferences-preview h3 { margin: 0; }
+.preferences-preview p, .preferences-preview small { color: var(--ink-2); }
+.preview-panel { display: grid; gap: 0.5rem; padding: 1rem; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ivory); }
+.preview-panel span { color: var(--muted); font-size: 0.88rem; }
+.preferences-controls .st-actions { margin-top: 0.2rem; }
 .st-sec > header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.8rem; margin-bottom: 1rem; }
 .st-sec h2 { font-size: 1.55rem; }
 .st-sec h3 { font-size: 1.1rem; margin-bottom: 0.4rem; }
@@ -108,7 +116,7 @@
 .st-team-form .btn { height: 48px; }
 
 @media (max-width: 640px) {
-  .st-two, .st-team-form { grid-template-columns: 1fr; }
+  .st-two, .st-team-form, .preferences-layout { grid-template-columns: 1fr; }
   .st-sec { padding: 1rem; border-radius: var(--r-m); }
   .st-ext thead { display: none; }
   .st-ext, .st-ext tbody, .st-ext tr, .st-ext td, .st-ext tbody th { display: block; }

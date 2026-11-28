@@ -44,7 +44,9 @@ function useLastProject(current: string | null) {
   return current ?? stored;
 }
 
-export function AppShell({ children, workspace, user, connectionsEnabled }: { children: React.ReactNode; workspace: string; user: { name: string; email: string }; connectionsEnabled: boolean }) {
+type Appearance = { theme: "approved" | "warm" | "high-contrast"; accent: "amber" | "terracotta" | "forest" | "ocean"; fontPair: "project" | "clean"; textSize: "standard" | "large" | "larger"; reducedMotion: boolean };
+
+export function AppShell({ children, workspace, user, settingsVisible, appearance }: { children: React.ReactNode; workspace: string; user: { name: string; email: string }; settingsVisible: boolean; appearance: Appearance }) {
   const path = usePathname();
   const router = useRouter();
   const project = useLastProject(projectInPath(path));
@@ -60,7 +62,7 @@ export function AppShell({ children, workspace, user, connectionsEnabled }: { ch
   };
   const settings: MenuItem[] = [
     { heading: workspace },
-    ...(connectionsEnabled ? [{ id: "settings", label: "Settings", onSelect: () => router.push("/app/settings") } satisfies MenuItem] : []),
+    ...(settingsVisible ? [{ id: "settings", label: "Settings", onSelect: () => router.push("/app/settings") } satisfies MenuItem] : []),
     { id: "engine", label: "Run on", onSelect: () => router.push("/app/engine") },
     { id: "team", label: "Team", onSelect: () => router.push("/app/team") },
     { id: "extensions", label: "Extensions", onSelect: () => router.push("/app/extensions") },
@@ -96,7 +98,7 @@ export function AppShell({ children, workspace, user, connectionsEnabled }: { ch
 
   return (
     <ShellSlotsContext.Provider value={{ main, actions }}>
-      <div className="z-shell">
+      <div className="z-shell" data-izwi-theme={appearance.theme} data-izwi-accent={appearance.accent} data-izwi-font={appearance.fontPair} data-izwi-text-size={appearance.textSize} data-izwi-motion={appearance.reducedMotion ? "reduced" : "normal"}>
         <header className="z-header">
           <Wordmark href="/app" />
           <span className="z-header-divider" aria-hidden="true" />

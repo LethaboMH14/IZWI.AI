@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e:connections": "playwright test --config playwright.config.ts",
+    "test:e2e:preferences": "playwright test --config playwright.config.ts e2e/settings-preferences.spec.ts",
     "setup": "node scripts/setup.mjs && tsx scripts/migrate.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "worker": "tsx worker/index.ts",

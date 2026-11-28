@@ -512,6 +512,19 @@ ALTER TABLE upload_session ADD COLUMN multipart_id TEXT;
 ALTER TABLE upload_session ADD COLUMN bytes BIGINT CHECK (bytes IS NULL OR bytes >= 0);
 ALTER TABLE upload_session ADD COLUMN finished_at BIGINT;`,
   },
+  {
+    version: 10,
+    name: "per-user studio appearance preferences",
+    sql: `CREATE TABLE user_preferences (
+  user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+  theme TEXT NOT NULL DEFAULT 'approved' CHECK (theme IN ('approved','warm','high-contrast')),
+  accent TEXT NOT NULL DEFAULT 'amber' CHECK (accent IN ('amber','terracotta','forest','ocean')),
+  font_pair TEXT NOT NULL DEFAULT 'project' CHECK (font_pair IN ('project','clean')),
+  text_size TEXT NOT NULL DEFAULT 'standard' CHECK (text_size IN ('standard','large','larger')),
+  reduced_motion INTEGER NOT NULL DEFAULT 0 CHECK (reduced_motion IN (0,1)),
+  updated_at BIGINT NOT NULL
+);`,
+  },
 ];
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 

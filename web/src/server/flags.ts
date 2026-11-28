@@ -11,3 +11,11 @@ export function assistantEnabled(): boolean {
 export function connectionsEnabled(): boolean {
   return process.env.IZWI_FLAG_CONNECTIONS === "1";
 }
+
+export function preferencesEnabled(): boolean {
+  return process.env.IZWI_FLAG_PREFERENCES === "1";
+}
+
+export function languagesEnabled(): boolean {
+  return process.env.IZWI_FLAG_LANGUAGES === "1";
+}
