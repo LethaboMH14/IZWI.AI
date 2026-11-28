@@ -19,3 +19,7 @@ export function preferencesEnabled(): boolean {
 export function languagesEnabled(): boolean {
   return process.env.IZWI_FLAG_LANGUAGES === "1";
 }
+
+export function spatialRestoreEnabled(): boolean {
+  return process.env.IZWI_FLAG_SPATIAL_RESTORE === "1";
+}

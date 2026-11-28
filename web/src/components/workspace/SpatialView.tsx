@@ -5,6 +5,6 @@ import { Backdrop } from "@/components/scene3d/Backdrop";
 import { Timeline } from "@/components/timeline/Timeline";
 import { AgentPanel } from "@/components/agent/AgentPanel";
 
-export function SpatialView() {
-  return <SpatialCanvas backdrop={<Backdrop />} timeline={<Timeline compact />} agentCard={<AgentPanel variant="card" />} />;
+export function SpatialView({ restoreEnabled }: { restoreEnabled: boolean }) {
+  return <SpatialCanvas restoreEnabled={restoreEnabled} backdrop={<Backdrop />} timeline={<Timeline compact />} agentCard={<AgentPanel variant="card" />} />;
 }
