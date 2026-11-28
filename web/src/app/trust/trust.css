@@ -2,34 +2,34 @@
 .trust { min-height: 100vh; background: var(--ivory); color: var(--ink); font-family: var(--text); padding: 24px 16px 64px; }
 .trust > * { max-width: 880px; margin-left: auto; margin-right: auto; }
 .trust .mono { font-family: var(--mono); }
-.trust code { font-family: var(--mono); font-size: 0.82em; background: var(--sand); border-radius: 6px; padding: 1px 6px; overflow-wrap: anywhere; }
+.trust code { font-family: var(--mono); font-size: 0.82em; background: var(--sand); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; }
 .trust h1, .trust h2 { font-family: var(--display); font-weight: 500; letter-spacing: -0.01em; }
-.trust h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.1; margin: 0 0 12px; }
-.trust h2 { font-size: 1.35rem; margin: 0 0 12px; }
+.trust h1 { font-size: var(--z-type-display); line-height: 1.1; margin: 0 0 12px; }
+.trust h2 { font-size: var(--z-type-lg); margin: 0 0 12px; }
 .trust p { line-height: 1.55; color: var(--ink-2); margin: 0 0 8px; }
 
 .trust-top { display: flex; align-items: center; padding-bottom: 32px; }
 .trust-top a { color: inherit; text-decoration: none; }
 .trust-intro { margin-bottom: 32px; }
 .trust-intro p { max-width: 62ch; }
-.trust-tally { font-size: 0.85rem; color: var(--muted); margin-top: 12px; }
+.trust-tally { font-size: var(--z-type-sm); color: var(--muted); margin-top: 12px; }
 
-.trust-ledger { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-m); padding: 20px; margin-bottom: 40px; box-shadow: var(--shadow); }
-.trust-ledger dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 0 0 14px; }
-.trust-ledger dt { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.trust-ledger dd { margin: 2px 0 0; font-size: 1rem; color: var(--ink); overflow-wrap: anywhere; }
+.trust-ledger { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-m); padding: 20px; margin-bottom: 32px; box-shadow: var(--shadow); }
+.trust-ledger dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 0 0 12px; }
+.trust-ledger dt { font-size: var(--z-type-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.trust-ledger dd { margin: 2px 0 0; font-size: var(--z-type-base); color: var(--ink); overflow-wrap: anywhere; }
 
 .trust-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.trust-row { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-s); padding: 16px 18px; }
+.trust-row { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-s); padding: 16px 16px; }
 .trust-row-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.trust-row h3 { font-size: 1.02rem; font-weight: 600; margin: 0; color: var(--ink); }
-.trust-note { font-size: 0.92rem; border-left: 3px solid var(--gold); padding-left: 10px; }
+.trust-row h3 { font-size: var(--z-type-base); font-weight: 600; margin: 0; color: var(--ink); }
+.trust-note { font-size: var(--z-type-sm); border-left: 3px solid var(--gold); padding-left: 8px; }
 .trust-evidence { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
-.trust-status { font-size: 0.78rem; font-weight: 600; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+.trust-status { font-size: var(--z-type-xs); font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .trust-implemented { background: var(--moss-tint); color: var(--moss); }
 .trust-partial { background: var(--tint-2); color: var(--amber-deep); }
 .trust-planned { background: var(--sand-2); color: var(--ink-2); }
 
-.trust-foot { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); }
-.trust-foot p { font-size: 0.9rem; color: var(--muted); }
+.trust-foot { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); }
+.trust-foot p { font-size: var(--z-type-sm); color: var(--muted); }

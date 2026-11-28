@@ -72,14 +72,16 @@
   --z-font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
   --z-font-ui: var(--font-ui), "Segoe UI", system-ui, sans-serif;
   --z-font-mono: var(--font-time), ui-monospace, "Cascadia Mono", monospace;
-  --z-text-micro: 11px;
-  --z-text-meta: 12px;
-  --z-text-ui: 13px;
-  --z-text-body: 14px;
-  --z-text-title-s: 18px;
-  --z-text-title-m: 22px;
-  --z-text-title-l: 28px;
-  --z-text-figure: 32px;
+  /* Editor roles on the six-step product scale (12/14/16/20/28/40). Sizes moved to the nearest step from the
+     26 Nov values (11→12, 13→14, 18→20, 22→20, 32→28); needs Lethabo's sign-off. */
+  --z-text-micro: var(--z-type-xs);
+  --z-text-meta: var(--z-type-xs);
+  --z-text-ui: var(--z-type-sm);
+  --z-text-body: var(--z-type-sm);
+  --z-text-title-s: var(--z-type-lg);
+  --z-text-title-m: var(--z-type-lg);
+  --z-text-title-l: var(--z-type-xl);
+  --z-text-figure: var(--z-type-xl);
 
   /* Shared product scale for non-editor screens; the editor keeps the tighter roles above. */
   --z-type-xs: 12px;
