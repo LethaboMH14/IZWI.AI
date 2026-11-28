@@ -21,7 +21,7 @@ const ProviderIn = z.object({
   baseUrl: z.string().trim().min(8).max(300),
   model: z.string().trim().max(120).optional(),
   key: z.string().trim().max(400).optional(),
-  roles: z.array(z.enum(["plan", "translate", "clips", "asr", "chat"])).min(1),
+  roles: z.array(z.enum(["plan", "translate", "chat"])).min(1),
   freeTier: z.boolean().optional(),
 }).refine((x) => !["openai_compat", "openrouter", "groq", "gemini", "aimlapi", "ollama", "meta"].includes(x.kind) || !!x.model, { path: ["model"], message: "Load and choose a model first." });
 

@@ -25,11 +25,13 @@ Static prices are USD per million tokens and carry the provider URL and review d
 
 A paid model also needs `IZWI_USD_ZAR` and a daily Rand cap, `IZWI_ASSISTANT_DAILY_CENTS` (default 0, so the assistant refuses paid models until the operator sets one).
 
-OpenRouter returns live prompt and completion prices in USD per token; they are used directly and are not copied into the static table. Models with no returned or reviewed price are **Unknown** and cannot be budgeted. The typical-turn estimate uses 1,500 prompt and 400 completion tokens. Tags are based on the estimate: Free at zero, Cheap below R0.01, Moderate from R0.01 to below R0.10, Expensive at R0.10 or more. This categorization is a product display choice, not a provider quotation. When `IZWI_USD_ZAR` and its `IZWI_USD_ZAR_ASOF` date are set, estimates show Rand and that date; otherwise the UI shows USD only and the Rand category remains Unknown. No exchange rate is supplied by default.
+OpenRouter returns live prompt and completion prices in USD per token; they are used directly and are not copied into the static table. Models with no returned or reviewed prices are **Unknown** and cannot be budgeted. The typical-turn estimate uses 1,500 prompt and 400 completion tokens. Tags are based on the estimate: Free at zero, Cheap below R0.01, Moderate from R0.01 to below R0.10, Expensive at R0.10 or more. This categorization is a product display choice, not a provider quotation. The Connections and model list screens show Rand estimates only when `IZWI_USD_ZAR` and its `IZWI_USD_ZAR_ASOF` date are set; otherwise the model cost is labelled unknown in Rand. No exchange rate is supplied by default.
 
 ## Routing and privacy
 
-Owner/admin task routes select a tested provider and model for chat, plan, translate or clips. An unset route preserves the existing role-based provider choice. The server derives privacy: loopback Ollama is Private, the Meta host is Standard, and all other providers are May log. Free-tier zero-budget treatment is an owner-marked workspace assertion; token limits still apply.
+Owner/admin task routes select a tested provider and model for chat, plan or translate. Find clips and Transcribe still run locally; their unused provider-role settings are no longer accepted in API writes, and stale clip routes are dropped when task routes are saved. The server derives privacy: loopback Ollama is Private, the Meta host is Standard, and all other providers are May log. Free-tier zero-budget treatment is an owner-marked workspace assertion; token limits still apply.
+
+`POST /api/providers/models` previews a model list for the Settings connection wizard without creating a database provider row. The request is owner/admin-only, the supplied key is sealed only for the duration of the server request, and the model list call uses the same `sdkFetch`/SSRF guard and price parser as saved providers. Only known provider presets are accepted, with a custom OpenAI-compatible address validated by the existing address rules.
 
 ## Evidence boundary
 

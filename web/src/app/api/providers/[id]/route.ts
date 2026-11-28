@@ -18,7 +18,7 @@ const PatchIn = z.object({
   baseUrl: z.string().trim().min(8).max(300).optional(),
   model: z.string().trim().max(120).nullable().optional(),
   key: z.string().trim().max(400).optional(),
-  roles: z.array(z.enum(["plan", "translate", "clips", "asr", "chat"])).min(1).optional(),
+  roles: z.array(z.enum(["plan", "translate", "chat"])).min(1).optional(),
   freeTier: z.boolean().optional(),
 }).strict();
 

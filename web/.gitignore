@@ -53,3 +53,6 @@ next-env.d.ts
 
 # Browser-automation logs and snapshots (may hold share-link tokens)
 .playwright-mcp/
+/.playwright-browsers/
+/test-results/
+/playwright-report/

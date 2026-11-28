@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e:connections": "playwright test --config playwright.config.ts",
     "setup": "node scripts/setup.mjs && tsx scripts/migrate.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "worker": "tsx worker/index.ts",
@@ -55,6 +56,7 @@
     "zustand": "5.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/d3-geo": "^3.1.1",
     "@types/node": "^24.19.2",

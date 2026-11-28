@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { closeTestDb, openTestDb, seedWorkspace, type Db } from "./helpers/testdb";
 import { call, sessionFor, type Session } from "./helpers/api";
 
-const hoisted = vi.hoisted(() => ({ session: null as unknown, inviteError: null as unknown }));
+const hoisted = vi.hoisted(() => ({ session: null as unknown, inviteError: null as unknown, previewModels: false, previewAuth: "" }));
 vi.mock("../src/server/auth", () => ({ auth: { api: { getSession: async () => hoisted.session, createInvitation: async () => { throw hoisted.inviteError; } } } }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("../src/server/media", async (load) => ({
@@ -14,6 +14,17 @@ vi.mock("../src/server/media", async (load) => ({
   ffmpeg: vi.fn(async () => undefined),
   whisper: vi.fn(async () => ({ language: "en", engine: "test", segments: [{ startMs: 0, endMs: 1000, text: "make a clip", words: [] }] })),
 }));
+vi.mock("../src/server/sdk-fetch", async (load) => {
+  const actual = await load<typeof import("../src/server/sdk-fetch")>();
+  return { ...actual, sdkFetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : input instanceof URL ? input.toString() : input;
+    if (hoisted.previewModels && url === "http://127.0.0.1:11434/v1/models") {
+      hoisted.previewAuth = new Headers(init?.headers).get("authorization") ?? "";
+      return Response.json({ data: [{ id: "llama3.1:8b" }, { id: "qwen3:1.7b" }] });
+    }
+    return actual.sdkFetch(input, init);
+  } };
+});
 
 let db: Db;
 let provider: Server;
@@ -121,6 +132,23 @@ describe("team", () => {
 });
 
 describe("providers", () => {
+  it("previews models through the guarded provider client without storing the pasted key", async () => {
+    const w = await workspace();
+    const route = await import("../src/app/api/providers/models/route");
+    const before = await db.one<{ count: number }>(`SELECT COUNT(*)::int AS count FROM provider WHERE workspace_id = ?`, w.ws);
+    hoisted.previewModels = true;
+    const preview = () => call(route.POST, "POST", "/api/providers/models", { json: { kind: "ollama", key: "sim_preview_key" } });
+    const r = await preview();
+    expect(r.status, r.text).toBe(200);
+    expect((r.data as unknown as { models: { id: string }[] }).models.map((m) => m.id)).toEqual(["llama3.1:8b", "qwen3:1.7b"]);
+    expect(r.text).not.toContain("sim_preview_key");
+    expect(hoisted.previewAuth).toBe("Bearer sim_preview_key");
+    expect(await db.one<{ count: number }>(`SELECT COUNT(*)::int AS count FROM provider WHERE workspace_id = ?`, w.ws)).toEqual(before);
+    w.as("member");
+    expect((await preview()).status).toBe(403);
+    hoisted.previewModels = false;
+  });
+
   it("lists a provider's models for an owner, and nobody else", async () => {
     const w = await workspace();
     await addProvider(w.ws, w.owner, "prv_models", "ollama", `${providerUrl}/v1`, null);
@@ -141,6 +169,17 @@ describe("providers", () => {
     const r = await call(route.POST, "POST", "/api/providers", { json: { kind: "openai_compat", label: "Mine", baseUrl: "http://models.example.test/v1", model: "m", roles: ["plan"] } });
     expect(r.status).toBe(400);
     expect(r.text).toContain("https");
+  });
+
+  it("rejects provider task roles that do not have a working route", async () => {
+    await workspace();
+    const providers = await import("../src/app/api/providers/route");
+    const add = await call(providers.POST, "POST", "/api/providers", { json: { kind: "openai_compat", label: "Old route", baseUrl: "https://models.example.test/v1", model: "m", roles: ["asr"] } });
+    expect(add.status).toBe(400);
+    expect(await db.one(`SELECT COUNT(*)::int AS count FROM provider WHERE label = 'Old route'`)).toEqual({ count: 0 });
+    const routes = await import("../src/app/api/providers/routes/route");
+    const save = await call(routes.PUT, "PUT", "/api/providers/routes", { json: { routes: [{ role: "clips", providerId: "prv_old", model: "m" }] } });
+    expect(save.status).toBe(400);
   });
 
   it("does not send a stored key to a new address", async () => {

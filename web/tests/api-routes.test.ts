@@ -30,6 +30,7 @@ const ROUTES: Entry[] = [
   { path: "projects/[id]/assistant", params: { id: A.project }, methods: { GET: {}, POST: { json: { providerId: A.provider, text: "hi" } } }, kind: "session" },
   { path: "projects/[id]/assistant/transcribe", params: { id: A.project }, methods: { POST: {} }, kind: "session" },
   { path: "providers", params: {}, methods: { GET: {}, POST: { json: { kind: "openai_compat", label: "x", baseUrl: "https://x.example.test/v1", model: "m", roles: ["plan"] } } }, kind: "session" },
+  { path: "providers/models", params: {}, methods: { POST: { json: { kind: "openai_compat", baseUrl: "https://x.example.test/v1" } } }, kind: "session" },
   { path: "providers/[id]", params: { id: A.provider }, methods: { PATCH: { json: { label: "taken" } }, POST: {}, DELETE: {} }, kind: "session" },
   { path: "providers/[id]/models", params: { id: A.provider }, methods: { GET: {} }, kind: "session" },
   { path: "providers/routes", params: {}, methods: { GET: {}, PUT: { json: { routes: [] } } }, kind: "session" },
@@ -219,6 +220,7 @@ describe("roles", () => {
   const adminOnly: [string, string, Record<string, string>, unknown?][] = [
     ["projects/[id]", "DELETE", { id: A.project }],
     ["providers", "POST", {}, { kind: "openai_compat", label: "x", baseUrl: "https://x.example.test/v1", model: "m", roles: ["plan"] }],
+    ["providers/models", "POST", {}, { kind: "openai_compat", baseUrl: "https://x.example.test/v1" }],
     ["providers/[id]", "PATCH", { id: A.provider }, { label: "taken" }], ["providers/[id]", "POST", { id: A.provider }], ["providers/[id]", "DELETE", { id: A.provider }],
     ["providers/[id]/models", "GET", { id: A.provider }], ["providers/routes", "PUT", {}, { routes: [] }],
     ["team", "POST", {}, { email: "x@example.test", role: "admin" }], ["workspace/audit", "GET", {}],

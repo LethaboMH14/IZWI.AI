@@ -5,8 +5,8 @@ import { all, now, one, parse, run, tx } from "@/server/db";
 import { privacyOf, type ProviderRow } from "@/server/providers";
 
 export const runtime = "nodejs";
-const roles = ["chat", "plan", "translate", "clips"] as const;
-const Input = z.object({ routes: z.array(z.object({ role: z.enum(roles), providerId: z.string().min(1), model: z.string().trim().min(1).max(120) }).strict()).max(4) }).strict();
+const roles = ["chat", "plan", "translate"] as const;
+const Input = z.object({ routes: z.array(z.object({ role: z.enum(roles), providerId: z.string().min(1), model: z.string().trim().min(1).max(120) }).strict()).max(3) }).strict();
 
 export const GET = route(async () => {
   const ctx = await requireCtx();
