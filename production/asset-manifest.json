@@ -1,0 +1,93 @@
+{
+  "updated": "2026-11-28",
+  "assets": [
+    {
+      "id": "izwi_capture_home_16x9.png",
+      "path": "production/assets/captures/izwi_capture_home_16x9.png",
+      "type": "screenshot",
+      "status": "real",
+      "source": "https://izwi-ai-six.vercel.app/",
+      "owner": "claude"
+    },
+    {
+      "id": "izwi_capture_sign-in_16x9.png",
+      "path": "production/assets/captures/izwi_capture_sign-in_16x9.png",
+      "type": "screenshot",
+      "status": "real",
+      "source": "https://izwi-ai-six.vercel.app/sign-in",
+      "owner": "claude"
+    },
+    {
+      "id": "izwi_capture_trust_16x9.png",
+      "path": "production/assets/captures/izwi_capture_trust_16x9.png",
+      "type": "screenshot",
+      "status": "real",
+      "source": "https://izwi-ai-six.vercel.app/trust",
+      "owner": "claude"
+    },
+    {
+      "id": "izwi_capture_home_9x16.png",
+      "path": "production/assets/captures/izwi_capture_home_9x16.png",
+      "type": "screenshot",
+      "status": "real",
+      "source": "https://izwi-ai-six.vercel.app/",
+      "owner": "claude"
+    },
+    {
+      "id": "izwi_capture_sign-in_9x16.png",
+      "path": "production/assets/captures/izwi_capture_sign-in_9x16.png",
+      "type": "screenshot",
+      "status": "real",
+      "source": "https://izwi-ai-six.vercel.app/sign-in",
+      "owner": "claude"
+    },
+    {
+      "id": "izwi_capture_trust_9x16.png",
+      "path": "production/assets/captures/izwi_capture_trust_9x16.png",
+      "type": "screenshot",
+      "status": "real",
+      "source": "https://izwi-ai-six.vercel.app/trust",
+      "owner": "claude"
+    },
+    {
+      "id": "izwi_stream_full_both",
+      "type": "video",
+      "status": "pending-recording",
+      "owner": "lethabo+sibusiso",
+      "storage": "shared drive"
+    },
+    {
+      "id": "izwi_dictation_short_sbu",
+      "type": "audio",
+      "status": "pending-recording",
+      "owner": "sibusiso",
+      "storage": "shared drive"
+    },
+    {
+      "id": "izwi_radio_L01-L10",
+      "type": "audio",
+      "status": "pending-recording",
+      "owner": "lethabo+sibusiso",
+      "storage": "shared drive"
+    },
+    {
+      "id": "figma_storyboard_page",
+      "type": "figma",
+      "status": "real",
+      "url": "https://www.figma.com/design/IVJa5NlJJINI75Lyc9Eklw?node-id=6-2",
+      "owner": "claude"
+    },
+    {
+      "id": "izwi_pitch_20s",
+      "type": "render",
+      "status": "pending",
+      "owner": "codex"
+    },
+    {
+      "id": "izwi_radio_30s_master",
+      "type": "render",
+      "status": "pending",
+      "owner": "codex"
+    }
+  ]
+}

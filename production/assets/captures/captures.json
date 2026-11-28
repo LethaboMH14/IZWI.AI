@@ -1,0 +1,72 @@
+{
+  "base": "https://izwi-ai-six.vercel.app",
+  "note": "Real screenshots of the deployed app. Production ran the pre-PR#16 main at capture time.",
+  "captures": [
+    {
+      "file": "izwi_capture_home_16x9.png",
+      "url": "https://izwi-ai-six.vercel.app/",
+      "finalUrl": "https://izwi-ai-six.vercel.app/",
+      "status": 200,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "capturedAt": "2026-11-28T02:36:56.261Z"
+    },
+    {
+      "file": "izwi_capture_sign-in_16x9.png",
+      "url": "https://izwi-ai-six.vercel.app/sign-in",
+      "finalUrl": "https://izwi-ai-six.vercel.app/sign-in",
+      "status": 200,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "capturedAt": "2026-11-28T02:36:59.782Z"
+    },
+    {
+      "file": "izwi_capture_trust_16x9.png",
+      "url": "https://izwi-ai-six.vercel.app/trust",
+      "finalUrl": "https://izwi-ai-six.vercel.app/trust",
+      "status": 200,
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "capturedAt": "2026-11-28T02:37:03.368Z"
+    },
+    {
+      "file": "izwi_capture_home_9x16.png",
+      "url": "https://izwi-ai-six.vercel.app/",
+      "finalUrl": "https://izwi-ai-six.vercel.app/",
+      "status": 200,
+      "viewport": {
+        "width": 540,
+        "height": 960
+      },
+      "capturedAt": "2026-11-28T02:37:08.418Z"
+    },
+    {
+      "file": "izwi_capture_sign-in_9x16.png",
+      "url": "https://izwi-ai-six.vercel.app/sign-in",
+      "finalUrl": "https://izwi-ai-six.vercel.app/sign-in",
+      "status": 200,
+      "viewport": {
+        "width": 540,
+        "height": 960
+      },
+      "capturedAt": "2026-11-28T02:37:11.693Z"
+    },
+    {
+      "file": "izwi_capture_trust_9x16.png",
+      "url": "https://izwi-ai-six.vercel.app/trust",
+      "finalUrl": "https://izwi-ai-six.vercel.app/trust",
+      "status": 200,
+      "viewport": {
+        "width": 540,
+        "height": 960
+      },
+      "capturedAt": "2026-11-28T02:37:15.421Z"
+    }
+  ]
+}
