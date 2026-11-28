@@ -1,11 +1,12 @@
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { newId, one, parse } from "../../../../../../server/db";
 import { HttpError, route } from "../../../../../../server/http";
 import { requireCtx, projectOf } from "../../../../../../server/guard";
 import { enqueueVoice, cancelQueued } from "../../../../../../server/jobs";
-import { STORAGE } from "../../../../../../server/env";
+import { absPath, persist, removeObject, storageKey, storageMode } from "../../../../../../server/storage";
 import { limit, LIMIT, RateLimitError } from "../../../../../../server/ratelimit";
 import { all } from "../../../../../../server/db";
 import { assistantEnabled } from "../../../../../../server/flags";
@@ -37,15 +38,26 @@ export const POST = route<{ id: string }>(async (req, { id }) => {
   if (!file.type.startsWith("audio/")) throw new HttpError(415, "Choose an audio file.");
   if (req.signal.aborted) throw new HttpError(499, "The request was cancelled.");
   const idJob = newId("job"); const requestId = randomUUID();
-  const tempDir = path.join(STORAGE, "tmp", "assistant-voice", idJob);
+  const ext = /\.(mp3|m4a|aac|wav|ogg|opus|flac|webm|mp4)$/i.exec(file.name)?.[1]?.toLowerCase() ?? "audio";
+  const hosted = storageMode() === "s3";
+  const key = hosted
+    ? storageKey(ctx.workspaceId, project.id, `voice-${idJob}.${ext}`)
+    : `tmp/assistant-voice/${idJob}/audio.upload`;
+  const tempDir = hosted ? await mkdtemp(path.join(tmpdir(), "izwi-voice-upload-")) : path.dirname(absPath(key));
   await mkdir(tempDir, { recursive: true });
-  const sourcePath = path.join(tempDir, "audio.upload");
+  const sourcePath = hosted ? path.join(tempDir, `voice.${ext}`) : absPath(key);
+  await mkdir(path.dirname(sourcePath), { recursive: true });
   await writeFile(sourcePath, Buffer.from(await file.arrayBuffer()));
-  const job = await enqueueVoice({ workspaceId: ctx.workspaceId, projectId: project.id, idempotencyKey: `voice:${requestId}`, input: { sourcePath, tempDir }, createdBy: ctx.userId });
-  if (!job) { await rm(tempDir, { recursive: true, force: true }); return Response.json({ error: "A voice transcription is already open.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } }); }
+  if (hosted) {
+    try { await persist(key, sourcePath, file.type || "application/octet-stream"); }
+    finally { await rm(tempDir, { recursive: true, force: true }); }
+  }
+  const job = await enqueueVoice({ workspaceId: ctx.workspaceId, projectId: project.id, idempotencyKey: `voice:${requestId}`, input: { key }, createdBy: ctx.userId });
+  if (!job) { await removeObject(key); return Response.json({ error: "A voice transcription is already open.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } }); }
   const until = Date.now() + 60_000;
   let started = false;
-  const onAbort = async () => { if (!started && await cancelQueued(job.id, ctx.workspaceId)) void rm(tempDir, { recursive: true, force: true }); };
+  const cleanup = () => hosted ? removeObject(key) : rm(tempDir, { recursive: true, force: true });
+  const onAbort = async () => { if (!started && await cancelQueued(job.id, ctx.workspaceId)) void cleanup(); };
   req.signal.addEventListener("abort", onAbort, { once: true });
   try {
     while (Date.now() < until) {
@@ -57,7 +69,7 @@ export const POST = route<{ id: string }>(async (req, { id }) => {
       if (["failed", "blocked", "cancelled"].includes(row.status)) throw new HttpError(422, row.error ?? "Audio transcription failed.");
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    if (await cancelQueued(job.id, ctx.workspaceId)) await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    if (await cancelQueued(job.id, ctx.workspaceId)) await cleanup().catch(() => {});
     return Response.json({ error: "Whisper is busy. Try again shortly.", retryAfter: 60 }, { status: 429, headers: { "Retry-After": "60" } });
   } finally { req.signal.removeEventListener("abort", onAbort); }
 });
