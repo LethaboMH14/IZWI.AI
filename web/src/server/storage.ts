@@ -67,12 +67,10 @@ export function storageOrigin(): string | null {
   return new URL(process.env.S3_ENDPOINT).origin;
 }
 
-/** Upload a local file to the bucket under `key` (s3 mode). In disk mode the file already sits at absPath(key). */
+/** Upload a local file to the bucket under `key` (s3 mode). A no-op in disk mode. */
 export async function persist(key: string, file = absPath(key), contentType = "application/octet-stream") {
-  if (storageMode() !== "s3") {
-    if (path.resolve(file) !== absPath(key)) throw new Error("persist() in disk mode expects the file at its key.");
-    return;
-  }
+  // Disk mode: the caller writes or renames the file to absPath(key) itself; there is nothing to upload.
+  if (storageMode() !== "s3") return;
   const { PutObjectCommand } = await import("@aws-sdk/client-s3");
   const size = statSync(file).size;
   if (size > 4.5 * 1024 ** 3) throw new Error("File too large for a single upload.");
