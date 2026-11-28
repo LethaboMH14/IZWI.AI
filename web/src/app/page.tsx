@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, ArrowUpRight, CellSignalMedium, DownloadSimple, WhatsappLogo } from "@phosphor-icons/react";
+import { ArrowRight, ArrowUpRight } from "@phosphor-icons/react";
 import { Mark } from "@/components/Mark";
 import { Strand } from "@/components/Strand";
 import { CaptionPlayer, type CapMode } from "@/components/CaptionPlayer";
@@ -70,7 +70,7 @@ export default function Landing() {
         <ul className="fan" aria-label="What one episode becomes">
           {fan.map((f, i) => (
             <li key={i} className={`s-${f.k}`} style={{ ["--i" as string]: i }}>
-              <i /> <b>{f.t}</b> <span>{f.s}</span>
+              <b>{f.t}</b> <span>{f.s}</span>
             </li>
           ))}
         </ul>
@@ -133,17 +133,14 @@ export default function Landing() {
         <h2>Made for the phone in your hand and the data you paid for.</h2>
         <div className="mz-row">
           <div>
-            <CellSignalMedium />
             <h3>Uploads that pick up where they stopped</h3>
             <p>Signal drops. Power goes. The upload resumes from the last chunk, and you see the megabytes before you start.</p>
           </div>
           <div>
-            <WhatsappLogo />
             <h3>Approve from a link</h3>
             <p>Send a guest or a reviewer one link. They watch, approve or ask for a change on their phone. No account, no app.</p>
           </div>
           <div>
-            <DownloadSimple />
             <h3>Small files first</h3>
             <p>You review a light preview, not the full render. The big file is made once, when you say export.</p>
           </div>

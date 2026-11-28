@@ -52,7 +52,7 @@
 .fs-project .z-pill-outline { color: #f6cf85; border-color: var(--z-amber-strong); }
 .fs-project .z-pill-muted { background: var(--z-shell-4); color: var(--z-shell-muted); }
 .fs-project .z-btn:not(.z-btn-primary) { color: var(--z-shell-text); }
-.fs-pillwrap { display: inline-flex; border-radius: 999px; flex: none; }
+.fs-pillwrap { display: inline-flex; border-radius: var(--z-r-control); flex: none; }
 
 /* Project panel */
 .fs-project-in { display: flex; flex-direction: column; gap: 12px; }
@@ -106,7 +106,7 @@
 .fs-bar { width: min(240px, 70%); height: 4px; border-radius: 2px; background: var(--z-shell-line-strong); overflow: hidden; display: block; }
 .fs-bar i { display: block; height: 100%; background: var(--z-amber); }
 .fs-marks { position: absolute; left: var(--z-s5); top: var(--z-s5); display: flex; gap: var(--z-s3); pointer-events: none; }
-.fs-badge { font-size: var(--z-text-micro); font-weight: 600; background: var(--z-gold-tint); color: var(--z-ink); border-radius: 999px; padding: 2px 8px; }
+.fs-badge { font-size: var(--z-text-micro); font-weight: 600; background: var(--z-gold-tint); color: var(--z-ink); border-radius: var(--z-r-control); padding: 2px 8px; }
 .fs-caption { position: absolute; left: var(--z-s6); right: var(--z-s6); bottom: 52px; margin: 0; text-align: center; white-space: pre-line; font: 650 24px/1.25 var(--z-font-display); color: var(--z-ivory-0); text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); pointer-events: none; }
 .fs-caption .is-word { color: var(--z-amber-glow); }
 .fs-controls { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: var(--z-s4); padding: var(--z-s3) var(--z-s5); background: linear-gradient(transparent, rgba(0, 0, 0, 0.65)); color: var(--z-ivory-0); }
@@ -165,7 +165,7 @@
 .fs-line-hint { font-size: var(--z-text-micro); color: var(--z-ink-muted); }
 .fs-line-act { display: flex; gap: var(--z-s1); opacity: 0; transition: opacity var(--z-t-hover) var(--z-ease); }
 .fs-line:hover .fs-line-act, .fs-line:focus-within .fs-line-act { opacity: 1; }
-.fs-tag { display: inline-flex; align-items: center; gap: var(--z-s1); height: 18px; padding: 0 var(--z-s3); border-radius: 999px; background: var(--z-ivory-4); color: var(--z-ink-muted); font-weight: 600; }
+.fs-tag { display: inline-flex; align-items: center; gap: var(--z-s1); height: 18px; padding: 0 var(--z-s3); border-radius: var(--z-r-control); background: var(--z-ivory-4); color: var(--z-ink-muted); font-weight: 600; }
 .fs-tag-clay { background: var(--z-clay-tint); color: var(--z-clay); }
 .fs-saving { color: var(--z-amber-text); }
 .fs-saved { color: var(--z-moss); font-weight: 600; }

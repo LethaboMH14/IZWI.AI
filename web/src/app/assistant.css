@@ -5,7 +5,7 @@
 .as-panel[hidden] { display: none; }
 .as-panel header { display: flex; align-items: center; justify-content: space-between; }
 .as-panel h2 { font-family: var(--display); font-size: var(--z-type-lg); margin: 0; }
-.as-close, .as-mic { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--sand); color: var(--ink); }
+.as-close, .as-mic { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: var(--z-r-control); background: var(--sand); color: var(--ink); }
 .as-mic.on { background: var(--clay); color: var(--paper); }
 .as-panel button:focus-visible, .as-panel select:focus-visible, .as-panel textarea:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
 .as-panel .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -26,7 +26,7 @@
 .as-md ul, .as-md ol { padding-left: 20px; }
 .as-md code, .as-card .mono { font-family: var(--mono); font-size: 0.85em; background: var(--sand); padding: 0 0.25em; border-radius: 4px; }
 .as-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
-.as-chip { padding: 2px 8px; border-radius: 999px; background: var(--sand); font-size: var(--z-type-xs); }
+.as-chip { padding: 2px 8px; border-radius: var(--z-r-control); background: var(--sand); font-size: var(--z-type-xs); }
 .as-chip-warn { background: var(--tint); }
 .as-cards { display: grid; gap: 8px; }
 .as-card { padding: 12px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--ivory); }

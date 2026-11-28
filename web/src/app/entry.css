@@ -43,8 +43,8 @@
 .up-head > svg.ok { color: var(--moss); }
 .up-head > div { display: grid; min-width: 0; }
 .up-name { font: 700 1.15rem/1.2 var(--display); overflow-wrap: anywhere; }
-.up-bar { height: 12px; border-radius: 999px; background: var(--sand-2); overflow: hidden; }
-.up-bar i { display: block; height: 100%; border-radius: 999px; background: var(--gold); transition: width 0.35s var(--ease); }
+.up-bar { height: 12px; border-radius: var(--z-r-control); background: var(--sand-2); overflow: hidden; }
+.up-bar i { display: block; height: 100%; border-radius: var(--z-r-control); background: var(--gold); transition: width 0.35s var(--ease); }
 .u-done .up-bar i { background: var(--moss); }
 .u-waiting .up-bar i, .u-paused .up-bar i { background: #b9b2a3; }
 .up-meta { display: flex; justify-content: space-between; gap: 8px 1rem; flex-wrap: wrap; color: var(--ink-2); }

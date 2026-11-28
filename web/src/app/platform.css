@@ -18,9 +18,9 @@
 
 .promptbar { position: fixed; z-index: 30; left: calc(15rem + clamp(1rem, 3vw, 2.6rem)); right: clamp(1rem, 3vw, 2.6rem); bottom: 1.1rem; max-width: 56rem; margin: 0 auto; display: grid; gap: 0.5rem; }
 .ideas { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
-.ideas button { flex: none; height: 34px; padding: 0 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); border: 1px solid var(--line); font-size: var(--z-type-sm); font-weight: 500; transition: all 0.2s var(--ease); }
+.ideas button { flex: none; height: 34px; padding: 0 16px; border-radius: var(--z-r-control); background: rgba(255, 255, 255, 0.9);  border: 1px solid var(--line); font-size: var(--z-type-sm); font-weight: 500; transition: all 0.2s var(--ease); }
 .ideas button:hover { border-color: var(--amber); background: var(--tint-2); transform: translateY(-2px); }
-.promptrow { display: flex; align-items: center; gap: 12px; height: 64px; padding: 0 8px 0 20px; border-radius: 999px; background: var(--ink); color: var(--ivory); box-shadow: 0 24px 50px -18px rgba(33, 30, 26, 0.6); transition: box-shadow 0.3s; }
+.promptrow { display: flex; align-items: center; gap: 12px; height: 64px; padding: 0 8px 0 20px; border-radius: var(--z-r-control); background: var(--ink); color: var(--ivory); box-shadow: 0 24px 50px -18px rgba(33, 30, 26, 0.6); transition: box-shadow 0.3s; }
 .promptrow:focus-within { box-shadow: 0 24px 50px -18px rgba(33, 30, 26, 0.6), 0 0 0 4px var(--gold); }
 .promptrow > svg { color: var(--gold); width: 22px; height: 22px; flex: none; }
 .promptbar.busy .promptrow > svg { animation: spin 1s linear infinite; }
@@ -30,7 +30,7 @@
 .send { width: 46px; height: 46px; border-radius: 50%; background: var(--gold); color: var(--ink); display: grid; place-items: center; flex: none; transition: transform 0.2s var(--ease), opacity 0.2s; }
 .send:disabled { opacity: 0.35; }
 .send:not(:disabled):hover { transform: scale(1.08); }
-.promptbar > small { text-align: center; font-size: var(--z-type-xs); color: var(--muted); background: rgba(250, 248, 244, 0.85); border-radius: 999px; justify-self: center; padding: 2px 12px; }
+.promptbar > small { text-align: center; font-size: var(--z-type-xs); color: var(--muted); background: rgba(250, 248, 244, 0.85); border-radius: var(--z-r-control); justify-self: center; padding: 2px 12px; }
 .miss { background: var(--clay-tint); color: var(--ink); padding: 8px 1rem; border-radius: var(--r-m); font-size: var(--z-type-sm); }
 
 .plan { position: fixed; z-index: 29; left: calc(15rem + clamp(1rem, 3vw, 2.6rem)); right: clamp(1rem, 3vw, 2.6rem); bottom: 7.4rem; max-width: 56rem; margin: 0 auto; max-height: calc(100dvh - 10rem); overflow: auto; background: var(--paper); border-radius: var(--r-l); box-shadow: 0 30px 80px -20px rgba(33, 30, 26, 0.45), 0 0 0 1px var(--line); padding: 20px 20px; animation: planin 0.45s var(--ease); }
@@ -44,7 +44,7 @@
 .plan ol p { font-size: var(--z-type-base); }
 .plan ol small { display: flex; gap: 4px; align-items: center; margin-top: 4px; color: var(--clay); font-size: var(--z-type-xs); }
 .plan ol .mono { color: var(--muted); padding-top: 0.25rem; }
-.runs { display: inline-flex; align-items: center; gap: 4px; font-size: var(--z-type-xs); font-weight: 600; padding: 4px 8px; border-radius: 999px; background: var(--sand); white-space: nowrap; }
+.runs { display: inline-flex; align-items: center; gap: 4px; font-size: var(--z-type-xs); font-weight: 600; padding: 4px 8px; border-radius: var(--z-r-control); background: var(--sand); white-space: nowrap; }
 .plan > footer { display: flex; align-items: center; gap: 8px; margin-top: 1rem; }
 .plan > footer p { flex: 1; font-size: var(--z-type-sm); color: var(--muted); }
 
@@ -61,7 +61,7 @@
 .mk-flow path { fill: none; stroke: var(--gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-dasharray: 1; animation: draw 0.7s var(--ease) backwards; animation-delay: calc(var(--i) * 90ms); }
 @keyframes draw { from { stroke-dashoffset: 1; } }
 .mk-flow ul { display: grid; height: 13rem; align-content: space-between; padding: 2px 0; }
-.mk-flow li { padding: 8px 1rem; border-radius: 999px; background: var(--tint); font-weight: 600; font-size: var(--z-type-base); white-space: nowrap; animation: rise 0.5s var(--ease) both; animation-delay: calc(0.25s + var(--i) * 90ms); justify-self: start; }
+.mk-flow li { padding: 8px 1rem; border-radius: var(--z-r-control); background: var(--tint); font-weight: 600; font-size: var(--z-type-base); white-space: nowrap; animation: rise 0.5s var(--ease) both; animation-delay: calc(0.25s + var(--i) * 90ms); justify-self: start; }
 .makersec { padding: clamp(3rem, 7vw, 6rem) var(--pad) clamp(2rem, 5vw, 4rem); max-width: 82rem; margin: 0 auto; }
 .makersec h2 { font-size: var(--z-type-display); margin-bottom: 24px; }
 .home-new { margin: 48px 0 1rem; }
@@ -109,11 +109,11 @@
 .rr-big { position: absolute; left: 1rem; bottom: 1rem; width: 54px; height: 54px; border-radius: 50%; background: var(--gold); color: var(--ink); display: grid; place-items: center; transition: transform 0.2s var(--ease); }
 .rr-big:hover { transform: scale(1.08); }
 .rr-big svg { width: 22px; height: 22px; }
-.rr-track { position: relative; width: 100%; height: 26px; border-radius: 999px; background: var(--sand-2); cursor: pointer; overflow: visible; }
-.rr-track i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--ink); min-width: 26px; }
+.rr-track { position: relative; width: 100%; height: 26px; border-radius: var(--z-r-control); background: var(--sand-2); cursor: pointer; overflow: visible; }
+.rr-track i { position: absolute; inset: 0 auto 0 0; border-radius: var(--z-r-control); background: var(--ink); min-width: 26px; }
 .rr-track b { position: absolute; top: -5px; width: 12px; height: 36px; margin-left: -6px; border-radius: 6px; background: var(--clay); border: 2px solid var(--ivory); }
 .rr-meta { width: 100%; display: flex; justify-content: space-between; color: var(--muted); }
-.rr-add { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 1rem; background: var(--paper); border-radius: 999px; border: 1.5px solid var(--line); }
+.rr-add { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 1rem; background: var(--paper); border-radius: var(--z-r-control); border: 1.5px solid var(--line); }
 .rr-add:focus-within { border-color: var(--amber); }
 .rr-add input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; }
 .rr-side { display: grid; gap: 12px; }

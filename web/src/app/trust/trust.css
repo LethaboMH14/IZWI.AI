@@ -26,7 +26,7 @@
 .trust-note { font-size: var(--z-type-sm); border-left: 3px solid var(--gold); padding-left: 8px; }
 .trust-evidence { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
-.trust-status { font-size: var(--z-type-xs); font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.trust-status { font-size: var(--z-type-xs); font-weight: 600; border-radius: var(--z-r-control); padding: 2px 8px; white-space: nowrap; }
 .trust-implemented { background: var(--moss-tint); color: var(--moss); }
 .trust-partial { background: var(--tint-2); color: var(--amber-deep); }
 .trust-planned { background: var(--sand-2); color: var(--ink-2); }

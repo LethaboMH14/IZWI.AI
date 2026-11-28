@@ -10,13 +10,13 @@
 .field small { color: var(--muted); font-size: var(--z-type-sm); }
 .field small.err { color: var(--clay); font-weight: 600; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chips button { height: 44px; padding: 0 16px; border-radius: 999px; background: var(--paper); border: 1.5px solid var(--line); font-weight: 600; transition: all 0.2s var(--ease); }
+.chips button { height: 44px; padding: 0 16px; border-radius: var(--z-r-control); background: var(--paper); border: 1.5px solid var(--line); font-weight: 600; transition: all 0.2s var(--ease); }
 .chips button:hover { border-color: var(--amber); transform: translateY(-1px); }
 .chips button.on { background: var(--ink); border-color: var(--ink); color: var(--ivory); }
 .chips.big button { height: 64px; padding: 0 24px; font-family: var(--display); font-size: var(--z-type-lg); font-weight: 700; }
 .toggle { display: flex; gap: 16px; align-items: center; margin-top: 24px; cursor: pointer; }
 .toggle input { position: absolute; opacity: 0; }
-.toggle i { flex: none; width: 52px; height: 30px; border-radius: 999px; background: var(--sand-2); position: relative; transition: background 0.2s; }
+.toggle i { flex: none; width: 52px; height: 30px; border-radius: var(--z-r-control); background: var(--sand-2); position: relative; transition: background 0.2s; }
 .toggle i::after { content: ""; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); transition: transform 0.25s var(--ease); }
 .toggle input:checked + i { background: var(--amber); }
 .toggle input:checked + i::after { transform: translateX(22px); }
@@ -161,7 +161,7 @@
 .loc-src small { display: flex; gap: 6px; align-items: center; margin-top: 0.5rem; color: var(--amber-deep); font-size: var(--z-type-xs); }
 .locrow textarea { min-height: 100%; font-size: var(--z-type-base); }
 .locrow.ok textarea { border-color: var(--moss); background: #f6faf1; }
-.okbtn { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 999px; background: var(--sand); font-weight: 600; font-size: var(--z-type-sm); transition: all 0.2s var(--ease); }
+.okbtn { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: var(--z-r-control); background: var(--sand); font-weight: 600; font-size: var(--z-type-sm); transition: all 0.2s var(--ease); }
 .okbtn.on { background: var(--moss); color: #fff; }
 .okbtn:active { transform: scale(0.95); }
 .glossary { padding: 16px; border-radius: var(--r-m); background: var(--tint-2); align-self: start; display: grid; gap: 8px; }

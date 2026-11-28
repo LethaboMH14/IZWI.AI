@@ -50,7 +50,7 @@
 
 /* Add form */
 .st-presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 8px 0 1rem; }
-.st-presets button { min-height: 44px; padding: 6px 1rem; border-radius: 999px; background: var(--paper); border: 1.5px solid var(--line); font-weight: 600; font-size: var(--z-type-sm); transition: all 0.2s var(--ease); }
+.st-presets button { min-height: 44px; padding: 6px 1rem; border-radius: var(--z-r-control); background: var(--paper); border: 1.5px solid var(--line); font-weight: 600; font-size: var(--z-type-sm); transition: all 0.2s var(--ease); }
 .st-presets button:hover { border-color: var(--amber); transform: translateY(-1px); }
 .st-presets button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--ivory); }
 .st-form { display: grid; gap: 16px; }
@@ -61,7 +61,7 @@
 .st-roles { border: 0; padding: 0; display: grid; gap: 6px; }
 .st-roles legend { font-weight: 600; font-size: var(--z-type-sm); margin-bottom: 4px; }
 .st-roles div { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.st-roles label { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 44px; padding: 0 1rem; border-radius: 999px; background: var(--paper); border: 1.5px solid var(--line); font-weight: 600; font-size: var(--z-type-sm); cursor: pointer; }
+.st-roles label { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 44px; padding: 0 1rem; border-radius: var(--z-r-control); background: var(--paper); border: 1.5px solid var(--line); font-weight: 600; font-size: var(--z-type-sm); cursor: pointer; }
 .st-roles label:has(input:checked) { border-color: var(--ink); background: var(--tint-2); }
 .st-roles label:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--tint); }
 .st-roles input { accent-color: var(--amber); width: 18px; height: 18px; }

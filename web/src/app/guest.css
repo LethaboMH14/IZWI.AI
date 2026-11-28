@@ -80,7 +80,7 @@
 /* listing */
 .gx-terms { white-space: pre-wrap; line-height: 1.55; overflow-wrap: anywhere; }
 .gx-langs { display: flex; flex-wrap: wrap; gap: 6px; }
-.gx-langs span { background: var(--sand); border-radius: 999px; padding: 4px 12px; font-size: var(--z-type-sm); font-weight: 600; }
+.gx-langs span { background: var(--sand); border-radius: var(--z-r-control); padding: 4px 12px; font-size: var(--z-type-sm); font-weight: 600; }
 
 /* friendly full-page state */
 .gx-state { min-height: 100dvh; display: grid; place-items: center; padding: 1.5rem 16px; }
