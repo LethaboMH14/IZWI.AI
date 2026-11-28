@@ -7,3 +7,7 @@
 export function assistantEnabled(): boolean {
   return (process.env.IZWI_FLAG_ASSISTANT ?? process.env.NEXT_PUBLIC_IZWI_FLAG_ASSISTANT) === "1";
 }
+
+export function connectionsEnabled(): boolean {
+  return process.env.IZWI_FLAG_CONNECTIONS === "1";
+}

@@ -44,7 +44,7 @@ function useLastProject(current: string | null) {
   return current ?? stored;
 }
 
-export function AppShell({ children, workspace, user }: { children: React.ReactNode; workspace: string; user: { name: string; email: string } }) {
+export function AppShell({ children, workspace, user, connectionsEnabled }: { children: React.ReactNode; workspace: string; user: { name: string; email: string }; connectionsEnabled: boolean }) {
   const path = usePathname();
   const router = useRouter();
   const project = useLastProject(projectInPath(path));
@@ -60,6 +60,7 @@ export function AppShell({ children, workspace, user }: { children: React.ReactN
   };
   const settings: MenuItem[] = [
     { heading: workspace },
+    ...(connectionsEnabled ? [{ id: "settings", label: "Settings", onSelect: () => router.push("/app/settings") } satisfies MenuItem] : []),
     { id: "engine", label: "Run on", onSelect: () => router.push("/app/engine") },
     { id: "team", label: "Team", onSelect: () => router.push("/app/team") },
     { id: "extensions", label: "Extensions", onSelect: () => router.push("/app/extensions") },

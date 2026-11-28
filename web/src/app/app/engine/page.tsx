@@ -172,7 +172,9 @@ type Role = "plan" | "translate" | "clips" | "asr" | "chat";
 type Provider = { id: string; kind: Kind; label: string; baseUrl: string; model: string | null; keyHint: string | null; freeTier: boolean; roles: Role[]; privacy: "private" | "standard" | "may_log"; lastTestAt: number | null; lastTestOk: boolean | null; lastTestNote: string | null };
 
 const KIND_LABEL: Record<Kind, string> = { openai_compat: "OpenAI-compatible chat", madlad_endpoint: "MADLAD-400 endpoint", asr_endpoint: "Speech endpoint", openrouter: "OpenRouter", groq: "Groq", gemini: "Gemini", aimlapi: "AI/ML API", ollama: "Ollama", meta: "Meta Model API (Standard mode)" };
-const ROLE_LABEL: Record<Role, string> = { plan: "Plan", translate: "Translate", clips: "Find clips", asr: "Transcribe", chat: "Studio assistant chat" };
+// Clip finding and transcription currently run locally; provider role switches were stored but ignored.
+// Do not offer those switches until the worker actually routes those jobs through a provider.
+const ROLE_LABEL: Partial<Record<Role, string>> = { plan: "Plan", translate: "Translate", chat: "Studio assistant chat" };
 const PRIVACY_TEXT: Record<Provider["privacy"], string> = {
   private: "Private: on this machine (owner-configured; IZWI can't verify that it doesn't forward elsewhere)",
   standard: "Standard: Meta",
@@ -188,7 +190,6 @@ const PRESETS: Preset[] = [
   { id: "ollama", name: "Ollama on this computer", kind: "ollama", label: "Ollama (this computer)", baseUrl: "http://127.0.0.1:11434/v1", modelHint: "a model you have pulled", roles: ["plan", "translate", "chat"], verified: true, keyOptional: true, note: "No key needed. Big local models slow this PC down while they run." },
   { id: "meta", name: "Meta API", kind: "meta", label: "Meta API", baseUrl: "https://api.meta.ai/v1", modelHint: "model id from Meta's API", roles: ["plan", "translate", "chat"], verified: true },
   { id: "madlad", name: "MADLAD-400 endpoint", kind: "madlad_endpoint", label: "MADLAD-400", baseUrl: "", modelHint: "", roles: ["translate"], keyOptional: true, note: "Paste the URL of an endpoint you deployed, for example on Hugging Face or Kaggle." },
-  { id: "asr", name: "Speech endpoint", kind: "asr_endpoint", label: "Speech endpoint", baseUrl: "", modelHint: "", roles: ["asr"], keyOptional: true, note: "Paste the URL of a transcription endpoint that accepts a WAV file." },
 ];
 
 const errText = (e: unknown, adminAction = false) => {
@@ -200,7 +201,7 @@ const errText = (e: unknown, adminAction = false) => {
   return (e as Error).message || "Something went wrong.";
 };
 
-function ProviderCard({ p, onChange }: { p: Provider; onChange: () => void }) {
+function ProviderCard({ p, onChange, canManage }: { p: Provider; onChange: () => void; canManage: boolean }) {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [msg, setMsg] = useState("");
@@ -227,14 +228,14 @@ function ProviderCard({ p, onChange }: { p: Provider; onChange: () => void }) {
         <div><dt>Address</dt><dd className="mono">{p.baseUrl}</dd></div>
         {p.model && <div><dt>Model</dt><dd>{p.model}</dd></div>}
         <div><dt>Key</dt><dd className="mono">{p.keyHint ? `ends in ${p.keyHint}` : "No key stored"}</dd></div>
-        <div><dt>Used for</dt><dd>{p.roles.map((r) => ROLE_LABEL[r] ?? r).join(", ")}</dd></div>
+        <div><dt>Used for</dt><dd>{p.roles.filter((r) => ROLE_LABEL[r]).map((r) => ROLE_LABEL[r]).join(", ") || "No supported provider tasks assigned"}</dd></div>
         <div><dt>Free tier</dt><dd>{p.freeTier ? "Owner marked" : "Not marked"}</dd></div>
       </dl>
       {/* Changing the model clears the last test, so test the new one at once: only a tested provider is used. */}
-      {p.kind !== "madlad_endpoint" && p.kind !== "asr_endpoint" && <ModelList id={p.id} onChoose={async (m) => { try { await api(`/api/providers/${p.id}`, { method: "PATCH", body: { model: m.id, roles: p.roles } }); await retest(); onChange(); } catch (e) { setMsg(errText(e, true)); } }} />}
+      {canManage && p.kind !== "madlad_endpoint" && p.kind !== "asr_endpoint" && <ModelList id={p.id} onChoose={async (m) => { try { await api(`/api/providers/${p.id}`, { method: "PATCH", body: { model: m.id, roles: p.roles } }); await retest(); onChange(); } catch (e) { setMsg(errText(e, true)); } }} />}
       {p.lastTestAt && <p className="st-test">{p.lastTestNote} <span className="mono">· {ago(p.lastTestAt)}</span></p>}
       {msg && <p className="st-note bad" role="alert">{msg}</p>}
-      <div className="st-actions">
+      {canManage && <div className="st-actions">
         <button className="btn btn-quiet" onClick={retest} disabled={busy}><ArrowClockwise weight="bold" /> {busy ? "Testing…" : "Test again"}</button>
         {confirm ? (
           <span className="st-confirm">Remove {p.label}?
@@ -244,7 +245,7 @@ function ProviderCard({ p, onChange }: { p: Provider; onChange: () => void }) {
         ) : (
           <button className="btn btn-quiet" onClick={() => setConfirm(true)} disabled={busy}><Trash weight="bold" /> Remove</button>
         )}
-      </div>
+      </div>}
     </li>
   );
 }
@@ -276,7 +277,7 @@ function AddProvider({ onAdded }: { onAdded: () => void }) {
     setBusy(true);
     try {
       const p = await api<Provider>("/api/providers", { method: "POST", body: { kind, label: label.trim(), baseUrl: baseUrl.trim(), model: model.trim() || undefined, key: key.trim() || undefined, roles, freeTier } });
-      setResult(p); setKey(""); onAdded();
+      setResult(p); setKey(""); onAdded(); window.dispatchEvent(new Event("izwi:providers-changed"));
     } catch (err) { setError(errText(err, true)); }
     setBusy(false);
   };
@@ -319,8 +320,10 @@ function AddProvider({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function Keys() {
+export function Keys() {
   const { data, error, loading, refresh } = useLive<Provider[]>("/api/providers", { slowMs: 30_000 });
+  const [canManage, setCanManage] = useState(false);
+  useEffect(() => { api<{ canEdit: boolean }>("/api/providers/routes").then((v) => setCanManage(v.canEdit)).catch(() => setCanManage(false)); }, []);
   return (
     <section className="st-sec" aria-labelledby="keys-h">
       <header>
@@ -331,8 +334,8 @@ function Keys() {
       </header>
       {loading && <div className="st-skel" aria-label="Loading" />}
       {error && !data && <p className="st-note bad" role="alert">Could not load your providers. {error.message}</p>}
-      {data && (data.length === 0 ? <p className="st-empty">No keys added yet. IZWI works without one; a key adds AI planning and translation.</p> : <ul className="st-list">{data.map((p) => <ProviderCard key={p.id} p={p} onChange={refresh} />)}</ul>)}
-      <AddProvider onAdded={refresh} />
+      {data && (data.length === 0 ? <p className="st-empty">No keys added yet. IZWI works without one; a key adds AI planning and translation.</p> : <ul className="st-list">{data.map((p) => <ProviderCard key={p.id} p={p} onChange={refresh} canManage={canManage} />)}</ul>)}
+      {canManage ? <AddProvider onAdded={refresh} /> : <p className="st-note">Only workspace owners and admins can add, test or remove provider connections. Ask an owner or admin to manage these keys.</p>}
     </section>
   );
 }

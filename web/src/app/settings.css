@@ -6,6 +6,10 @@
 .st-page .lede { margin-top: 0.7rem; max-width: 40rem; }
 
 .st-sec { margin-top: 1.4rem; padding: 1.2rem; border-radius: var(--r-l); background: var(--paper); box-shadow: var(--shadow); }
+.st-tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.8rem 0 1rem; }
+.st-tabs a, .st-tabs span { display: inline-flex; min-height: 44px; align-items: center; padding: 0.55rem 0.9rem; border: 1px solid var(--line); border-radius: var(--r-m); color: var(--ink); background: var(--paper); text-decoration: none; }
+.st-tabs a[aria-current="page"] { border-color: var(--amber-deep); background: var(--amber-tint); font-weight: 700; }
+.st-tabs span[aria-disabled="true"] { color: var(--muted); }
 .st-sec > header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.8rem; margin-bottom: 1rem; }
 .st-sec h2 { font-size: 1.55rem; }
 .st-sec h3 { font-size: 1.1rem; margin-bottom: 0.4rem; }

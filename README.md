@@ -5,6 +5,8 @@ A proposed creative operating system for South African independent creators and 
 
 **Status: hackathon build.** The studio in `web/` works on real data: sign-in and workspaces, uploads, local transcription, clips, caption review, consent links, held and released renders, signed provenance and bring-your-own AI keys. Billing, payouts, publishing to social platforms and dubbing are not built. Mockups illustrate intended behaviour; prices, budgets and pilot metrics are proposals. [CRITERIA.md](CRITERIA.md) records what has evidence.
 
+The partial guided provider setup at `/app/settings` is off by default. Set server-side `IZWI_FLAG_CONNECTIONS=1` to show it. The advanced setup remains at `/app/engine`.
+
 ## Start here
 1. [Handoff and current decisions](docs/HANDOFF.md)
 2. [Product requirements and user journey](docs/PRODUCT.md)

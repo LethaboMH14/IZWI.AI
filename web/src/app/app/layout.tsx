@@ -2,6 +2,7 @@
 import { AppShell } from "@/components/AppShell";
 import { pageCtx } from "@/server/guard";
 import { one } from "@/server/db";
+import { connectionsEnabled } from "@/server/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ctx = await pageCtx();
   const ws = await one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
   return (
-    <AppShell workspace={ws?.name ?? "Workspace"} user={{ name: ctx.userName, email: ctx.email }}>
+    <AppShell workspace={ws?.name ?? "Workspace"} user={{ name: ctx.userName, email: ctx.email }} connectionsEnabled={connectionsEnabled()}>
       {children}
     </AppShell>
   );
