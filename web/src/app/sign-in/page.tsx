@@ -21,19 +21,38 @@ function SignInForm() {
   const [busy, setBusy] = useState<"" | "password" | "passkey">("");
   const [error, setError] = useState("");
   const [touched, setTouched] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [sent, setSent] = useState(false);
 
   const create = mode === "create";
   const short = password.length > 0 && password.length < MIN_PASSWORD;
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
-  const ready = emailOk && password.length >= (create ? MIN_PASSWORD : 1) && (!create || name.trim().length > 0);
+  const ready = forgot ? emailOk : emailOk && password.length >= (create ? MIN_PASSWORD : 1) && (!create || name.trim().length > 0);
 
   // One full page load: the server sees the new session, and a page with a one-time effect (an invite) runs once.
   const finish = () => window.location.assign(next);
+
+  const requestReset = async () => {
+    setBusy("password");
+    setError("");
+    try {
+      const res = await authClient.requestPasswordReset({ email: email.trim(), redirectTo: "/reset-password" });
+      if (res.error) setError(res.error.message || "We could not send the reset link. Try again in a few minutes.");
+      else setSent(true);
+    } catch {
+      setError("No connection. Check your signal and try again.");
+    }
+    setBusy("");
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched(true);
     if (!ready || busy) return;
+    if (forgot) {
+      await requestReset();
+      return;
+    }
     setBusy("password");
     setError("");
     try {
@@ -74,6 +93,8 @@ function SignInForm() {
     setMode(m);
     setError("");
     setTouched(false);
+    setForgot(false);
+    setSent(false);
   };
 
   return (
@@ -104,22 +125,28 @@ function SignInForm() {
               <input name="email" type="email" inputMode="email" autoComplete="username webauthn" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@yourstudio.co.za" aria-invalid={touched && !emailOk} />
               {touched && !emailOk && <small className="err">That email looks incomplete.</small>}
             </label>
-            <label className="field">
+            {!forgot && <label className="field">
               <span>Password</span>
               <input name="password" type="password" autoComplete={create ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={create && short} aria-describedby="pw-hint" />
               <small id="pw-hint" className={create && short ? "err" : ""}>
                 {create ? `At least ${MIN_PASSWORD} characters${password ? `. ${password.length} so far.` : "."}` : "The password you made when you joined."}
               </small>
-            </label>
+            </label>}
+            {!create && !forgot && (
+              <button type="button" className="link forgot" onClick={() => { setForgot(true); setError(""); setSent(false); }}>Forgot your password?</button>
+            )}
+            {forgot && <p className="fine">Enter the email you signed up with. If an account exists, we send a link that works once and expires in an hour.</p>}
+            {forgot && sent && <p className="form-ok" role="status">Check your inbox. The reset link is on its way if this email has an account.</p>}
 
             {error && <p className="form-err" role="alert">{error}</p>}
 
             <button className="btn btn-lg" disabled={busy !== "" || (touched && !ready)} aria-busy={busy === "password"}>
-              {busy === "password" ? (create ? "Creating your account…" : "Signing you in…") : create ? "Create my account" : "Sign in"} <ArrowRight weight="bold" />
+              {busy === "password" ? (forgot ? "Sending the link…" : create ? "Creating your account…" : "Signing you in…") : forgot ? "Send reset link" : create ? "Create my account" : "Sign in"} <ArrowRight weight="bold" />
             </button>
           </form>
 
-          {!create && (
+          {forgot && <button type="button" className="link" onClick={() => { setForgot(false); setSent(false); setError(""); }}>Back to sign in</button>}
+          {!create && !forgot && (
             <>
               <div className="or"><span>or</span></div>
               <button type="button" className="btn btn-lg btn-quiet" onClick={passkey} disabled={busy !== ""} aria-busy={busy === "passkey"}>

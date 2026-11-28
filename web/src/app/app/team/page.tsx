@@ -75,7 +75,7 @@ export default function TeamPage() {
                   const msg = `You're invited to my IZWI AI workspace. Sign up with ${i.email} and open: ${i.url}`;
                   return (
                     <li key={i.id ?? i.email} className="st-invite">
-                      <div><b style={{ fontFamily: "var(--display)", fontSize: "1.05rem" }}>{i.email}</b> <span className="pill s-draft" style={{ marginLeft: "0.4rem" }}>{ROLE_TEXT[i.role] ?? i.role}</span></div>
+                      <div><b style={{ fontFamily: "var(--display)", fontSize: "var(--z-type-base)" }}>{i.email}</b> <span className="pill s-draft" style={{ marginLeft: "0.4rem" }}>{ROLE_TEXT[i.role] ?? i.role}</span></div>
                       {i.url && <div className="st-link">{i.url}</div>}
                       <div className="st-actions">
                         {i.url && <CopyBtn text={i.url} />}

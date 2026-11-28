@@ -41,7 +41,7 @@ const upgrades = [
 ];
 
 const tokens = [
-  ["Ivory", "#faf8f4"], ["Paper", "#ffffff"], ["Sand", "#f0ece4"], ["Ink", "#211e1a"], ["Amber", "#b77913"], ["Gold", "#e9a21b"], ["Tint", "#ffe0a0"], ["Clay", "#c4552d"], ["Moss", "#4f6b3a"],
+  ["Ivory", "var(--ivory)"], ["Paper", "var(--paper)"], ["Sand", "var(--sand)"], ["Ink", "var(--ink)"], ["Amber", "var(--amber)"], ["Gold", "var(--gold)"], ["Tint", "var(--tint)"], ["Clay", "var(--clay)"], ["Moss", "var(--moss)"],
 ];
 
 export default function Board() {

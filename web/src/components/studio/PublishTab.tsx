@@ -147,7 +147,27 @@ export function PublishTab(props: TabProps) {
         {state.outputs.length === 0 ? (
           <p className="fine">Nothing rendered yet.</p>
         ) : (
-          <ul className="st-list">{state.outputs.map((o) => <OutputRow key={o.id} o={o} state={state} refresh={refresh} />)}</ul>
+          <>
+            <table className="pub-table">
+              <caption className="sr-only">Every render, with its format, captions, status and where it was posted</caption>
+              <thead><tr><th scope="col">Clip</th><th scope="col">Format</th><th scope="col">Captions</th><th scope="col">Status</th><th scope="col">Posted to</th></tr></thead>
+              <tbody>
+                {state.outputs.map((o) => {
+                  const clip = state.clips.find((c) => c.id === o.clipId);
+                  return (
+                    <tr key={o.id}>
+                      <th scope="row">{clip?.title ?? "Clip"}</th>
+                      <td>{presetLabel(o.preset)}</td>
+                      <td>{o.language ? `${langName(o.language)}${o.burn ? ", burned in" : ""}` : "None"}</td>
+                      <td><Pill status={o.status} /></td>
+                      <td>{o.posted ? o.posted.platform : <span className="fs-muted">Not yet</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <ul className="st-list">{state.outputs.map((o) => <OutputRow key={o.id} o={o} state={state} refresh={refresh} />)}</ul>
+          </>
         )}
       </section>
 

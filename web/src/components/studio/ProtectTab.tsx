@@ -35,7 +35,7 @@ function parseRanges(s: string): { startMs: number; endMs: number }[] | null {
 /** A scannable copy of a consent link. The URL is only known right after it is created, so this takes the URL itself. */
 function ConsentQr({ url, name }: { url: string; name: string }) {
   const [shown, setShown] = useState(true);
-  const svg = renderSVG(url, { ecc: "M", border: 0, blackColor: "#211e1a", whiteColor: "#faf8f4" });
+  const svg = renderSVG(url, { ecc: "M", border: 0, blackColor: "var(--ink)", whiteColor: "var(--ivory)" });
   return (
     <div className="cq">
       {shown && <div className="cq-code" role="img" aria-label={`QR code for the consent link for ${name}`} dangerouslySetInnerHTML={{ __html: svg }} />}

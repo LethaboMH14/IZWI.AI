@@ -6,8 +6,10 @@ import { Button, ContextMenu, DropdownMenu, EmptyState, IconButton, Kbd, Tooltip
 import { api } from "@/lib/api";
 import { formatTime } from "@/lib/timecode";
 import { filterLines, lineIndexAt, rangeFromLine, rangeFromLineIndexes, splitByQuery, wordIndexAt, type Line, type Word } from "@/lib/scenes";
+import { envelopeSlice } from "@/lib/timeline-math";
 import { usePlayhead, usePlayheadStore, useProject, useProjectStore } from "@/components/workspace/ProjectProvider";
 import { useDurationMs, useFlat } from "./flat-context";
+import { ReadinessList } from "./ReadinessList";
 import { useReadOnlyReason } from "./hooks";
 import { isActive, isFailed, latestJob, messageOf, percentOf, retryJob, runStep } from "./jobs";
 
@@ -23,6 +25,28 @@ type RowProps = {
   onMake: (line: Line) => void;
   onTeach: (heard: string) => void;
 };
+
+// A thin envelope under each line: where the voice is loud, and where a line trails into silence. Real peaks only;
+// without a recording it draws nothing rather than a shape.
+const LineWave = memo(function LineWave({ startMs, endMs }: { startMs: number; endMs: number }) {
+  const peaks = useProject((s) => s.state.peaks);
+  const durationMs = useDurationMs();
+  const bars = useMemo(() => {
+    if (!peaks.length) return [] as number[];
+    const slice = envelopeSlice(peaks, { startMs, endMs }, durationMs);
+    if (!slice.length) return [] as number[];
+    const top = Math.max(...peaks, 1e-9);
+    const n = Math.min(64, slice.length);
+    return Array.from({ length: n }, (_, i) => {
+      const a = Math.floor((i * slice.length) / n), b = Math.max(a + 1, Math.floor(((i + 1) * slice.length) / n));
+      let m = 0;
+      for (let j = a; j < b && j < slice.length; j++) m = Math.max(m, Math.abs(slice[j]));
+      return Math.max(0.08, Math.min(1, m / top));
+    });
+  }, [peaks, startMs, endMs, durationMs]);
+  if (!bars.length) return null;
+  return <span className="fs-line-wave" aria-hidden="true">{bars.map((h, i) => <span key={i} style={{ height: `${Math.round(h * 100)}%` }} />)}</span>;
+});
 
 const Row = memo(function Row({ line, current, query, readOnly, onSeek, onMake, onTeach }: RowProps) {
   const store = useProjectStore();
@@ -91,6 +115,7 @@ const Row = memo(function Row({ line, current, query, readOnly, onSeek, onMake, 
               <span className="fs-line-hint">Enter saves · Esc cancels</span>
             </>
           ) : <p className="fs-line-text">{body}</p>}
+          {!editing && <LineWave startMs={line.startMs} endMs={line.endMs} />}
           <span className="fs-line-meta" aria-live="polite">
             {line.edited && <span className="fs-tag">Edited</span>}
             {line.flag && (
@@ -131,6 +156,7 @@ export function TranscriptView() {
   const ph = usePlayheadStore();
   const lines = useProject((s) => s.state.lines);
   const source = useProject((s) => s.state.source);
+  const clips = useProject((s) => s.state.clips);
   const job = useProject((s) => latestJob(s.state.jobs, ["transcribe"]));
   const readOnly = useReadOnlyReason();
   const durationMs = useDurationMs();
@@ -211,7 +237,21 @@ export function TranscriptView() {
   // States before there is a transcript to edit.
   if (lines.length === 0) {
     if (isActive(job)) return <Busy title="Transcribing" percent={percentOf(job)} stage={job?.stage} />;
-    if (!source) return <EmptyState icon={<MagnifyingGlass size={28} />} title="No recording yet" line="The words appear here" />;
+    const transcribeAction = (
+      <Button variant="primary" loading={busy} disabled={!!readOnly || !source} disabledReason={readOnly ?? (!source ? "Upload a recording first." : undefined)} onClick={() => void act(() => runStep(store, { type: "transcribe" }))}>Transcribe</Button>
+    );
+    if (!source || !isFailed(job)) {
+      return (
+        <ReadinessList
+          title="Getting this story ready"
+          steps={[
+            { label: "Recording", detail: source ? "Uploaded and ready to listen to." : "Upload a recording to start.", done: !!source },
+            { label: "Transcript", detail: "Words with timings, read from the recording.", done: false, action: source ? transcribeAction : undefined },
+            { label: "Scenes", detail: "Suggested from the transcript once it exists.", done: clips.length > 0 },
+          ]}
+        />
+      );
+    }
     if (isFailed(job)) {
       return (
         <div className="fs-panel fs-panel-flow" role="alert">
@@ -222,10 +262,6 @@ export function TranscriptView() {
         </div>
       );
     }
-    return (
-      <EmptyState icon={<MagnifyingGlass size={28} />} title="No transcript yet" line="The recording's words appear here"
-        action={<><Button variant="primary" loading={busy} disabled={!!readOnly} disabledReason={readOnly} onClick={() => void act(() => runStep(store, { type: "transcribe" }))}>Transcribe</Button>{actionError && <span className="fs-error" role="alert">{actionError}</span>}</>} />
-    );
   }
 
   const submitTeach = (e: FormEvent) => {

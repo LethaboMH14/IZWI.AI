@@ -8,6 +8,7 @@ import { Pool } from "pg";
 import { one, surviveDrops } from "./db";
 import { STUDIO_URL } from "./env";
 import { audit } from "./audit";
+import { resetEmail, sendMail } from "./mail";
 
 const authPool = process.env.IZWI_DB === "pglite" ? undefined : new Pool({ connectionString: process.env.DATABASE_URL });
 if (authPool) surviveDrops(authPool);
@@ -15,9 +16,19 @@ if (authPool) surviveDrops(authPool);
 export const auth = betterAuth({
   appName: "IZWI AI",
   database: authPool,
-  baseURL: STUDIO_URL,
+  // The site answers at its own address. Preview deployments (izwi-ai-*.vercel.app) are allowed too, so sign-in and
+  // reset links work there. Any other address falls back to the configured one.
+  baseURL: { allowedHosts: [new URL(STUDIO_URL).host, "izwi-ai*.vercel.app"], fallback: STUDIO_URL, protocol: "https" },
   secret: process.env.BETTER_AUTH_SECRET,
-  emailAndPassword: { enabled: true, minPasswordLength: 10, maxPasswordLength: 128, autoSignIn: true },
+  emailAndPassword: {
+    enabled: true, minPasswordLength: 10, maxPasswordLength: 128, autoSignIn: true,
+    // The link is single-use and expires in an hour. It is sent only through the configured SMTP service, never logged.
+    resetPasswordTokenExpiresIn: 60 * 60,
+    sendResetPassword: async ({ user, url }) => {
+      const mail = resetEmail(url);
+      await sendMail({ to: user.email, subject: mail.subject, text: mail.text });
+    },
+  },
   session: { expiresIn: 60 * 60 * 24 * 14, updateAge: 60 * 60 * 24 },
   rateLimit: {
     enabled: true,

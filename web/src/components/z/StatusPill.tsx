@@ -23,12 +23,10 @@ const META: Record<Status, { word: string; icon: Icon; kind: string }> = {
 
 export function StatusPill({ status, label, percent }: { status: Status; label?: string; percent?: number }) {
   const m = META[status];
-  const Ic = m.icon;
   const pct = status === "running" && typeof percent === "number" && Number.isFinite(percent)
     ? ` ${Math.round(Math.min(100, Math.max(0, percent)))}%` : "";
   return (
     <span className={`z-pill z-pill-${m.kind}`} data-status={status}>
-      <Ic size={12} weight="fill" aria-hidden="true" className={status === "running" ? "z-pill-spin" : undefined} />
       <span>{(label ?? m.word) + (label ? "" : pct)}</span>
     </span>
   );

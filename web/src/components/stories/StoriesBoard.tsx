@@ -39,6 +39,16 @@ function pills(c: StoryCard) {
   return out;
 }
 
+// What a story needs from the creator, most urgent first. Equal cards would say every story needs the same attention.
+// 0: held or failed · 1: no recording yet · 2: scenes to review · 3: working in the background · 4: ready or idle.
+function attention(c: StoryCard): number {
+  if (c.counts.waiting || c.counts.failed) return 0;
+  if (!c.filename) return 1;
+  if (c.counts.clips && !c.counts.ready) return 2;
+  if (c.counts.running) return 3;
+  return 4;
+}
+
 function Envelope({ peaks }: { peaks: number[] }) {
   if (!peaks.length) return null;
   return (
@@ -53,7 +63,11 @@ export function StoriesBoard({ cards, workspace, newStory }: { cards: StoryCard[
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<string | null>(cards[0]?.id ?? null);
   const [adding, setAdding] = useState(cards.length === 0);
-  const shown = useMemo(() => cards.filter(FILTERS.find((f) => f.id === filter)!.test), [cards, filter]);
+  const shown = useMemo(
+    () => cards.filter(FILTERS.find((f) => f.id === filter)!.test).sort((a, b) => attention(a) - attention(b) || b.updatedAt - a.updatedAt),
+    [cards, filter],
+  );
+  const needYou = cards.filter((c) => attention(c) <= 2).length;
   const sel = cards.find((c) => c.id === selected) ?? null;
 
   const items = (c: StoryCard): MenuItem[] => [
@@ -72,6 +86,9 @@ export function StoriesBoard({ cards, workspace, newStory }: { cards: StoryCard[
           <div>
             <h1 id="st-title">Stories</h1>
             <p className="st-meta">{workspace} · {cards.length} {cards.length === 1 ? "story" : "stories"}</p>
+            {cards.length > 0 && (
+              <p className="st-need">{needYou > 0 ? `${needYou} ${needYou === 1 ? "needs" : "need"} you. Listed first.` : "Nothing is waiting on you."}</p>
+            )}
           </div>
           <Button variant="primary" onClick={() => setAdding((v) => !v)} aria-expanded={adding}><Plus size={16} aria-hidden="true" />New story</Button>
         </div>

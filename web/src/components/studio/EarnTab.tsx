@@ -34,7 +34,7 @@ function ListingCard({ l, clipTitle, refresh }: { l: Listing; clipTitle: string 
             <li key={q.id} className="st-card soft">
               <div className="st-head"><b>{q.name}</b><Pill status={q.status} /></div>
               <p className="st-meta">{q.contact}{q.organisation ? ` · ${q.organisation}` : ""} · {dateOf(q.created_at)}</p>
-              <p style={{ color: "var(--ink)", fontSize: "0.95rem" }}>{q.intended_use}</p>
+              <p style={{ color: "var(--ink)", fontSize: "var(--z-type-sm)" }}>{q.intended_use}</p>
               <div className="st-row">
                 <label className="st-meta" htmlFor={`qs-${q.id}`}>Status</label>
                 <select id={`qs-${q.id}`} value={q.status} disabled={busy === "q" + q.id} onChange={(e) => act("q" + q.id, "PATCH", `/api/items/enquiry/${q.id}`, { status: e.target.value })}>
