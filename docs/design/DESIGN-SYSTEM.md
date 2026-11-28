@@ -59,24 +59,29 @@ Status is never colour alone: each state also has a word, an icon or a pattern (
 - **Mono:** Geist Mono (OFL), tabular, for every timecode, duration and count shown in a column.
 - No italics anywhere in the chrome. All faces are self-hosted through next/font, with no external font links.
 
+**Proposed, 28 Nov 2026 UI pass: pending Lethabo's approval.** The 26 Nov values were: micro 11/14, meta 12/16, ui 13/18, body 14/20, title-s 18/22, title-m 22/26, title-l 28/32, figure 32/34. Every role now sits on the six-step scale in §3a below; the mapping is in `web/src/app/tokens.css`.
+
 | Step | Size / line | Face | Use |
 |---|---|---|---|
-| micro | 11/14 | sans 500 | rail labels, chips, track tags |
+| micro | 12/16 | sans 500 | rail labels, chips, track tags |
 | meta | 12/16 | sans 400 | secondary rows, file sizes |
-| ui | 13/18 | sans 400/500 | default UI text, buttons, menus |
+| ui | 14/20 | sans 400/500 | default UI text, buttons, menus |
 | body | 14/20 | sans 400 | transcript lines, form fields |
 | head | 14/18 | sans 600 | panel headers |
-| title-s | 18/22 | Fraunces 650 | agent panel title, card titles |
-| title-m | 22/26 | Fraunces 650 | proposal title |
+| title-s | 20/24 | Fraunces 650 | agent panel title, card titles |
+| title-m | 20/24 | Fraunces 650 | proposal title |
 | title-l | 28/32 | Fraunces 650 | scene or page title |
-| figure | 32/34 | Fraunces 650 | 36s → 34s |
+| figure | 28/32 | Fraunces 650 | 36s → 34s |
 | time | 12/16 | mono 500 | timecodes, durations |
+
+**§3a Six-step scale (proposed):** 12, 14, 16, 20, 28 and 40 px. Product text uses these steps only. The landing hero is the only exception: up to 80 px on large screens and 64 px on phones. Relative sizes (`em`) remain for inline emphasis, and the 3D labels in the Story Room keep their own sizes on the dark scene.
 
 Public and account screens share a compact semantic scale defined in `tokens.css`: 12, 14, 16, 20, 28 and 40 px. The 16 px role is the minimum for long-form public form copy; 40 px is the normal page heading. Landing hero headings may grow to 80 px on large screens and 64 px on phones. Marketing sections use 20–40 px. Avoid introducing another one-off size when a role fits.
 
 ## 4. Space, shape, depth
 Public and account layouts may use 48 and 64 px as section spacing; keep them out of dense editor chrome.
-- **Spacing:** a 4 px base: 2, 4, 6, 8, 12, 16, 20, 24, 32.
+- **Spacing:** a 4 px base: 2, 4, 6, 8, 12, 16, 20, 24, 32. Public and account layouts add 48 and 64. Off-grid gaps, paddings and margins (0.4rem, 0.6rem, 1.2rem and similar) snap to the nearest step in the 28 Nov UI pass (proposed, pending approval).
+- **Nested radius (proposed, 28 Nov):** 4 px for a clip or thumbnail inside a panel (`--z-r-nested`).
 - **Rows:** dense list rows are 32 px; transcript rows are at least 40 px.
 - **Touch:** targets are at least 44 px on touch devices.
 - **Radii:**
