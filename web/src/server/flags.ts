@@ -35,3 +35,7 @@ export function starterTemplatesEnabled(): boolean {
 export function scheduledPostsEnabled(): boolean {
   return process.env.IZWI_FLAG_SCHEDULED_POSTS === "1";
 }
+
+export function homeTipsEnabled(): boolean {
+  return process.env.IZWI_FLAG_HOME_TIPS === "1";
+}

@@ -20,6 +20,7 @@ const A = { project: "prj_a", clip: "clp_a", line: "ln_a", track: "trk_a", perso
 const ROUTES: Entry[] = [
   { path: "auth/[...all]", params: {}, methods: { GET: {}, POST: {} }, kind: "library" },
   { path: "glossary", params: {}, methods: { POST: { json: { term: "Thabiso" } } }, kind: "session" },
+  { path: "home-inspiration", params: {}, methods: { GET: {}, PATCH: { json: { niche: "podcast" } } }, kind: "session" },
   { path: "items/[kind]/[id]", params: { kind: "clip", id: A.clip }, methods: { GET: {}, PATCH: { json: { status: "dropped" } }, DELETE: {} }, kind: "session" },
   { path: "media/[id]", params: { id: A.asset }, methods: { GET: {} }, kind: "session" },
   { path: "plan", params: {}, methods: { GET: {}, POST: { json: { projectId: A.project, prompt: "make three clips" } } }, kind: "session" },
@@ -65,6 +66,7 @@ beforeAll(async () => {
   process.env.IZWI_FLAG_POLICY_PRECHECK = "1";
   process.env.IZWI_FLAG_STARTER_TEMPLATES = "1";
   process.env.IZWI_FLAG_SCHEDULED_POSTS = "1";
+  process.env.IZWI_FLAG_HOME_TIPS = "1";
   db = await openTestDb();
   await db.execScript(`CREATE TABLE IF NOT EXISTS invitation (id TEXT PRIMARY KEY, "organizationId" TEXT, email TEXT, role TEXT, status TEXT, "expiresAt" TEXT)`);
   await seedWorkspace(db, "org_a", "own_a", A.project);
@@ -91,7 +93,7 @@ beforeAll(async () => {
   ];
   for (const s of sql) await db.run(s);
 }, 60_000);
-afterAll(async () => { delete process.env.IZWI_FLAG_PREFERENCES; delete process.env.IZWI_FLAG_LANGUAGES; delete process.env.IZWI_FLAG_POLICY_PRECHECK; delete process.env.IZWI_FLAG_STARTER_TEMPLATES; delete process.env.IZWI_FLAG_SCHEDULED_POSTS; await closeTestDb(db); });
+afterAll(async () => { delete process.env.IZWI_FLAG_PREFERENCES; delete process.env.IZWI_FLAG_LANGUAGES; delete process.env.IZWI_FLAG_POLICY_PRECHECK; delete process.env.IZWI_FLAG_STARTER_TEMPLATES; delete process.env.IZWI_FLAG_SCHEDULED_POSTS; delete process.env.IZWI_FLAG_HOME_TIPS; await closeTestDb(db); });
 beforeEach(() => { hoisted.session = null; });
 
 const TABLES = ["project", "asset", "clip", "caption_track", "caption_line", "person", "share_link", "job", "output", "listing", "enquiry", "comment", "provider", "plan_run", "declaration", "consent", "model_route", "workspace_pref"];

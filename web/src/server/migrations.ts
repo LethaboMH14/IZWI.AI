@@ -565,6 +565,11 @@ ALTER TABLE upload_session ADD COLUMN finished_at BIGINT;`,
   created_at BIGINT NOT NULL
 );`,
   },
+  {
+    version: 14,
+    name: "creator niche preference for Home tips",
+    sql: `ALTER TABLE user_preferences ADD COLUMN creator_niche TEXT NOT NULL DEFAULT 'podcast';`,
+  },
 ];
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 

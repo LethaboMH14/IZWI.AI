@@ -10,6 +10,9 @@ import { readCreatorLanguages } from "@/server/languages";
 import { greetingFor } from "@/lib/greetings";
 import { starterTemplatesEnabled } from "@/server/flags";
 import { StarterTemplateLibrary } from "@/components/studio/StarterTemplateLibrary";
+import { homeTipsEnabled } from "@/server/flags";
+import { readCreatorNiche } from "@/server/niche";
+import { HomeInspiration } from "@/components/home/HomeInspiration";
 import "../entry.css";
 import "../stories.css";
 
@@ -20,6 +23,7 @@ export default async function Home() {
   const rows = await projectList(ctx);
   const ws = await one<{ name: string }>(`SELECT name FROM organization WHERE id = ?`, ctx.workspaceId);
   const greeting = languagesEnabled() ? greetingFor(await readCreatorLanguages(ctx.userId)) : null;
+  const creatorNiche = homeTipsEnabled() ? await readCreatorNiche(ctx.userId) : null;
   const cards: StoryCard[] = rows.map((p) => ({
     id: p.id,
     title: p.title,
@@ -35,6 +39,7 @@ export default async function Home() {
     <div className="st-page">
       <StoriesBoard cards={cards} workspace={ws?.name ?? "Workspace"} greeting={greeting ? `${greeting.text}, ${ctx.userName}` : null} newStory={<NewStory empty={cards.length === 0} />} />
       {starterTemplatesEnabled() && <StarterTemplateLibrary instance="home" compact />}
+      {creatorNiche && <HomeInspiration initialNiche={creatorNiche} />}
     </div>
   );
 }
