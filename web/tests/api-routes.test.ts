@@ -24,6 +24,7 @@ const ROUTES: Entry[] = [
   { path: "media/[id]", params: { id: A.asset }, methods: { GET: {} }, kind: "session" },
   { path: "plan", params: {}, methods: { GET: {}, POST: { json: { projectId: A.project, prompt: "make three clips" } } }, kind: "session" },
   { path: "plan/[id]", params: { id: A.plan }, methods: { POST: { json: { action: "approve" } } }, kind: "session" },
+  { path: "post-schedules", params: {}, methods: { GET: {}, POST: { json: { outputId: "out_a", platform: "youtube", scheduledAt: Date.now() + 3600000, timezone: "Africa/Johannesburg", title: "x", description: "", tags: [], acknowledgeReview: false } } }, kind: "session" },
   { path: "policy-check", params: {}, methods: { GET: {}, POST: { json: { outputId: "out_a", platforms: ["youtube"] } } }, kind: "session" },
   { path: "projects", params: {}, methods: { GET: {}, POST: { json: { title: "x", kind: "podcast" } } }, kind: "session" },
   { path: "projects/[id]", params: { id: A.project }, methods: { GET: {}, PATCH: { json: { title: "x" } }, DELETE: {} }, kind: "session" },
@@ -63,6 +64,7 @@ beforeAll(async () => {
   process.env.IZWI_FLAG_LANGUAGES = "1";
   process.env.IZWI_FLAG_POLICY_PRECHECK = "1";
   process.env.IZWI_FLAG_STARTER_TEMPLATES = "1";
+  process.env.IZWI_FLAG_SCHEDULED_POSTS = "1";
   db = await openTestDb();
   await db.execScript(`CREATE TABLE IF NOT EXISTS invitation (id TEXT PRIMARY KEY, "organizationId" TEXT, email TEXT, role TEXT, status TEXT, "expiresAt" TEXT)`);
   await seedWorkspace(db, "org_a", "own_a", A.project);
@@ -89,7 +91,7 @@ beforeAll(async () => {
   ];
   for (const s of sql) await db.run(s);
 }, 60_000);
-afterAll(async () => { delete process.env.IZWI_FLAG_PREFERENCES; delete process.env.IZWI_FLAG_LANGUAGES; delete process.env.IZWI_FLAG_POLICY_PRECHECK; delete process.env.IZWI_FLAG_STARTER_TEMPLATES; await closeTestDb(db); });
+afterAll(async () => { delete process.env.IZWI_FLAG_PREFERENCES; delete process.env.IZWI_FLAG_LANGUAGES; delete process.env.IZWI_FLAG_POLICY_PRECHECK; delete process.env.IZWI_FLAG_STARTER_TEMPLATES; delete process.env.IZWI_FLAG_SCHEDULED_POSTS; await closeTestDb(db); });
 beforeEach(() => { hoisted.session = null; });
 
 const TABLES = ["project", "asset", "clip", "caption_track", "caption_line", "person", "share_link", "job", "output", "listing", "enquiry", "comment", "provider", "plan_run", "declaration", "consent", "model_route", "workspace_pref"];

@@ -545,6 +545,26 @@ ALTER TABLE upload_session ADD COLUMN finished_at BIGINT;`,
   UNIQUE (output_id, platform)
 );`,
   },
+  {
+    version: 13,
+    name: "manual post schedule and export records",
+    sql: `CREATE TABLE post_schedule (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  output_id TEXT NOT NULL REFERENCES output(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL CHECK (platform IN ('youtube','tiktok','instagram','facebook')),
+  scheduled_at BIGINT NOT NULL,
+  timezone TEXT NOT NULL DEFAULT 'Africa/Johannesburg',
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  tags TEXT NOT NULL DEFAULT '[]',
+  policy_status TEXT NOT NULL CHECK (policy_status IN ('pass','review')),
+  acknowledged_by TEXT,
+  status TEXT NOT NULL DEFAULT 'manual_export' CHECK (status IN ('manual_export','cancelled')),
+  created_by TEXT NOT NULL,
+  created_at BIGINT NOT NULL
+);`,
+  },
 ];
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 

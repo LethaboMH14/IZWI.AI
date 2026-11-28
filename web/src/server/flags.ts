@@ -31,3 +31,7 @@ export function policyPrecheckEnabled(): boolean {
 export function starterTemplatesEnabled(): boolean {
   return process.env.IZWI_FLAG_STARTER_TEMPLATES === "1";
 }
+
+export function scheduledPostsEnabled(): boolean {
+  return process.env.IZWI_FLAG_SCHEDULED_POSTS === "1";
+}

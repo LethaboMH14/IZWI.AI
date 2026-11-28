@@ -7,6 +7,7 @@ import type { TabProps } from "./types";
 import { Err, Pill, dateOf, useAct } from "./parts";
 import { PolicyPrecheck } from "./PolicyPrecheck";
 import { StarterTemplateLibrary } from "@/components/studio/StarterTemplateLibrary";
+import { ScheduleExport } from "@/components/studio/ScheduleExport";
 
 const PRESETS = [
   { id: "vertical", label: "9:16 vertical", use: "Reels, Shorts, TikTok" },
@@ -99,6 +100,7 @@ function OutputRow({ o, state, refresh }: { o: Output } & Pick<TabProps, "state"
         </p>
       )}
       {o.status === "ready" && <PolicyPrecheck outputId={o.id} />}
+      {o.status === "ready" && <ScheduleExport outputId={o.id} title={clip?.title ?? ""} />}
       {o.posted ? (
         <p className="st-ok">You report posting on {o.posted.platform}{o.posted.url ? <> · <a className="link" href={o.posted.url} target="_blank" rel="noreferrer">open</a></> : ""}. Recorded on {dateOf(o.posted.at)}.</p>
       ) : o.status === "ready" ? (
