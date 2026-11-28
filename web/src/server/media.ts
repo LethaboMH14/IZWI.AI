@@ -140,9 +140,13 @@ type WhisperJson = {
   transcription: { offsets: { from: number; to: number }; text: string; tokens?: { text: string; offsets: { from: number; to: number }; p: number }[] }[];
 };
 
-export async function whisper(wav: string, outBase: string, o: { language?: string; prompt?: string; accurate?: boolean; onProgress?: (p: number) => void; signal?: AbortSignal }): Promise<Transcript> {
+export async function whisper(wav: string, outBase: string, o: { language?: string; prompt?: string; accurate?: boolean; long?: boolean; onProgress?: (p: number) => void; signal?: AbortSignal }): Promise<Transcript> {
   const args = ["-m", BIN.whisperModel, "-f", wav, "-l", o.language || "auto", "-t", String(LIMITS.whisperThreads), "-ojf", "-of", outBase, "-pp"];
   if (!o.accurate) args.push("-bs", "1", "-bo", "1");
+  // On a long recording the base model can lock onto one sentence and repeat it to the end, because each window is
+  // primed with the text of the one before. Turning that off also stops the spelling hint reaching the model, so short
+  // recordings keep it; taught corrections are still applied to the text either way.
+  if (o.long) args.push("-mc", "0");
   if (o.prompt) args.push("--prompt", o.prompt.slice(0, 600));
   const r = await runTool(BIN.whisper, args, {
     signal: o.signal, timeoutMs: 6 * 3600_000,

@@ -13,6 +13,7 @@ export type InjectionLine = { id: string; idx: number; text: string };
 export type InjectionScorer = (text: string) => Promise<number>;
 type Classifier = (text: string) => Promise<{ label: string; score: number }[]>;
 
+export const injectionEnabled = () => process.env.IZWI_FLAG_INJECTION === "1";
 const textHash = (text: string) => createHash("sha256").update(text).digest("hex");
 let classifierPromise: Promise<Classifier> | undefined;
 
@@ -65,11 +66,27 @@ export async function recordInjectionScans(
   return lines.length;
 }
 
+/** Queues a fresh check for lines whose text changed after they were scanned. Does nothing with the check off. */
+export async function queueRescan(input: { workspaceId: string; projectId: string; trackId: string; lineIds: string[]; createdBy: string }) {
+  if (!injectionEnabled()) return;
+  for (let k = 0; k < input.lineIds.length; k += INJECTION_BATCH_SIZE) {
+    await enqueue({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      type: "injection_scan" as unknown as JobType,
+      input: { trackId: input.trackId, lineIds: input.lineIds.slice(k, k + INJECTION_BATCH_SIZE) },
+      createdBy: input.createdBy,
+    });
+  }
+}
+
 export async function scanProjectBatch(input: {
   workspaceId: string;
   projectId: string;
   trackId: string;
   afterIdx?: number;
+  /** Only these lines (a rescan after an edit). Without it the whole track is walked in batches. */
+  lineIds?: string[];
   createdBy?: string | null;
   scoreText?: InjectionScorer;
 }) {
@@ -80,12 +97,21 @@ export async function scanProjectBatch(input: {
   );
   if (!track) return { scanned: 0, more: false, afterIdx };
 
+  const scoreText = input.scoreText ?? (async (text) => injectionScore(await (await loadClassifier())(text)));
+  if (input.lineIds) {
+    const ids = input.lineIds.slice(0, INJECTION_BATCH_SIZE);
+    const edited = ids.length
+      ? await all<InjectionLine>(`SELECT id, idx, text FROM caption_line WHERE track_id = ? AND id IN (${ids.map(() => "?").join(",")}) ORDER BY idx`, input.trackId, ...ids)
+      : [];
+    await recordInjectionScans(edited, scoreText);
+    return { scanned: edited.length, more: false, afterIdx };
+  }
+
   const rows = await all<InjectionLine>(
     `SELECT id, idx, text FROM caption_line WHERE track_id = ? AND idx > ? ORDER BY idx LIMIT ?`,
     input.trackId, afterIdx, INJECTION_BATCH_SIZE + 1,
   );
   const batch = rows.slice(0, INJECTION_BATCH_SIZE);
-  const scoreText = input.scoreText ?? (async (text) => injectionScore(await (await loadClassifier())(text)));
   await recordInjectionScans(batch, scoreText);
   const nextIdx = batch.at(-1)?.idx ?? afterIdx;
   const more = rows.length > INJECTION_BATCH_SIZE;

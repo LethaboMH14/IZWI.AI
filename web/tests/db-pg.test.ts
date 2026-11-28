@@ -1,10 +1,26 @@
 // The Postgres data layer on in-process PGlite: placeholder rewriting, transactions, bigint parsing.
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 process.env.IZWI_DB = "pglite";
 const db = await import("../src/server/db");
 
 afterAll(() => db.closeDb());
+
+describe("dropped connections", () => {
+  it("are logged for idle and checked-out clients instead of being thrown", async () => {
+    const { EventEmitter } = await import("node:events");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const pool = new EventEmitter(), client = new EventEmitter();
+      db.surviveDrops(pool as never);
+      pool.emit("connect", client);
+      expect(() => pool.emit("error", new Error("idle drop"))).not.toThrow();
+      expect(() => client.emit("error", new Error("drop mid-query"))).not.toThrow();
+      expect(log).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("mid-query");
+    } finally { log.mockRestore(); }
+  });
+});
 
 describe("toPg", () => {
   it("numbers placeholders and leaves quoted text alone", () => {

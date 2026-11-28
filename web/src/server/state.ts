@@ -1,6 +1,6 @@
 // Everything the studio screen needs about one project, read in one go. All rows are from this workspace only.
 import { all, one, parse } from "./db";
-import { projectOf, type Ctx } from "./guard";
+import { managesConsent, projectOf, type Ctx } from "./guard";
 import { projectJobs } from "./jobs";
 import { readText } from "./storage";
 import { gateFor } from "./rights";
@@ -75,6 +75,8 @@ export async function projectState(ctx: Ctx, projectId: string, options: { lite?
     packages: assets.filter((a) => a.kind === "package").reverse().map(pub),
     tracks, lines, clips, people, outputs, links, comments, listings, declaration, plans,
     jobs: await projectJobs(p.id),
+    // What this person may do here, so the screen does not offer a button the server will refuse.
+    canManageConsent: managesConsent(ctx),
   };
   if (options.lite) delete (result as { peaks?: number[] }).peaks;
   return result;

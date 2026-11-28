@@ -51,6 +51,12 @@ export function requireRole(ctx: Ctx, roles: string[]) {
   if (!roles.includes(ctx.role)) throw new HttpError(403, "Your role in this workspace cannot do this.");
 }
 
+/**
+ * Who may ask a guest, close their link or remove them. Whoever holds a consent link can answer it, and removing a
+ * person drops their answer, so either could release a held render: owners and admins only.
+ */
+export const managesConsent = (ctx: Pick<Ctx, "role">) => ctx.role === "owner" || ctx.role === "admin";
+
 export async function projectOf(ctx: Ctx, projectId: string): Promise<ProjectRow> {
   const p = await one<ProjectRow>(`SELECT * FROM project WHERE id = ? AND workspace_id = ?`, projectId, ctx.workspaceId);
   if (!p) throw new HttpError(404, "Not found.");

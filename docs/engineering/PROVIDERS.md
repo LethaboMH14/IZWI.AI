@@ -21,6 +21,9 @@ Static prices are USD per million tokens and carry the provider URL and review d
 |---|---:|---|
 | `openai/gpt-oss-120b` | $0.15 / $0.60 | [Groq model pricing](https://console.groq.com/docs/models): “$0.15 input $0.60 output”. |
 | `openai/gpt-oss-20b` | $0.075 / $0.30 | [Groq model pricing](https://console.groq.com/docs/models): “$0.075 input $0.30 output”. |
+| `muse-spark-1.1` | $1.25 / $4.25 | [Meta Model API pricing](https://dev.meta.ai/docs/pricing-rate-limits), checked 2026-11-28: Standard mode table, “Input” $1.25 and “Output” $4.25 per 1M tokens; “Muse Spark 1.1 is Standard mode only.” Cached input ($0.15) is not tracked, so every input token is budgeted at the full rate. |
+
+A paid model also needs `IZWI_USD_ZAR` and a daily Rand cap, `IZWI_ASSISTANT_DAILY_CENTS` (default 0, so the assistant refuses paid models until the operator sets one).
 
 OpenRouter returns live prompt and completion prices in USD per token; they are used directly and are not copied into the static table. Models with no returned or reviewed price are **Unknown** and cannot be budgeted. The typical-turn estimate uses 1,500 prompt and 400 completion tokens. Tags are based on the estimate: Free at zero, Cheap below R0.01, Moderate from R0.01 to below R0.10, Expensive at R0.10 or more. This categorization is a product display choice, not a provider quotation. When `IZWI_USD_ZAR` and its `IZWI_USD_ZAR_ASOF` date are set, estimates show Rand and that date; otherwise the UI shows USD only and the Rand category remains Unknown. No exchange rate is supplied by default.
 

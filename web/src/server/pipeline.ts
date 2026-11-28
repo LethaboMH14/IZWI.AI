@@ -145,6 +145,7 @@ async function transcribeJob(c: JobCtx) {
   const started = now();
   const t = await whisper(await localCopy(wav.storage_key), path.join(dir, "transcript"), {
     language: lang, prompt: glossary.map((g) => g.term).join(", "), accurate: pf?.accuracy === "accurate",
+    long: (src.duration_ms ?? 0) > 5 * 60_000,
     onProgress: (x) => c.beat(x * 0.92, "Listening"), signal: c.signal,
   });
   const { segs, fixes } = applyGlossary(t.segments, glossary);
@@ -376,7 +377,9 @@ async function renderJob(c: JobCtx) {
     uploaded = true;
     const release = await tx(async () => {
       const active = await one(`SELECT 1 FROM job WHERE id = ? AND worker_id = ? AND attempts = ? AND status = 'running' AND lease_until > ?`, c.job.id, c.job.worker_id, c.job.attempts, now());
-      const current = await one<{ status: string; job_id: string | null }>(`SELECT status, job_id FROM output WHERE id = ? AND workspace_id = ?`, out.id, out.workspace_id);
+      const current = await one<{ status: string; job_id: string | null; note: string | null }>(`SELECT status, job_id, note FROM output WHERE id = ? AND workspace_id = ?`, out.id, out.workspace_id);
+      // Held while it was rendering (a withdrawal): keep that reason rather than reporting a failure.
+      if (current?.status === "blocked" && current.job_id === c.job.id) return current.note ?? "Held while rendering. Check consent.";
       if (!active || c.signal.aborted || !current || current.job_id !== c.job.id || current.status !== "queued") return "inactive";
       const currentClip = await one<{ start_ms: number; end_ms: number; version: number }>(`SELECT start_ms, end_ms, version FROM clip WHERE id = ? AND workspace_id = ?`, clip.id, out.workspace_id);
       if (!currentClip || currentClip.start_ms !== clip.start_ms || currentClip.end_ms !== clip.end_ms || currentClip.version !== clip.version) return "The clip changed during rendering. Render it again.";
@@ -410,7 +413,9 @@ async function renderJob(c: JobCtx) {
     if (srtKey) rmSync(absPath(srtKey), { force: true });
     if (assetId) await run(`DELETE FROM asset WHERE id = ?`, assetId);
     const reason = error instanceof Error ? error.message : "Signed provenance failed.";
-    await run(`UPDATE output SET status = 'failed', note = ?, updated_at = ? WHERE id = ? AND status != 'ready'`, reason, now(), out.id);
+    // A render stopped because a yes is missing is held, so the next yes releases it. Anything else failed.
+    const heldByGate = error instanceof Blocked && !(await gateFor(proj.id, clip.start_ms, clip.end_ms)).ok;
+    await run(`UPDATE output SET status = ?, note = ?, updated_at = ? WHERE id = ? AND status NOT IN ('ready','blocked')`, heldByGate ? "blocked" : "failed", reason, now(), out.id);
     throw error;
   }
 }

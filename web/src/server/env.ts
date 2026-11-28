@@ -1,6 +1,7 @@
 // Paths, binaries and limits. Everything configurable through environment variables, with local defaults.
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { LINK_DAYS } from "../lib/limits";
 
 export const ROOT = process.cwd();
 export const STORAGE = path.resolve(process.env.IZWI_STORAGE_DIR || path.join(ROOT, "storage"));
@@ -23,7 +24,7 @@ export const LIMITS = {
   // 2 GiB by default (was 4 GiB). Raise it per deployment with IZWI_MAX_UPLOAD_BYTES.
   uploadBytes: Number(process.env.IZWI_MAX_UPLOAD_BYTES || 2 * 1024 ** 3),
   sourceSeconds: Number(process.env.IZWI_MAX_SOURCE_SECONDS || 3 * 3600),
-  linkDays: 14,
+  linkDays: LINK_DAYS,
   // IZWI default reading speed for caption checks. Adjustable per workspace later; not a cited standard.
   readingCps: 17,
   whisperThreads: Number(process.env.IZWI_WHISPER_THREADS || 4),

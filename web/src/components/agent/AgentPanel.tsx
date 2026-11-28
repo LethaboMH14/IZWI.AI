@@ -129,7 +129,7 @@ function Agent({ variant }: { variant: "panel" | "card" }) {
   }, [chat.messages, data]);
 
   const lastStored = [...(data?.thread?.messages ?? [])].reverse().find((m) => m.role === "assistant");
-  const chipProvider = meta?.provider ?? lastStored?.provider ?? ready.find((r) => r.id === providerId) ?? null;
+  const chipProvider = meta?.provider ?? lastStored?.provider ?? ready.find((r) => r.id === chosenProviderId) ?? null;
   const chipRedacted = meta ? meta.redacted : (lastStored?.redacted ?? 0);
   const heldChips = metaChips({ excludedLines: meta ? meta.excludedLines : lastStored?.excludedLines });
 
@@ -140,7 +140,7 @@ function Agent({ variant }: { variant: "panel" | "card" }) {
 
   const setPending = useCallback((clipId: string, on: boolean) => setPendingClips((s) => (on ? [...s, clipId] : s.filter((x) => x !== clipId))), []);
   const askAgain = useCallback(() => { if (session.lastText) send(session.lastText); }, [send, session.lastText]);
-  const canSend = !running && !!providerId && text.trim().length > 0;
+  const canSend = !running && !!chosenProviderId && text.trim().length > 0;
   const submit = () => { if (!canSend) return; send(text); setText(""); };
 
   return (

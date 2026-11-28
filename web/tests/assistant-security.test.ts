@@ -602,6 +602,22 @@ describe("budget", () => {
     expect((await count(`SELECT COUNT(*) n FROM assistant_lease WHERE user_id = ?`, fx.user))).toBe(0);
   });
 
+  it("the hosted trial covers assistant replies: an unlisted route is refused before any outbound call", async () => {
+    process.env.IZWI_PROVIDER_TRIAL = "1";
+    process.env.IZWI_PROVIDER_TRIAL_RULES = "[]";
+    try {
+      const fx = (await fixture());
+      const r = await send(fx);
+      expect(r.error?.code).toBe("budget");
+      expect(mockA.requests).toHaveLength(0);
+      expect((await count(`SELECT COUNT(*) n FROM assistant_message WHERE project_id = ?`, fx.project))).toBe(0);
+      expect((await count(`SELECT COUNT(*) n FROM assistant_lease WHERE user_id = ?`, fx.user))).toBe(0);
+    } finally {
+      delete process.env.IZWI_PROVIDER_TRIAL;
+      delete process.env.IZWI_PROVIDER_TRIAL_RULES;
+    }
+  });
+
   it("a priced model with no price entry is refused before any outbound call", async () => {
     const fx = (await fixture({ kind: "openai_compat", model: "some-paid-model" }));
     const r = await send(fx);
@@ -617,6 +633,13 @@ describe("budget", () => {
     const bad = (await fixture({ model: "429:free" }));
     await send(bad);
     expect((await db.one<{ r: number }>(`SELECT tokens_reserved r FROM assistant_budget WHERE workspace_id = ?`, bad.ws))!.r).toBe(0);
+  });
+
+  it("asks Meta's always-thinking model for low effort and leaves it room to answer", async () => {
+    expect((await send(await fixture({ kind: "meta", model: "normal:free" }))).error).toBeUndefined();
+    expect(chatCalls(mockA).at(-1)!.body).toMatchObject({ reasoning_effort: "low", max_tokens: 3000 });
+    expect((await send(await fixture({ model: "normal:free" }))).error).toBeUndefined();
+    expect(chatCalls(mockA).at(-1)!.body).toMatchObject({ reasoning_effort: "none", max_tokens: 800 });
   });
 
   it("requests compatible-provider usage and charges the full reservation when usage is absent", async () => {
@@ -714,7 +737,8 @@ describe("transport: the model call cannot be used to fetch URLs", () => {
     const src = readFileSync(path.join(root, "src", "app", "api", "projects", "[id]", "assistant", "route.ts"), "utf8");
     // The hook must refuse any non-empty download list (an empty list is what ai@7 passes on every text turn).
     expect(src).toMatch(/experimental_download:\s*async \(requested: unknown\[\]\) => \{\s*if \(requested\.length > 0\) throw new Error\("URL downloads are disabled\."\);\s*return \[\];/);
-    expect(src).toMatch(/fetch:\s*meteredFetch\([^;]*sdkFetch/);
+    expect(src).toMatch(/trialFetch\(provider, sdkFetch/);
+    expect(src).toMatch(/fetch:\s*meteredFetch\([^;]*capped/);
   });
 
   it("sdkFetch refuses cloud-metadata addresses always, and loopback when hosted", async () => {

@@ -1,14 +1,15 @@
 // Creator actions. Each one checks the caller's workspace, validates input, writes rows, and leaves an audit entry.
 import { z } from "zod";
 import { all, newId, now, one, parse, run, tx } from "./db";
-import { projectOf, requireRole, type Ctx } from "./guard";
+import { managesConsent, projectOf, requireRole, type Ctx } from "./guard";
 import { HttpError, fail } from "./http";
-import { enqueue, publicJob, requeueBlocked, cancelQueuedOrBlocked } from "./jobs";
+import { enqueue, publicJob, releaseHeldRenders, cancelQueuedOrBlocked } from "./jobs";
 import { audit } from "./audit";
 import { hashToken, newToken } from "./crypto";
 import { LIMITS, PUBLIC_URL } from "./env";
 import { DECLARATION, consentStatement, gateFor, gateReason } from "./rights";
 import { removeProjectFiles } from "./storage";
+import { queueRescan } from "./injection";
 import { isPreset } from "./render";
 import { providerFor } from "./providers";
 import { LANGUAGES, langName } from "../lib/languages";
@@ -18,7 +19,10 @@ import { createHash } from "node:crypto";
 
 export const KINDS = ["podcast", "video", "lesson", "music", "film", "animation", "client"] as const;
 
-export const ProjectIn = z.object({ title: z.string().trim().min(1).max(120), kind: z.enum(KINDS), spokenLanguage: z.string().max(5).default("auto") });
+const projectFields = { title: z.string().trim().min(1).max(120), kind: z.enum(KINDS), spokenLanguage: z.string().max(5) };
+export const ProjectIn = z.object({ ...projectFields, spokenLanguage: projectFields.spokenLanguage.default("auto") });
+// A change carries only what the person changed. ProjectIn.partial() would fill the language default back in.
+export const ProjectPatch = z.object(projectFields).partial();
 
 export async function createProject(ctx: Ctx, input: z.infer<typeof ProjectIn>) {
   const id = newId("prj");
@@ -27,7 +31,7 @@ export async function createProject(ctx: Ctx, input: z.infer<typeof ProjectIn>) 
   return { id };
 }
 
-export async function updateProject(ctx: Ctx, id: string, patch: Partial<z.infer<typeof ProjectIn>>) {
+export async function updateProject(ctx: Ctx, id: string, patch: z.infer<typeof ProjectPatch>) {
   const p = await projectOf(ctx, id);
   await run(`UPDATE project SET title = ?, kind = ?, spoken_language = ?, updated_at = ? WHERE id = ?`, patch.title ?? p.title, patch.kind ?? p.kind, patch.spokenLanguage ?? p.spoken_language, now(), p.id);
   await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "project.updated", target: p.id, meta: { fields: Object.keys(patch) } });
@@ -116,16 +120,13 @@ const lineOf = async (ctx: Ctx, id: string) =>
 
 // Track status follows its lines: approved only when every line has a person's yes.
 export async function refreshTrack(trackId: string) {
-  const t = await one<{ project_id: string; language: string; status: string; total: number; ok: number }>(
-    `SELECT project_id, language, status, (SELECT COUNT(*) FROM caption_line WHERE track_id = t.id) total, (SELECT COUNT(*) FROM caption_line WHERE track_id = t.id AND status = 'approved') ok FROM caption_track t WHERE id = ?`, trackId,
+  const t = await one<{ project_id: string; status: string; total: number; ok: number }>(
+    `SELECT project_id, status, (SELECT COUNT(*) FROM caption_line WHERE track_id = t.id) total, (SELECT COUNT(*) FROM caption_line WHERE track_id = t.id AND status = 'approved') ok FROM caption_track t WHERE id = ?`, trackId,
   );
   if (!t) return;
   const next = t.total > 0 && t.ok === t.total ? "approved" : t.status === "approved" ? "in_review" : t.status;
   await run(`UPDATE caption_track SET status = ?, updated_at = ? WHERE id = ?`, next, now(), trackId);
-  if (next === "approved") {
-    await run(`UPDATE output SET status = 'queued', note = NULL WHERE project_id = ? AND language = ? AND status = 'blocked'`, t.project_id, t.language);
-    await requeueBlocked(t.project_id, "render");
-  }
+  if (next === "approved") await releaseHeldRenders(t.project_id);
 }
 
 export const LineIn = z.object({ text: z.string().trim().min(1).max(400).optional(), expectText: z.string().max(400).optional(), approve: z.boolean().optional() });
@@ -140,6 +141,7 @@ export async function updateLine(ctx: Ctx, id: string, patch: z.infer<typeof Lin
       lineText(words.map((w) => ({ w }))), JSON.stringify(words.map((w, i) => ({ w, s: Math.round(l.start_ms + i * step), e: Math.round(l.start_ms + (i + 1) * step) }))), l.id, ...(patch.expectText !== undefined ? [patch.expectText] : []),
     );
     if (patch.expectText !== undefined && !updated.changes) fail(409, "This changed since you loaded it.");
+    if (l.kind === "source") await queueRescan({ workspaceId: ctx.workspaceId, projectId: l.project_id, trackId: l.track_id, lineIds: [l.id], createdBy: ctx.userId });
   }
   if (patch.approve !== undefined) {
     await run(`UPDATE caption_line SET status = ?, approved_by = ?, approved_at = ? WHERE id = ?`, patch.approve ? "approved" : "draft", patch.approve ? by : null, patch.approve ? now() : null, l.id);
@@ -161,15 +163,15 @@ export async function approveAll(ctx: Ctx, trackId: string, by: string) {
 export const GlossaryIn = z.object({ term: z.string().trim().min(1).max(60), heard: z.string().trim().max(60).optional() });
 
 export async function previewGlossaryChanges(workspaceId: string, entry: z.infer<typeof GlossaryIn>) {
-  if (!entry.heard) return [] as { id: string; projectId: string; textHash: string; text: string; words: string }[];
-  const rows = await all<{ id: string; text: string; words: string | null; start_ms: number; end_ms: number; project_id: string }>(
-    `SELECT l.id, l.text, l.words, l.start_ms, l.end_ms, t.project_id FROM caption_line l JOIN caption_track t ON t.id = l.track_id WHERE t.workspace_id = ? AND t.kind = 'source' AND l.status = 'draft' AND l.text LIKE ? ESCAPE '!'`,
+  if (!entry.heard) return [] as { id: string; projectId: string; trackId: string; textHash: string; text: string; words: string }[];
+  const rows = await all<{ id: string; text: string; words: string | null; start_ms: number; end_ms: number; project_id: string; track_id: string }>(
+    `SELECT l.id, l.text, l.words, l.start_ms, l.end_ms, l.track_id, t.project_id FROM caption_line l JOIN caption_track t ON t.id = l.track_id WHERE t.workspace_id = ? AND t.kind = 'source' AND l.status = 'draft' AND l.text LIKE ? ESCAPE '!'`,
     workspaceId, `%${entry.heard.replace(/[!%_]/g, (c) => `!${c}`)}%`,
   );
   return rows.flatMap((row) => {
     const seg = { startMs: row.start_ms, endMs: row.end_ms, text: row.text.replace(/\n/g, " "), words: parse<Word[]>(row.words, []) };
     const { segs, fixes } = applyGlossary([seg], [{ term: entry.term, heard: [entry.heard!] }]);
-    return fixes ? [{ id: row.id, projectId: row.project_id, textHash: createHash("sha256").update(row.text).digest("hex"), text: lineText(segs[0].words), words: JSON.stringify(segs[0].words) }] : [];
+    return fixes ? [{ id: row.id, projectId: row.project_id, trackId: row.track_id, textHash: createHash("sha256").update(row.text).digest("hex"), text: lineText(segs[0].words), words: JSON.stringify(segs[0].words) }] : [];
   });
 }
 
@@ -187,6 +189,10 @@ export async function learnGlossary(ctx: Ctx, entry: z.infer<typeof GlossaryIn>)
   await tx(async () => {
     for (const change of changes) await run(`UPDATE caption_line SET text = ?, words = ?, edited = 1 WHERE id = ?`, change.text, change.words, change.id);
   });
+  for (const trackId of new Set(changes.map((c) => c.trackId))) {
+    const inTrack = changes.filter((c) => c.trackId === trackId);
+    await queueRescan({ workspaceId: ctx.workspaceId, projectId: inTrack[0].projectId, trackId, lineIds: inTrack.map((c) => c.id), createdBy: ctx.userId });
+  }
   return { glossary: g, fixed: changes.length };
 }
 
@@ -204,10 +210,10 @@ export async function addPerson(ctx: Ctx, projectId: string, input: z.infer<type
 }
 
 export async function removePerson(ctx: Ctx, personId: string) {
+  if (!managesConsent(ctx)) fail(403, "Only an owner or admin can remove a person.");
   const x = await one<{ id: string; project_id: string }>(`SELECT id, project_id FROM person WHERE id = ? AND workspace_id = ?`, personId, ctx.workspaceId) ?? fail(404, "Not found.");
   await run(`DELETE FROM person WHERE id = ?`, x.id);
-  await requeueBlocked(x.project_id, "render");
-  await run(`UPDATE output SET status = 'queued', note = NULL WHERE project_id = ? AND status = 'blocked'`, x.project_id);
+  await releaseHeldRenders(x.project_id);
   await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "person.removed", target: x.id });
 }
 
@@ -222,6 +228,7 @@ async function makeLink(ctx: Ctx, projectId: string, purpose: "review" | "consen
 }
 
 export async function requestConsent(ctx: Ctx, projectId: string, personId: string, scope: "appearance" | "voice" | "likeness", options: { audit?: boolean } = {}) {
+  if (!managesConsent(ctx)) fail(403, "Only an owner or admin can ask for consent.");
   const p = await projectOf(ctx, projectId);
   const person = await one<{ id: string; name: string }>(`SELECT id, name FROM person WHERE id = ? AND project_id = ?`, personId, p.id) ?? fail(404, "Not found.");
   const consentId = newId("cns");
@@ -241,8 +248,7 @@ export async function requestConsent(ctx: Ctx, projectId: string, personId: stri
 export async function declare(ctx: Ctx, projectId: string) {
   const p = await projectOf(ctx, projectId);
   await run(`INSERT INTO declaration (id, workspace_id, project_id, user_id, statement, created_at) VALUES (?, ?, ?, ?, ?, ?)`, newId("dec"), ctx.workspaceId, p.id, ctx.userId, DECLARATION, now());
-  await run(`UPDATE output SET status = 'queued', note = NULL WHERE project_id = ? AND status = 'blocked'`, p.id);
-  await requeueBlocked(p.id, "render");
+  await releaseHeldRenders(p.id);
   await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "declaration.recorded", target: p.id });
 }
 
@@ -258,7 +264,10 @@ export async function createReviewLink(ctx: Ctx, projectId: string, trackId: str
 }
 
 export async function revokeLink(ctx: Ctx, linkId: string) {
-  const n = (await run(`UPDATE share_link SET revoked_at = ? WHERE id = ? AND workspace_id = ? AND revoked_at IS NULL`, now(), linkId, ctx.workspaceId)).changes;
+  const link = await one<{ purpose: string }>(`SELECT purpose FROM share_link WHERE id = ? AND workspace_id = ?`, linkId, ctx.workspaceId) ?? fail(404, "Not found.");
+  // A guest answers, and withdraws, through their consent link, so closing it is managing consent.
+  if (link.purpose === "consent" && !managesConsent(ctx)) fail(403, "Only an owner or admin can close a consent link.");
+  const n =(await run(`UPDATE share_link SET revoked_at = ? WHERE id = ? AND workspace_id = ? AND revoked_at IS NULL`, now(), linkId, ctx.workspaceId)).changes;
   if (!n) fail(404, "Not found.");
   await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "link.revoked", target: linkId });
 }
@@ -306,7 +315,7 @@ export async function createOutput(ctx: Ctx, projectId: string, o: z.infer<typeo
   });
 }
 
-export const PostedIn = z.object({ platform: z.string().trim().min(1).max(40), url: z.string().trim().url().max(500).optional() });
+export const PostedIn = z.object({ platform: z.string().trim().min(1).max(40), url: z.string().trim().max(500).pipe(z.url({ protocol: /^https?$/ })).optional() });
 
 export async function markPosted(ctx: Ctx, outputId: string, input: z.infer<typeof PostedIn>) {
   const o = await one<{ id: string; status: string }>(`SELECT id, status FROM output WHERE id = ? AND workspace_id = ?`, outputId, ctx.workspaceId) ?? fail(404, "Not found.");

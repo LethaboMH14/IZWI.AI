@@ -23,6 +23,6 @@ export const GET = route(async () => {
     files: storageMode() === "s3"
       ? info?.tools ?? {}
       : { whisper: existsSync(BIN.whisper), whisperModel: existsSync(BIN.whisperModel), captionFont: existsSync(`${BIN.fonts}/ArchivoBlack-Regular.ttf`) },
-    queue, storageBytes: storage, usage,
+    queue, storageBytes: storage, usage, storageMode: storageMode(),
   };
 });

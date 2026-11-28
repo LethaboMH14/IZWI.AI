@@ -2,7 +2,7 @@
 // Claiming is one atomic UPDATE ... RETURNING. Leases expire, so a crashed worker's job is picked up again.
 // Idempotency keys make "run this again" safe: the same key returns the existing job instead of a duplicate.
 import { all, lockKey, newId, now, one, parse, run, tx } from "./db";
-import { gateFor } from "./rights";
+import { gateFor, gateReason } from "./rights";
 
 export type JobType = "probe" | "proxy" | "transcribe" | "voice_transcribe" | "suggest_clips" | "translate" | "publish" | "render" | "package";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "blocked";
@@ -39,9 +39,10 @@ export async function enqueue(j: {
   });
 }
 
-export async function enqueueVoice(j: { workspaceId: string; projectId: string; input: unknown; createdBy: string; idempotencyKey: string }): Promise<JobRow | null> {
+export async function enqueueVoice(j: { id?: string; workspaceId: string; projectId: string; input: unknown; createdBy: string; idempotencyKey: string }): Promise<JobRow | null> {
   return tx(async () => {
-    const id = newId("job");
+    // The caller names the job when it has already stored the recording under that id.
+    const id = j.id ?? newId("job");
     const row = await one<JobRow>(`INSERT INTO job (id, workspace_id, project_id, type, status, input, idempotency_key, run_after, created_by, created_at, max_attempts, priority) VALUES (?, ?, ?, 'voice_transcribe', 'queued', ?, ?, ?, ?, ?, 3, 10) ON CONFLICT DO NOTHING RETURNING *`, id, j.workspaceId, j.projectId, JSON.stringify(j.input), `${j.workspaceId}:${j.idempotencyKey}`, now(), j.createdBy, now());
     if (row) return row;
     const existing = await one<JobRow>(`SELECT * FROM job WHERE idempotency_key = ? AND workspace_id = ?`, `${j.workspaceId}:${j.idempotencyKey}`, j.workspaceId);
@@ -162,14 +163,32 @@ export async function sweep() {
   );
 }
 
-// Blocked jobs (for example renders waiting on consent) re-enter the queue when the blocker clears.
-export function requeueBlocked(projectId: string, type: JobType) {
+// The one way a held render goes back to work: its gate has to pass now, and the output and its job move together.
+// A render held before it ran has a blocked job. A finished render held by a withdrawal has a succeeded job, and
+// renders again so the new signed record names the current consent. A render the creator cancelled stays cancelled.
+export function releaseHeldRenders(projectId: string) {
   return tx(async () => {
-    const jobs = await all<JobRow>(`SELECT * FROM job WHERE project_id = ? AND type = ? AND status = 'blocked'`, projectId, type);
+    const held = await all<{ id: string; job_id: string | null; start_ms: number; end_ms: number }>(
+      `SELECT o.id, o.job_id, c.start_ms, c.end_ms FROM output o JOIN clip c ON c.id = o.clip_id AND c.project_id = o.project_id WHERE o.project_id = ? AND o.status = 'blocked'`, projectId,
+    );
     let count = 0;
-    for (const job of jobs) {
-      if (type === "render" && !(await queueRenderOutput(job))) continue;
-      count += (await run(`UPDATE job SET status = 'queued', error = NULL, run_after = ? WHERE id = ? AND status = 'blocked'`, now(), job.id)).changes;
+    for (const o of held) {
+      const gate = await gateFor(projectId, o.start_ms, o.end_ms);
+      if (!gate.ok) {
+        // Still held: replace an out-of-date waiting reason. A withdrawal note is left as it is.
+        const reason = gateReason(gate);
+        await run(`UPDATE output SET note = ?, updated_at = ? WHERE id = ? AND status = 'blocked' AND (note LIKE 'Record your creator declaration%' OR note LIKE 'Waiting on %')`, reason, now(), o.id);
+        if (o.job_id) await run(`UPDATE job SET error = ? WHERE id = ? AND status = 'blocked' AND (error LIKE 'Record your creator declaration%' OR error LIKE 'Waiting on %')`, reason, o.job_id);
+        continue;
+      }
+      await run(`UPDATE output SET status = 'queued', note = NULL, updated_at = ? WHERE id = ? AND status = 'blocked'`, now(), o.id);
+      if (o.job_id) {
+        await run(
+          `UPDATE job SET status = 'queued', error = NULL, progress = 0, stage = NULL, run_after = ?, max_attempts = attempts + 3, finished_at = NULL, worker_id = NULL, lease_until = NULL
+           WHERE id = ? AND project_id = ? AND type = 'render' AND status IN ('blocked','succeeded','failed')`, now(), o.job_id, projectId,
+        );
+      }
+      count++;
     }
     return count;
   });

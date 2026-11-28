@@ -8,7 +8,7 @@ import "../../settings.css";
 
 type Team = {
   members: { id: string; role: string; name: string; email: string }[];
-  invites: { id: string; email: string; role: string; status: string; expiresAt: string; url: string }[];
+  invites: { id?: string; email: string; role: string; status: string; expiresAt: string; url?: string }[];
   me: { role: string; userId: string };
 };
 const ROLE_TEXT: Record<string, string> = { owner: "Owner", admin: "Admin", member: "Member" };
@@ -74,12 +74,12 @@ export default function TeamPage() {
                 {data.invites.map((i) => {
                   const msg = `You're invited to my IZWI AI workspace. Sign up with ${i.email} and open: ${i.url}`;
                   return (
-                    <li key={i.id} className="st-invite">
+                    <li key={i.id ?? i.email} className="st-invite">
                       <div><b style={{ fontFamily: "var(--display)", fontSize: "1.05rem" }}>{i.email}</b> <span className="pill s-draft" style={{ marginLeft: "0.4rem" }}>{ROLE_TEXT[i.role] ?? i.role}</span></div>
-                      <div className="st-link">{i.url}</div>
+                      {i.url && <div className="st-link">{i.url}</div>}
                       <div className="st-actions">
-                        <CopyBtn text={i.url} />
-                        <a className="btn btn-quiet" href={whatsappLink(msg)} target="_blank" rel="noreferrer"><WhatsappLogo weight="bold" /> Share on WhatsApp</a>
+                        {i.url && <CopyBtn text={i.url} />}
+                        {i.url && <a className="btn btn-quiet" href={whatsappLink(msg)} target="_blank" rel="noreferrer"><WhatsappLogo weight="bold" /> Share on WhatsApp</a>}
                         <span className="fine">Expires {new Date(i.expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}</span>
                       </div>
                     </li>
@@ -90,7 +90,7 @@ export default function TeamPage() {
           </section>
 
           <section className="st-sec" aria-labelledby="new-h">
-            <header><div><h2 id="new-h">Invite someone</h2><p>Members can work on projects. Admins can also invite people and manage AI keys.</p></div></header>
+            <header><div><h2 id="new-h">Invite someone</h2><p>Members can work on projects. Admins can also invite people, manage AI keys, ask guests for consent and remove them from a story.</p></div></header>
             {!canInvite && <p className="st-note">Only owners and admins can invite people. You can see the team but not change it.</p>}
             <form className="st-team-form" onSubmit={invite}>
               <label className="field"><span>Their email</span><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" placeholder="name@example.com" disabled={!canInvite} /></label>

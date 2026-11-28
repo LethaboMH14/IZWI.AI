@@ -50,9 +50,14 @@ export const PATCH = route<P>(async (req, { kind, id }) => {
       return A.resolveComment(ctx, id, (await body(req, z.object({ resolved: z.boolean() }))).resolved);
     case "job": {
       const x = await body(req, z.object({ action: z.enum(["cancel", "retry"]) }));
-      const ok = x.action === "cancel" ? cancel(id, ctx.workspaceId) : await retry(id, ctx.workspaceId);
+      const ok = x.action === "cancel" ? await cancel(id, ctx.workspaceId) : await retry(id, ctx.workspaceId);
+      if (!ok && x.action === "retry") {
+        const held = await one<{ error: string | null }>(`SELECT error FROM job WHERE id = ? AND workspace_id = ? AND status = 'blocked'`, id, ctx.workspaceId);
+        if (held) fail(409, `Still held. ${held.error ?? "Check the declaration and consent in Protect."}`);
+      }
       if (!ok) fail(409, x.action === "cancel" ? "This step has already finished." : "Only failed, cancelled or held steps can run again.");
-      if (x.action === "retry") await run(`UPDATE output SET status = 'queued', note = NULL WHERE job_id = ? AND status IN ('failed','blocked')`, id);
+      // A cancelled render must not keep showing as waiting. Retry puts it back in the queue.
+      if (x.action === "cancel") await run(`UPDATE output SET status = 'failed', note = 'Cancelled.' WHERE job_id = ? AND workspace_id = ? AND status IN ('queued','blocked')`, id, ctx.workspaceId);
       return { ok };
     }
     default:

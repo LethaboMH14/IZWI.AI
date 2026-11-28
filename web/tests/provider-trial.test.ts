@@ -57,3 +57,14 @@ it("enforces request limits on a free route", async () => {
   expect((await trial.reserveTrialCall(provider, endpoint))).toBeTruthy();
   await expect(trial.reserveTrialCall(provider, endpoint)).rejects.toThrow(/cap has been reached/);
 });
+
+it("charges a streaming caller's request against the same caps before it is sent", async () => {
+  configure(10, 10, 5);
+  const sent: string[] = [];
+  const reserved: string[] = [];
+  let refused = 0;
+  const capped = trial.trialFetch(provider, (async (url: string) => { sent.push(url); return new Response("ok"); }) as typeof fetch, { reserved: (r) => reserved.push(r.route), refused: () => refused++ });
+  expect((await capped(endpoint, { method: "POST" })).status).toBe(200);
+  await expect(capped(endpoint, { method: "POST" })).rejects.toThrow(/cap has been reached/);
+  expect({ sent, reserved: reserved.length, refused }).toEqual({ sent: [endpoint], reserved: 1, refused: 1 });
+});

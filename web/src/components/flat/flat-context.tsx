@@ -28,6 +28,11 @@ export function useFlat(): FlatCtx {
   return value;
 }
 
+/** The same marks for a view that may sit outside Flat Studio (the timeline is also on the Spatial Canvas). */
+export function useOptionalFlat(): FlatCtx | null {
+  return useContext(Ctx);
+}
+
 export function useDurationMs(): number {
   return useProject((s) => s.state.proxy?.durationMs ?? s.state.source?.durationMs ?? 0);
 }

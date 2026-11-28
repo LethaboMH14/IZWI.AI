@@ -1,14 +1,14 @@
 // What people without an account can do, through a link: review captions, give or withdraw consent,
 // ask to license a clip. Links are random tokens stored only as hashes; they expire and can be revoked.
 import { z } from "zod";
-import { all, newId, now, one, parse, run } from "./db";
+import { all, newId, now, one, parse, run, tx } from "./db";
 import { hashToken } from "./crypto";
 import { fail } from "./http";
-import { gateFor } from "./rights";
 import { audit } from "./audit";
 import { appendConsent } from "./ledger";
 import { limit, LIMIT } from "./ratelimit";
 import { refreshTrack } from "./actions";
+import { releaseHeldRenders } from "./jobs";
 import { langName } from "../lib/languages";
 
 type Link = { id: string; workspace_id: string; project_id: string; purpose: string; target_id: string | null; label: string | null; expires_at: number; revoked_at: number | null };
@@ -110,20 +110,23 @@ export async function consentAction(token: string, input: z.infer<typeof Consent
   if (input.decision === "revoke" && c.status !== "granted") fail(409, "There is no yes to withdraw.");
   const status = input.decision === "grant" ? "granted" : input.decision === "decline" ? "declined" : "revoked";
   const at = now();
-  await run(`UPDATE consent SET status = ?, responded_name = ?, responded_at = ?, user_agent = ?, updated_at = ? WHERE id = ?`, status, input.name, at, userAgent.slice(0, 200), at, c.id);
-  const entry = await appendConsent({ consentId: c.id, workspaceId: l.workspace_id, projectId: l.project_id, personId: c.person_id, scope: c.scope, decision: status, respondedName: input.name, at });
-  if (status === "granted") {
-    const blocked = await all<{ id: string; job_id: string | null; start_ms: number; end_ms: number }>(`SELECT o.id, o.job_id, c.start_ms, c.end_ms FROM output o JOIN clip c ON c.id = o.clip_id AND c.project_id = o.project_id WHERE o.project_id = ? AND o.status = 'blocked'`, l.project_id);
-    for (const output of blocked) {
-      if (!(await gateFor(l.project_id, output.start_ms, output.end_ms)).ok) continue;
-      await run(`UPDATE output SET status = 'queued', note = NULL, updated_at = ? WHERE id = ? AND status = 'blocked'`, at, output.id);
-      if (output.job_id) await run(`UPDATE job SET status = 'queued', error = NULL, run_after = ? WHERE id = ? AND project_id = ? AND type = 'render' AND status = 'blocked'`, at, output.job_id, l.project_id);
+  // The answer, its ledger entry and what it does to renders land together, so no render can see half of it.
+  const entry = await tx(async () => {
+    await run(`UPDATE consent SET status = ?, responded_name = ?, responded_at = ?, user_agent = ?, updated_at = ? WHERE id = ?`, status, input.name, at, userAgent.slice(0, 200), at, c.id);
+    const appended = await appendConsent({ consentId: c.id, workspaceId: l.workspace_id, projectId: l.project_id, personId: c.person_id, scope: c.scope, decision: status, respondedName: input.name, at });
+    if (status === "revoked") {
+      // Unposted renders that this person appears in are held again. Anything already posted stays where it is.
+      await run(
+        `UPDATE output SET status = 'blocked', note = ?, updated_at = ? WHERE project_id = ? AND status IN ('ready','queued') AND posted_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM clip k JOIN person who ON who.id = ? WHERE k.id = output.clip_id AND who.whole_recording = 0
+             AND NOT EXISTS (SELECT 1 FROM appearance a WHERE a.person_id = who.id AND a.start_ms < k.end_ms AND a.end_ms > k.start_ms))`,
+        `${person.name} withdrew consent. Remove their part or ask again.`, at, l.project_id, c.person_id,
+      );
     }
-  }
-  if (status === "revoked") {
-    // Finished renders that were never posted are held again; anything already posted stays where it is.
-    await run(`UPDATE output SET status = 'blocked', note = ? WHERE project_id = ? AND status IN ('ready','queued') AND posted_at IS NULL`, `${person.name} withdrew consent. Remove their part or ask again.`, l.project_id);
-  }
+    // Releases what this answer clears, and brings the reason on anything still held up to date.
+    await releaseHeldRenders(l.project_id);
+    return appended;
+  });
   await audit({ workspaceId: l.workspace_id, actor: "guest", action: `consent.${status}`, target: c.id, meta: { name: input.name, ledgerSeq: entry.seq } });
   return { status };
 }

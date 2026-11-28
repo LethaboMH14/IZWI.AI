@@ -124,7 +124,15 @@ export async function s3Create(who: { userId: string; workspaceId: string }, inp
 export async function s3Status(who: { userId: string; workspaceId: string }, uploadId: string) {
   const s = await ownSession(who, uploadId);
   if (s.finished_at) return { finished: true, parts: [] as { partNumber: number; size: number }[] };
-  const parts = await listParts(s.staging_key, s.multipart_id);
+  let parts: Awaited<ReturnType<typeof listParts>>;
+  try {
+    parts = await listParts(s.staging_key, s.multipart_id);
+  } catch (e) {
+    if ((e as { name?: string }).name !== "NoSuchUpload") throw e;
+    // Expired, or its parts were already joined and the upload then failed: it cannot be continued.
+    await run(`DELETE FROM upload_session WHERE upload_id = ? AND finished_at IS NULL`, uploadId);
+    throw new UploadRefused(404, "That upload can no longer be continued. Choose the file again.");
+  }
   return { finished: false, partBytes: PART_BYTES, parts: parts.map((p) => ({ partNumber: p.partNumber, size: p.size })) };
 }
 

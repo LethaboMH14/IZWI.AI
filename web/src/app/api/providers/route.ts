@@ -4,7 +4,7 @@ import { body, route } from "@/server/http";
 import { requireCtx, requireRole } from "@/server/guard";
 import { all, newId, now, one, run } from "@/server/db";
 import { keyHint, seal } from "@/server/crypto";
-import { canMarkFreeTier, checkBaseUrl, publicProvider, testProvider, type ProviderRow } from "@/server/providers";
+import { canMarkFreeTier, publicProvider, requireBaseUrl, testProvider, type ProviderRow } from "@/server/providers";
 import { audit } from "@/server/audit";
 import { limit, LIMIT } from "@/server/ratelimit";
 
@@ -35,7 +35,7 @@ export const POST = route(async (req) => {
   const id = newId("prv");
   await run(
     `INSERT INTO provider (id, workspace_id, kind, label, base_url, model, key_sealed, key_hint, roles, free_tier, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    id, ctx.workspaceId, x.kind, x.label, checkBaseUrl(x.baseUrl, x.kind), x.model || null, x.key ? seal(x.key) : null, x.key ? keyHint(x.key) : null, JSON.stringify(x.roles), x.freeTier ? 1 : 0, ctx.userId, now(),
+    id, ctx.workspaceId, x.kind, x.label, requireBaseUrl(x.baseUrl, x.kind), x.model || null, x.key ? seal(x.key) : null, x.key ? keyHint(x.key) : null, JSON.stringify(x.roles), x.freeTier ? 1 : 0, ctx.userId, now(),
   );
   await audit({ workspaceId: ctx.workspaceId, userId: ctx.userId, actor: "user", action: "provider.added", target: id, meta: { kind: x.kind, label: x.label } });
   const row = (await one<ProviderRow>(`SELECT * FROM provider WHERE id = ?`, id))!;

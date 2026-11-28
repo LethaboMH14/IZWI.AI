@@ -32,6 +32,8 @@ export function ReviewClient({ token, data }: { token: string; data: ReviewData 
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const errRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (err) errRef.current?.scrollIntoView({ block: "nearest" }); }, [err]);
   const [needName, setNeedName] = useState(false);
   const [sent, setSent] = useState<"approve" | "changes" | null>(null);
 
@@ -171,7 +173,7 @@ export function ReviewClient({ token, data }: { token: string; data: ReviewData 
           <input value={name} onChange={(e) => rememberName(e.target.value)} maxLength={60} autoComplete="name" placeholder="So the creator knows who you are" aria-invalid={needName} />
           <small>Shown next to everything you send. Kept only in this tab.</small>
         </label>
-        {err && <p className="gx-err" role="alert">{err}</p>}
+        {err && <p ref={errRef} className="gx-err" role="alert">{err}</p>}
       </section>
 
       {data.track && (
